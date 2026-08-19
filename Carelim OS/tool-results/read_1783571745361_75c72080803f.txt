@@ -1,0 +1,602 @@
+    53→  patient: { id: string; patientCode: string; name: string; phone: string };
+    54→  items: InvoiceItem[];
+    55→}
+    56→
+    57→interface PatientLite {
+    58→  id: string;
+    59→  patientCode: string;
+    60→  name: string;
+    61→  phone: string;
+    62→}
+    63→
+    64→const TYPE_COLORS: Record<string, string> = {
+    65→  consultation: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
+    66→  pharmacy: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+    67→  lab: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300",
+    68→  package: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+    69→};
+    70→
+    71→const PAYMENT_METHODS = ["Cash", "Card", "Bank", "eSewa", "Khalti", "FonePay", "Stripe", "PayPal"];
+    72→
+    73→const STATUS_FILTERS = ["all", "paid", "partial", "unpaid"] as const;
+    74→
+    75→export function BillingView() {
+    76→  const [refreshKey, setRefreshKey] = useState(0);
+    77→  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+    78→  const { data: invoices, loading, error } = useFetch<Invoice[]>(
+    79→    refreshKey ? `/api/invoices?_r=${refreshKey}` : "/api/invoices",
+    80→  );
+    81→  const [q, setQ] = useState("");
+    82→  const [statusFilter, setStatusFilter] = useState<string>("all");
+    83→  const [createOpen, setCreateOpen] = useState(false);
+    84→  const [viewId, setViewId] = useState<string | null>(null);
+    85→  const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
+    86→
+    87→  const filtered = useMemo(() => {
+    88→    if (!invoices) return [];
+    89→    const ql = q.toLowerCase();
+    90→    return invoices.filter((inv) => {
+    91→      const matchesStatus = statusFilter === "all" || inv.status === statusFilter;
+    92→      const matchesSearch = !ql ||
+    93→        inv.invoiceNo.toLowerCase().includes(ql) ||
+    94→        inv.patient.name.toLowerCase().includes(ql);
+    95→      return matchesStatus && matchesSearch;
+    96→    });
+    97→  }, [invoices, q, statusFilter]);
+    98→
+    99→  const stats = useMemo(() => {
+   100→    if (!invoices) return { revenue: 0, collected: 0, due: 0, overdue: 0 };
+   101→    return {
+   102→      revenue: invoices.reduce((s, i) => s + (i.total || 0), 0),
+   103→      collected: invoices.reduce((s, i) => s + (i.paid || 0), 0),
+   104→      due: invoices.reduce((s, i) => s + (i.due || 0), 0),
+   105→      overdue: invoices.filter((i) => i.status === "unpaid").length,
+   106→    };
+   107→  }, [invoices]);
+   108→
+   109→  const selected = invoices?.find((i) => i.id === viewId) || null;
+   110→
+   111→  if (error) {
+   112→    return (
+   113→      <div className="space-y-4 animate-fade-in">
+   114→        <Card>
+   115→          <CardContent className="p-10 text-center text-sm text-rose-600">
+   116→            Failed to load invoices: {error}
+   117→          </CardContent>
+   118→        </Card>
+   119→      </div>
+   120→    );
+   121→  }
+   122→
+   123→  return (
+   124→    <div className="space-y-4 animate-fade-in">
+   125→      {/* Header */}
+   126→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   127→        <div>
+   128→          <h2 className="text-xl font-bold flex items-center gap-2">
+   129→            <Receipt className="w-5 h-5 text-teal-600" /> Billing &amp; Invoices
+   130→          </h2>
+   131→          <p className="text-sm text-muted-foreground">
+   132→            {invoices?.length ?? 0} invoices · {formatRs(stats.collected)} collected
+   133→          </p>
+   134→        </div>
+   135→        <Button
+   136→          size="sm"
+   137→          className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
+   138→          onClick={() => setCreateOpen(true)}
+   139→        >
+   140→          <Plus className="w-4 h-4" /> Create Invoice
+   141→        </Button>
+   142→      </div>
+   143→
+   144→      {/* Stat cards */}
+   145→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+   146→        {[
+   147→          { label: "Total Revenue", value: formatRs(stats.revenue), icon: TrendingUp, accent: "from-teal-500 to-teal-600" },
+   148→          { label: "Collected", value: formatRs(stats.collected), icon: Wallet, accent: "from-emerald-500 to-emerald-600" },
+   149→          { label: "Outstanding Due", value: formatRs(stats.due), icon: AlertTriangle, accent: "from-amber-500 to-orange-500" },
+   150→          { label: "Overdue Invoices", value: String(stats.overdue), icon: Receipt, accent: "from-rose-500 to-rose-600" },
+   151→        ].map((s, i) => (
+   152→          <motion.div
+   153→            key={s.label}
+   154→            initial={{ opacity: 0, y: 10 }}
+   155→            animate={{ opacity: 1, y: 0 }}
+   156→            transition={{ delay: i * 0.05 }}
+   157→          >
+   158→            <Card className="hover:shadow-md transition-shadow">
+   159→              <CardContent className="p-4 sm:p-5">
+   160→                <div className="flex items-start justify-between">
+   161→                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.accent} flex items-center justify-center shadow-sm`}>
+   162→                    <s.icon className="w-5 h-5 text-white" />
+   163→                  </div>
+   164→                </div>
+   165→                <p className="mt-3 text-xl sm:text-2xl font-bold tracking-tight">{s.value}</p>
+   166→                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{s.label}</p>
+   167→              </CardContent>
+   168→            </Card>
+   169→          </motion.div>
+   170→        ))}
+   171→      </div>
+   172→
+   173→      {/* Filters */}
+   174→      <Card>
+   175→        <CardContent className="p-4 space-y-3">
+   176→          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+   177→            <div className="relative flex-1 max-w-md">
+   178→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   179→              <Input
+   180→                placeholder="Search invoice no. or patient name…"
+   181→                value={q}
+   182→                onChange={(e) => setQ(e.target.value)}
+   183→                className="pl-9"
+   184→              />
+   185→            </div>
+   186→            <div className="flex flex-wrap gap-1.5">
+   187→              {STATUS_FILTERS.map((s) => (
+   188→                <button
+   189→                  key={s}
+   190→                  onClick={() => setStatusFilter(s)}
+   191→                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors capitalize ${
+   192→                    statusFilter === s
+   193→                      ? "bg-teal-600 text-white border-teal-600"
+   194→                      : "bg-card hover:bg-accent border-border"
+   195→                  }`}
+   196→                >
+   197→                  {s === "all" ? "All" : statusLabel(s)}
+   198→                  {s !== "all" && (
+   199→                    <span className="ml-1 opacity-70">
+   200→                      ({invoices?.filter((i) => i.status === s).length ?? 0})
+   201→                    </span>
+   202→                  )}
+   203→                </button>
+   204→              ))}
+   205→            </div>
+   206→          </div>
+   207→
+   208→          {/* Table */}
+   209→          <div className="rounded-lg border overflow-hidden">
+   210→            <Table>
+   211→              <TableHeader>
+   212→                <TableRow className="bg-muted/50">
+   213→                  <TableHead className="w-[120px]">Invoice No</TableHead>
+   214→                  <TableHead className="hidden sm:table-cell">Date</TableHead>
+   215→                  <TableHead>Patient</TableHead>
+   216→                  <TableHead className="hidden md:table-cell">Type</TableHead>
+   217→                  <TableHead className="text-right">Total</TableHead>
+   218→                  <TableHead className="hidden sm:table-cell text-right">Paid</TableHead>
+   219→                  <TableHead className="text-right">Due</TableHead>
+   220→                  <TableHead className="text-center">Status</TableHead>
+   221→                  <TableHead className="text-right">Actions</TableHead>
+   222→                </TableRow>
+   223→              </TableHeader>
+   224→              <TableBody>
+   225→                {loading ? (
+   226→                  Array.from({ length: 8 }).map((_, i) => (
+   227→                    <TableRow key={i}>
+   228→                      <TableCell colSpan={9}><Skeleton className="h-8 w-full" /></TableCell>
+   229→                    </TableRow>
+   230→                  ))
+   231→                ) : filtered.length === 0 ? (
+   232→                  <TableRow>
+   233→                    <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">
+   234→                      No invoices found
+   235→                    </TableCell>
+   236→                  </TableRow>
+   237→                ) : filtered.map((inv) => (
+   238→                  <TableRow key={inv.id} className="hover:bg-accent/40">
+   239→                    <TableCell className="font-mono text-xs">{inv.invoiceNo}</TableCell>
+   240→                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+   241→                      {formatDate(inv.date)}
+   242→                    </TableCell>
+   243→                    <TableCell>
+   244→                      <p className="font-medium text-sm">{inv.patient.name}</p>
+   245→                      <p className="text-xs text-muted-foreground font-mono">{inv.patient.patientCode}</p>
+   246→                    </TableCell>
+   247→                    <TableCell className="hidden md:table-cell">
+   248→                      <Badge variant="outline" className={`text-[10px] capitalize ${TYPE_COLORS[inv.type] || "bg-gray-100"}`}>
+   249→                        {inv.type}
+   250→                      </Badge>
+   251→                    </TableCell>
+   252→                    <TableCell className="text-right font-semibold text-sm">{formatRs(inv.total)}</TableCell>
+   253→                    <TableCell className="hidden sm:table-cell text-right text-sm text-emerald-600">
+   254→                      {formatRs(inv.paid)}
+   255→                    </TableCell>
+   256→                    <TableCell className={`text-right text-sm font-medium ${inv.due > 0 ? "text-rose-600" : "text-muted-foreground"}`}>
+   257→                      {formatRs(inv.due)}
+   258→                    </TableCell>
+   259→                    <TableCell className="text-center">
+   260→                      <Badge className={`text-[10px] ${statusColors[inv.status] || "bg-gray-100"}`}>
+   261→                        {statusLabel(inv.status)}
+   262→                      </Badge>
+   263→                    </TableCell>
+   264→                    <TableCell className="text-right">
+   265→                      <div className="flex items-center justify-end gap-1">
+   266→                        {(inv.status === "unpaid" || inv.status === "partial") && (
+   267→                          <Button
+   268→                            variant="outline"
+   269→                            size="sm"
+   270→                            className="h-7 gap-1 text-xs"
+   271→                            onClick={() => setPayInvoice(inv)}
+   272→                          >
+   273→                            <CreditCard className="w-3 h-3" /> Pay
+   274→                          </Button>
+   275→                        )}
+   276→                        <Button
+   277→                          variant="ghost"
+   278→                          size="sm"
+   279→                          className="h-7 text-teal-600 text-xs"
+   280→                          onClick={() => setViewId(inv.id)}
+   281→                        >
+   282→                          <Eye className="w-3 h-3" /> View
+   283→                        </Button>
+   284→                      </div>
+   285→                    </TableCell>
+   286→                  </TableRow>
+   287→                ))}
+   288→              </TableBody>
+   289→            </Table>
+   290→          </div>
+   291→        </CardContent>
+   292→      </Card>
+   293→
+   294→      {/* Create invoice dialog */}
+   295→      <CreateInvoiceDialog
+   296→        open={createOpen}
+   297→        onOpenChange={setCreateOpen}
+   298→        onCreated={() => { setCreateOpen(false); refresh(); toast.success("Invoice created successfully"); }}
+   299→      />
+   300→
+   301→      {/* Collect payment dialog */}
+   302→      <CollectPaymentDialog
+   303→        invoice={payInvoice}
+   304→        onOpenChange={(o) => !o && setPayInvoice(null)}
+   305→        onPaid={() => { setPayInvoice(null); refresh(); }}
+   306→      />
+   307→
+   308→      {/* View invoice sheet */}
+   309→      <Sheet open={!!viewId} onOpenChange={(o) => !o && setViewId(null)}>
+   310→        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto scrollbar-thin p-0">
+   311→          {selected && <InvoiceDetail invoice={selected} />}
+   312→        </SheetContent>
+   313→      </Sheet>
+   314→    </div>
+   315→  );
+   316→}
+   317→
+   318→/* ---------- Create Invoice Dialog ---------- */
+   319→
+   320→function CreateInvoiceDialog({
+   321→  open, onOpenChange, onCreated,
+   322→}: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+   323→  const { data: patients } = useFetch<PatientLite[]>("/api/patients");
+   324→  const [patientId, setPatientId] = useState("");
+   325→  const [type, setType] = useState("consultation");
+   326→  const [items, setItems] = useState<InvoiceItem[]>([{ description: "", qty: 1, rate: 0, amount: 0 }]);
+   327→  const [discount, setDiscount] = useState(0);
+   328→  const [taxRate, setTaxRate] = useState(13);
+   329→  const [paymentMethod, setPaymentMethod] = useState("Cash");
+   330→  const [paid, setPaid] = useState(0);
+   331→  const [saving, setSaving] = useState(false);
+   332→
+   333→  const subtotal = useMemo(
+   334→    () => items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0),
+   335→    [items],
+   336→  );
+   337→  const taxAmount = useMemo(() => (subtotal - discount) * (taxRate / 100), [subtotal, discount, taxRate]);
+   338→  const total = Math.max(0, subtotal - discount + taxAmount);
+   339→  const due = Math.max(0, total - paid);
+   340→
+   341→  const updateItem = (idx: number, patch: Partial<InvoiceItem>) => {
+   342→    setItems((prev) => prev.map((it, i) => {
+   343→      if (i !== idx) return it;
+   344→      const next = { ...it, ...patch };
+   345→      next.amount = (Number(next.qty) || 0) * (Number(next.rate) || 0);
+   346→      return next;
+   347→    }));
+   348→  };
+   349→
+   350→  const addItem = () => setItems((p) => [...p, { description: "", qty: 1, rate: 0, amount: 0 }]);
+   351→  const removeItem = (idx: number) => setItems((p) => p.filter((_, i) => i !== idx));
+   352→
+   353→  const reset = () => {
+   354→    setPatientId("");
+   355→    setType("consultation");
+   356→    setItems([{ description: "", qty: 1, rate: 0, amount: 0 }]);
+   357→    setDiscount(0);
+   358→    setTaxRate(13);
+   359→    setPaymentMethod("Cash");
+   360→    setPaid(0);
+   361→  };
+   362→
+   363→  const submit = async (e: React.FormEvent) => {
+   364→    e.preventDefault();
+   365→    if (!patientId) { toast.error("Please select a patient"); return; }
+   366→    if (items.length === 0 || items.every((i) => !i.description)) {
+   367→      toast.error("Add at least one invoice item"); return;
+   368→    }
+   369→    setSaving(true);
+   370→    try {
+   371→      const body = {
+   372→        patientId,
+   373→        type,
+   374→        subtotal,
+   375→        discount: Number(discount) || 0,
+   376→        tax: taxAmount,
+   377→        total,
+   378→        paid: Number(paid) || 0,
+   379→        due,
+   380→        status: paid >= total ? "paid" : paid > 0 ? "partial" : "unpaid",
+   381→        paymentMethod,
+   382→        items: items.filter((i) => i.description).map((i) => ({
+   383→          description: i.description,
+   384→          qty: Number(i.qty) || 0,
+   385→          rate: Number(i.rate) || 0,
+   386→          amount: (Number(i.qty) || 0) * (Number(i.rate) || 0),
+   387→        })),
+   388→      };
+   389→      const res = await fetch("/api/invoices", {
+   390→        method: "POST",
+   391→        headers: { "Content-Type": "application/json" },
+   392→        body: JSON.stringify(body),
+   393→      });
+   394→      if (!res.ok) throw new Error("Failed to create invoice");
+   395→      reset();
+   396→      onCreated();
+   397→    } catch {
+   398→      toast.error("Failed to create invoice");
+   399→    } finally {
+   400→      setSaving(false);
+   401→    }
+   402→  };
+   403→
+   404→  return (
+   405→    <Dialog open={open} onOpenChange={onOpenChange}>
+   406→      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+   407→        <DialogHeader>
+   408→          <DialogTitle>Create New Invoice</DialogTitle>
+   409→          <DialogDescription>Fill in patient and line items. Totals compute automatically.</DialogDescription>
+   410→        </DialogHeader>
+   411→        <form onSubmit={submit} className="space-y-4">
+   412→          {/* Patient + type */}
+   413→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   414→            <div className="space-y-1.5">
+   415→              <Label>Patient *</Label>
+   416→              <Select value={patientId} onValueChange={setPatientId}>
+   417→                <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
+   418→                <SelectContent>
+   419→                  {patients?.slice(0, 100).map((p) => (
+   420→                    <SelectItem key={p.id} value={p.id}>
+   421→                      {p.name} · <span className="font-mono text-xs">{p.patientCode}</span>
+   422→                    </SelectItem>
+   423→                  ))}
+   424→                </SelectContent>
+   425→              </Select>
+   426→            </div>
+   427→            <div className="space-y-1.5">
+   428→              <Label>Invoice Type</Label>
+   429→              <Select value={type} onValueChange={setType}>
+   430→                <SelectTrigger><SelectValue /></SelectTrigger>
+   431→                <SelectContent>
+   432→                  <SelectItem value="consultation">Consultation</SelectItem>
+   433→                  <SelectItem value="pharmacy">Pharmacy</SelectItem>
+   434→                  <SelectItem value="lab">Lab</SelectItem>
+   435→                  <SelectItem value="package">Package</SelectItem>
+   436→                </SelectContent>
+   437→              </Select>
+   438→            </div>
+   439→          </div>
+   440→
+   441→          {/* Items */}
+   442→          <div className="space-y-2">
+   443→            <div className="flex items-center justify-between">
+   444→              <Label>Line Items</Label>
+   445→              <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={addItem}>
+   446→                <Plus className="w-3 h-3" /> Add Item
+   447→              </Button>
+   448→            </div>
+   449→            <div className="space-y-2 rounded-lg border p-2 bg-muted/30 max-h-56 overflow-y-auto scrollbar-thin">
+   450→              {items.map((it, idx) => (
+   451→                <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+   452→                  <Input
+   453→                    className="col-span-12 sm:col-span-5 h-8 text-sm"
+   454→                    placeholder="Description"
+   455→                    value={it.description}
+   456→                    onChange={(e) => updateItem(idx, { description: e.target.value })}
+   457→                  />
+   458→                  <Input
+   459→                    type="number"
+   460→                    className="col-span-3 sm:col-span-2 h-8 text-sm"
+   461→                    placeholder="Qty"
+   462→                    value={it.qty}
+   463→                    onChange={(e) => updateItem(idx, { qty: Number(e.target.value) })}
+   464→                  />
+   465→                  <Input
+   466→                    type="number"
+   467→                    className="col-span-4 sm:col-span-2 h-8 text-sm"
+   468→                    placeholder="Rate"
+   469→                    value={it.rate}
+   470→                    onChange={(e) => updateItem(idx, { rate: Number(e.target.value) })}
+   471→                  />
+   472→                  <div className="col-span-4 sm:col-span-2 text-right text-sm font-medium">
+   473→                    {formatRs(it.amount)}
+   474→                  </div>
+   475→                  <Button
+   476→                    type="button"
+   477→                    variant="ghost"
+   478→                    size="sm"
+   479→                    className="col-span-1 h-8 w-8 p-0 text-rose-500"
+   480→                    onClick={() => removeItem(idx)}
+   481→                    disabled={items.length === 1}
+   482→                  >
+   483→                    <X className="w-3.5 h-3.5" />
+   484→                  </Button>
+   485→                </div>
+   486→              ))}
+   487→            </div>
+   488→          </div>
+   489→
+   490→          {/* Discount / tax / payment */}
+   491→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   492→            <div className="space-y-1.5">
+   493→              <Label className="text-xs">Discount (Rs)</Label>
+   494→              <Input type="number" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} className="h-8" />
+   495→            </div>
+   496→            <div className="space-y-1.5">
+   497→              <Label className="text-xs">Tax Rate (%)</Label>
+   498→              <Input type="number" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value))} className="h-8" />
+   499→            </div>
+   500→            <div className="space-y-1.5">
+   501→              <Label className="text-xs">Payment Method</Label>
+   502→              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+   503→                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+   504→                <SelectContent>
+   505→                  {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+   506→                </SelectContent>
+   507→              </Select>
+   508→            </div>
+   509→            <div className="space-y-1.5">
+   510→              <Label className="text-xs">Paid (Rs)</Label>
+   511→              <Input type="number" value={paid} onChange={(e) => setPaid(Number(e.target.value))} className="h-8" />
+   512→            </div>
+   513→          </div>
+   514→
+   515→          {/* Totals */}
+   516→          <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+   517→            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatRs(subtotal)}</span></div>
+   518→            <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-rose-600">- {formatRs(discount)}</span></div>
+   519→            <div className="flex justify-between"><span className="text-muted-foreground">Tax ({taxRate}%)</span><span>+ {formatRs(taxAmount)}</span></div>
+   520→            <div className="flex justify-between font-semibold border-t pt-1 mt-1"><span>Total</span><span>{formatRs(total)}</span></div>
+   521→            <div className="flex justify-between text-emerald-600"><span>Paid</span><span>{formatRs(paid)}</span></div>
+   522→            <div className="flex justify-between font-semibold text-rose-600"><span>Due</span><span>{formatRs(due)}</span></div>
+   523→          </div>
+   524→
+   525→          <DialogFooter>
+   526→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   527→            <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
+   528→              {saving ? "Creating…" : "Create Invoice"}
+   529→            </Button>
+   530→          </DialogFooter>
+   531→        </form>
+   532→      </DialogContent>
+   533→    </Dialog>
+   534→  );
+   535→}
+   536→
+   537→/* ---------- Collect Payment Dialog ---------- */
+   538→
+   539→function CollectPaymentDialog({
+   540→  invoice, onOpenChange, onPaid,
+   541→}: {
+   542→  invoice: Invoice | null;
+   543→  onOpenChange: (v: boolean) => void;
+   544→  onPaid: () => void;
+   545→}) {
+   546→  const [amount, setAmount] = useState(0);
+   547→  const [method, setMethod] = useState("Cash");
+   548→  const [saving, setSaving] = useState(false);
+   549→
+   550→  // Reset amount when invoice changes
+   551→  useEffect(() => {
+   552→    if (invoice) {
+   553→      setAmount(invoice.due || 0);
+   554→      setMethod(invoice.paymentMethod || "Cash");
+   555→    }
+   556→  }, [invoice]);
+   557→
+   558→  if (!invoice) return null;
+   559→
+   560→  const newPaidTotal = (invoice.paid || 0) + (Number(amount) || 0);
+   561→  const newDue = Math.max(0, invoice.total - newPaidTotal);
+   562→  const newStatus = newDue <= 0 ? "paid" : newPaidTotal > 0 ? "partial" : "unpaid";
+   563→
+   564→  const submit = async (e: React.FormEvent) => {
+   565→    e.preventDefault();
+   566→    if (amount <= 0) { toast.error("Enter a valid amount"); return; }
+   567→    setSaving(true);
+   568→    try {
+   569→      const res = await fetch(`/api/invoices/${invoice.id}`, {
+   570→        method: "PATCH",
+   571→        headers: { "Content-Type": "application/json" },
+   572→        body: JSON.stringify({ paid: newPaidTotal, status: newStatus, paymentMethod: method }),
+   573→      });
+   574→      if (!res.ok) throw new Error("Failed to record payment");
+   575→      toast.success(`Payment of ${formatRs(amount)} recorded for ${invoice.invoiceNo}`);
+   576→      onPaid();
+   577→    } catch {
+   578→      toast.error("Failed to record payment");
+   579→    } finally {
+   580→      setSaving(false);
+   581→    }
+   582→  };
+   583→
+   584→  return (
+   585→    <Dialog open={!!invoice} onOpenChange={onOpenChange}>
+   586→      <DialogContent className="max-w-md">
+   587→        <DialogHeader>
+   588→          <DialogTitle className="flex items-center gap-2">
+   589→            <CreditCard className="w-4 h-4 text-teal-600" /> Collect Payment
+   590→          </DialogTitle>
+   591→          <DialogDescription>
+   592→            Invoice <span className="font-mono">{invoice.invoiceNo}</span> · {invoice.patient.name}
+   593→          </DialogDescription>
+   594→        </DialogHeader>
+   595→        <form onSubmit={submit} className="space-y-3">
+   596→          <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+   597→            <div className="flex justify-between"><span className="text-muted-foreground">Invoice Total</span><span className="font-medium">{formatRs(invoice.total)}</span></div>
+   598→            <div className="flex justify-between"><span className="text-muted-foreground">Already Paid</span><span className="text-emerald-600">{formatRs(invoice.paid)}</span></div>
+   599→            <div className="flex justify-between font-semibold"><span>Outstanding Due</span><span className="text-rose-600">{formatRs(invoice.due)}</span></div>
+   600→          </div>
+   601→          <div className="grid grid-cols-2 gap-3">
+   602→            <div className="space-y-1.5">
+   603→              <Label>Amount (Rs) *</Label>
+   604→              <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} min={0} max={invoice.due} />
+   605→            </div>
+   606→            <div className="space-y-1.5">
+   607→              <Label>Method</Label>
+   608→              <Select value={method} onValueChange={setMethod}>
+   609→                <SelectTrigger><SelectValue /></SelectTrigger>
+   610→                <SelectContent>
+   611→                  {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+   612→                </SelectContent>
+   613→              </Select>
+   614→            </div>
+   615→          </div>
+   616→          <div className="rounded-lg border bg-teal-50 dark:bg-teal-950/20 p-3 text-sm space-y-1">
+   617→            <div className="flex justify-between"><span className="text-muted-foreground">New Paid Total</span><span className="text-emerald-600 font-medium">{formatRs(newPaidTotal)}</span></div>
+   618→            <div className="flex justify-between"><span className="text-muted-foreground">Remaining Due</span><span className="font-medium">{formatRs(newDue)}</span></div>
+   619→            <div className="flex justify-between"><span className="text-muted-foreground">New Status</span>
+   620→              <Badge className={`text-[10px] ${statusColors[newStatus]}`}>{statusLabel(newStatus)}</Badge>
+   621→            </div>
+   622→          </div>
+   623→          <DialogFooter>
+   624→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   625→            <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
+   626→              {saving ? "Recording…" : "Record Payment"}
+   627→            </Button>
+   628→          </DialogFooter>
+   629→        </form>
+   630→      </DialogContent>
+   631→    </Dialog>
+   632→  );
+   633→}
+   634→
+   635→/* ---------- Invoice Detail Sheet ---------- */
+   636→
+   637→function InvoiceDetail({ invoice }: { invoice: Invoice }) {
+   638→  return (
+   639→    <div>
+   640→      <SheetHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30">
+   641→        <div className="flex items-start justify-between gap-3">
+   642→          <div className="flex-1 min-w-0">
+   643→            <SheetTitle className="text-xl flex items-center gap-2">
+   644→              <Receipt className="w-5 h-5 text-teal-600" />
+   645→              <span className="font-mono">{invoice.invoiceNo}</span>
+   646→            </SheetTitle>
+   647→            <SheetDescription className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+   648→              <span>{formatDate(invoice.date)}</span>
+   649→              <Badge variant="outline" className={`text-[10px] capitalize ${TYPE_COLORS[invoice.type] || "bg-gray-100"}`}>
+   650→                {invoice.type}
+   651→              </Badge>
+   652→              <Badge className={`text-[10px] ${statusColors[invoice.status]}`}>{statusLabel(invoice.status)}</Badge>
+
+[showing lines 53-652 of 730; use offset=653 with limit to continue reading]

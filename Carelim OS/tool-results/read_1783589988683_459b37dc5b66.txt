@@ -1,0 +1,748 @@
+     1→"use client";
+     2→
+     3→import { useFetch } from "@/lib/use-fetch";
+     4→import { useState, useMemo } from "react";
+     5→import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+     6→import { Skeleton } from "@/components/ui/skeleton";
+     7→import { Badge } from "@/components/ui/badge";
+     8→import { Button } from "@/components/ui/button";
+     9→import {
+    10→  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+    11→  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+    12→  RadialBarChart, RadialBar,
+    13→} from "recharts";
+    14→import {
+    15→  FlaskConical, TestTube, ListChecks, Syringe, Microscope, FileText,
+    16→  AlertTriangle, Wallet, Clock, Download, Activity, Bell,
+    17→  Package, CheckCircle2, ChevronRight, Stethoscope, Building2,
+    18→} from "lucide-react";
+    19→import { formatRs, timeAgo, statusLabel } from "@/lib/format";
+    20→import { exportToCSV } from "@/lib/export-utils";
+    21→import { ChartTooltip } from "@/components/cms/chart-tooltip";
+    22→import { motion } from "framer-motion";
+    23→import { toast } from "sonner";
+    24→
+    25→/* ---------- Types (match /api/lab-dashboard response) ---------- */
+    26→
+    27→interface LabDashboardData {
+    28→  kpis: {
+    29→    totalOrders: number;
+    30→    pendingCollection: number;
+    31→    collectedSamples: number;
+    32→    processingSamples: number;
+    33→    pendingResults: number;
+    34→    pendingApproval: number;
+    35→    completedReports: number;
+    36→    criticalResults: number;
+    37→    todayRevenue: number;
+    38→    avgTAT: number;
+    39→  };
+    40→  dailyVolume: { date: string; count: number; revenue: number }[];
+    41→  deptRequests: { name: string; value: number; color: string }[];
+    42→  mostRequested: { name: string; count: number }[];
+    43→  techPerf: { name: string; completed: number }[];
+    44→  flagCounts: Record<string, number>;
+    45→  waitingCollection: { orderNo: string; patient: string; priority: string; tests: number }[];
+    46→  urgentTests: { orderNo: string; patient: string; priority: string }[];
+    47→  criticalAlerts: { parameter: string; value: string; flag: string; orderId: string }[];
+    48→  pendingApprovalList: { orderNo: string; patient: string; tests: number }[];
+    49→  recentlyReleased: { orderNo: string; patient: string; completedAt: string | null }[];
+    50→  lowStock: { id: string; name: string; stockQty: number; reorderLevel: number }[];
+    51→  monthRevenue: number;
+    52→  qcStats: { total: number; pass: number; fail: number; warning: number };
+    53→  departments: { id: string; name: string; code: string; color: string; tests: number; equipment: number }[];
+    54→}
+    55→
+    56→/* ---------- Constants ---------- */
+    57→
+    58→const FLAG_COLORS: Record<string, string> = {
+    59→  normal: "#0d9488",
+    60→  high: "#f59e0b",
+    61→  low: "#06b6d4",
+    62→  critical: "#f43f5e",
+    63→  panic: "#dc2626",
+    64→  abnormal: "#8b5cf6",
+    65→};
+    66→
+    67→const FLAG_LABELS: Record<string, string> = {
+    68→  normal: "Normal",
+    69→  high: "High",
+    70→  low: "Low",
+    71→  critical: "Critical",
+    72→  panic: "Panic",
+    73→  abnormal: "Abnormal",
+    74→};
+    75→
+    76→const PRIORITY_COLORS: Record<string, string> = {
+    77→  normal: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
+    78→  urgent: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+    79→  emergency: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+    80→};
+    81→
+    82→const QC_COLORS: Record<string, string> = {
+    83→  pass: "#10b981",
+    84→  fail: "#f43f5e",
+    85→  warning: "#f59e0b",
+    86→};
+    87→
+    88→/* ---------- Small helpers ---------- */
+    89→
+    90→interface KpiCardDef {
+    91→  key: string;
+    92→  label: string;
+    93→  value: string;
+    94→  icon: React.ComponentType<{ className?: string }>;
+    95→  accent: string;
+    96→}
+    97→
+    98→export function LimsDashboard() {
+    99→  const [refresh, setRefresh] = useState(0);
+   100→  const { data, loading } = useFetch<LabDashboardData>(
+   101→    refresh ? `/api/lab-dashboard?_r=${refresh}` : "/api/lab-dashboard",
+   102→  );
+   103→
+   104→  /* ---- Build chart datasets ---- */
+   105→  const flagData = useMemo(() => {
+   106→    if (!data?.flagCounts) return [];
+   107→    return Object.keys(FLAG_COLORS)
+   108→      .filter((k) => (data.flagCounts[k] ?? 0) > 0)
+   109→      .map((k) => ({ name: FLAG_LABELS[k], value: data.flagCounts[k] ?? 0, color: FLAG_COLORS[k] }));
+   110→  }, [data]);
+   111→
+   112→  const qcData = useMemo(() => {
+   113→    if (!data?.qcStats) return [];
+   114→    return [
+   115→      { name: "Pass", value: data.qcStats.pass, fill: QC_COLORS.pass },
+   116→      { name: "Fail", value: data.qcStats.fail, fill: QC_COLORS.fail },
+   117→      { name: "Warning", value: data.qcStats.warning, fill: QC_COLORS.warning },
+   118→    ];
+   119→  }, [data]);
+   120→
+   121→  if (loading || !data) return <DashboardSkeleton />;
+   122→
+   123→  const { kpis } = data;
+   124→
+   125→  /* ---------- 10 KPI cards ---------- */
+   126→  const kpiCards: KpiCardDef[] = [
+   127→    { key: "totalOrders", label: "Total Lab Orders", value: String(kpis.totalOrders), icon: FlaskConical, accent: "from-teal-500 to-teal-600" },
+   128→    { key: "pendingCollection", label: "Pending Collection", value: String(kpis.pendingCollection), icon: ListChecks, accent: "from-amber-500 to-orange-500" },
+   129→    { key: "collectedSamples", label: "Collected Samples", value: String(kpis.collectedSamples), icon: Syringe, accent: "from-cyan-500 to-teal-600" },
+   130→    { key: "processingSamples", label: "Processing", value: String(kpis.processingSamples), icon: Microscope, accent: "from-violet-500 to-purple-600" },
+   131→    { key: "pendingResults", label: "Pending Results", value: String(kpis.pendingResults), icon: TestTube, accent: "from-amber-500 to-yellow-600" },
+   132→    { key: "pendingApproval", label: "Pending Approval", value: String(kpis.pendingApproval), icon: FileText, accent: "from-teal-500 to-emerald-600" },
+   133→    { key: "completedReports", label: "Completed Reports", value: String(kpis.completedReports), icon: CheckCircle2, accent: "from-emerald-500 to-emerald-600" },
+   134→    { key: "criticalResults", label: "Critical Results", value: String(kpis.criticalResults), icon: AlertTriangle, accent: "from-rose-500 to-rose-600" },
+   135→    { key: "todayRevenue", label: "Today's Revenue", value: formatRs(kpis.todayRevenue), icon: Wallet, accent: "from-emerald-500 to-teal-600" },
+   136→    { key: "avgTAT", label: "Avg TAT (hrs)", value: String(kpis.avgTAT), icon: Clock, accent: "from-teal-500 to-cyan-600" },
+   137→  ];
+   138→
+   139→  const handleExport = () => {
+   140→    const rows: (string | number)[][] = [
+   141→      ["Total Lab Orders", kpis.totalOrders],
+   142→      ["Pending Collection", kpis.pendingCollection],
+   143→      ["Collected Samples", kpis.collectedSamples],
+   144→      ["Processing Samples", kpis.processingSamples],
+   145→      ["Pending Results", kpis.pendingResults],
+   146→      ["Pending Approval", kpis.pendingApproval],
+   147→      ["Completed Reports", kpis.completedReports],
+   148→      ["Critical Results", kpis.criticalResults],
+   149→      ["Today's Revenue", formatRs(kpis.todayRevenue)],
+   150→      ["Avg TAT (hours)", kpis.avgTAT],
+   151→      ["Month Revenue", formatRs(data.monthRevenue)],
+   152→      ["QC Total", data.qcStats.total],
+   153→      ["QC Pass", data.qcStats.pass],
+   154→      ["QC Fail", data.qcStats.fail],
+   155→      ["QC Warning", data.qcStats.warning],
+   156→    ];
+   157→    exportToCSV("lims-dashboard-summary", ["Metric", "Value"], rows);
+   158→    toast.success("LIMS dashboard summary exported");
+   159→  };
+   160→
+   161→  const handleRefresh = () => setRefresh((r) => r + 1);
+   162→
+   163→  return (
+   164→    <div className="space-y-4 animate-fade-in">
+   165→      {/* Header */}
+   166→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   167→        <div>
+   168→          <h2 className="text-xl font-bold flex items-center gap-2">
+   169→            <FlaskConical className="w-5 h-5 text-teal-600" /> Laboratory Dashboard
+   170→          </h2>
+   171→          <p className="text-sm text-muted-foreground">
+   172→            Real-time LIMS analytics · Month revenue {formatRs(data.monthRevenue)}
+   173→          </p>
+   174→        </div>
+   175→        <div className="flex items-center gap-2">
+   176→          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleRefresh}>
+   177→            <Activity className="w-4 h-4" /> Refresh
+   178→          </Button>
+   179→          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
+   180→            <Download className="w-4 h-4" /> Export CSV
+   181→          </Button>
+   182→        </div>
+   183→      </div>
+   184→
+   185→      {/* 10 KPI cards */}
+   186→      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+   187→        {kpiCards.map((k, i) => (
+   188→          <motion.div
+   189→            key={k.key}
+   190→            initial={{ opacity: 0, y: 10 }}
+   191→            animate={{ opacity: 1, y: 0 }}
+   192→            transition={{ delay: Math.min(i * 0.04, 0.3) }}
+   193→          >
+   194→            <Card className="overflow-hidden border-border/60">
+   195→              <CardContent className="p-3.5">
+   196→                <div className="flex items-start justify-between">
+   197→                  <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${k.accent} flex items-center justify-center text-white shadow-sm`}>
+   198→                    <k.icon className="w-4.5 h-4.5" />
+   199→                  </div>
+   200→                </div>
+   201→                <p className="text-xl font-bold mt-2 leading-tight">{k.value}</p>
+   202→                <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">{k.label}</p>
+   203→              </CardContent>
+   204→            </Card>
+   205→          </motion.div>
+   206→        ))}
+   207→      </div>
+   208→
+   209→      {/* Charts row 1 — Daily volume (2-col) + Dept requests donut */}
+   210→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   211→        <Card className="lg:col-span-2">
+   212→          <CardHeader className="pb-2">
+   213→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   214→              <Activity className="w-4 h-4 text-teal-600" /> Daily Test Volume (7 days)
+   215→            </CardTitle>
+   216→          </CardHeader>
+   217→          <CardContent>
+   218→            <div style={{ height: 250 }}>
+   219→              <ResponsiveContainer width="100%" height="100%">
+   220→                <AreaChart data={data.dailyVolume} margin={{ left: -16, right: 8, top: 8, bottom: 0 }}>
+   221→                  <defs>
+   222→                    <linearGradient id="labVolGrad" x1="0" y1="0" x2="0" y2="1">
+   223→                      <stop offset="0%" stopColor="#0d9488" stopOpacity={0.4} />
+   224→                      <stop offset="100%" stopColor="#0d9488" stopOpacity={0.02} />
+   225→                    </linearGradient>
+   226→                  </defs>
+   227→                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+   228→                  <XAxis dataKey="date" className="fill-muted-foreground" tick={{ fontSize: 11 }} />
+   229→                  <YAxis className="fill-muted-foreground" tick={{ fontSize: 11 }} allowDecimals={false} />
+   230→                  <Tooltip content={<ChartTooltip />} />
+   231→                  <Area type="monotone" dataKey="count" stroke="#0d9488" strokeWidth={2} fill="url(#labVolGrad)" />
+   232→                </AreaChart>
+   233→              </ResponsiveContainer>
+   234→            </div>
+   235→          </CardContent>
+   236→        </Card>
+   237→
+   238→        <Card>
+   239→          <CardHeader className="pb-2">
+   240→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   241→              <Building2 className="w-4 h-4 text-teal-600" /> Department-wise Requests
+   242→            </CardTitle>
+   243→          </CardHeader>
+   244→          <CardContent>
+   245→            <div style={{ height: 250 }}>
+   246→              {data.deptRequests.length === 0 ? (
+   247→                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+   248→                  No department requests
+   249→                </div>
+   250→              ) : (
+   251→                <ResponsiveContainer width="100%" height="100%">
+   252→                  <PieChart>
+   253→                    <Pie
+   254→                      data={data.deptRequests}
+   255→                      dataKey="value"
+   256→                      nameKey="name"
+   257→                      cx="50%"
+   258→                      cy="50%"
+   259→                      innerRadius={55}
+   260→                      outerRadius={85}
+   261→                      paddingAngle={2}
+   262→                    >
+   263→                      {data.deptRequests.map((d, i) => (
+   264→                        <Cell key={i} fill={d.color || "#0d9488"} />
+   265→                      ))}
+   266→                    </Pie>
+   267→                    <Tooltip content={<ChartTooltip />} />
+   268→                    <Legend
+   269→                      layout="horizontal"
+   270→                      verticalAlign="bottom"
+   271→                      align="center"
+   272→                      iconType="circle"
+   273→                      wrapperStyle={{ fontSize: 10 }}
+   274→                    />
+   275→                  </PieChart>
+   276→                </ResponsiveContainer>
+   277→              )}
+   278→            </div>
+   279→          </CardContent>
+   280→        </Card>
+   281→      </div>
+   282→
+   283→      {/* Charts row 2 — Most Requested (horizontal bar) + Tech Performance */}
+   284→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   285→        <Card>
+   286→          <CardHeader className="pb-2">
+   287→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   288→              <TestTube className="w-4 h-4 text-teal-600" /> Most Requested Tests
+   289→            </CardTitle>
+   290→          </CardHeader>
+   291→          <CardContent>
+   292→            <div style={{ height: 280 }}>
+   293→              {data.mostRequested.length === 0 ? (
+   294→                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+   295→                  No test request data
+   296→                </div>
+   297→              ) : (
+   298→                <ResponsiveContainer width="100%" height="100%">
+   299→                  <BarChart
+   300→                    data={data.mostRequested}
+   301→                    layout="vertical"
+   302→                    margin={{ left: 16, right: 16, top: 0, bottom: 0 }}
+   303→                  >
+   304→                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+   305→                    <XAxis type="number" className="fill-muted-foreground" tick={{ fontSize: 11 }} allowDecimals={false} />
+   306→                    <YAxis
+   307→                      type="category"
+   308→                      dataKey="name"
+   309→                      tick={{ fontSize: 10 }}
+   310→                      className="fill-muted-foreground"
+   311→                      width={120}
+   312→                      tickFormatter={(v: string) => (v.length > 18 ? v.slice(0, 18) + "…" : v)}
+   313→                    />
+   314→                    <Tooltip content={<ChartTooltip />} />
+   315→                    <Bar dataKey="count" fill="#0d9488" radius={[0, 4, 4, 0]} barSize={18} />
+   316→                  </BarChart>
+   317→                </ResponsiveContainer>
+   318→              )}
+   319→            </div>
+   320→          </CardContent>
+   321→        </Card>
+   322→
+   323→        <Card>
+   324→          <CardHeader className="pb-2">
+   325→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   326→              <Stethoscope className="w-4 h-4 text-emerald-600" /> Technician Performance
+   327→            </CardTitle>
+   328→          </CardHeader>
+   329→          <CardContent>
+   330→            <div style={{ height: 280 }}>
+   331→              {data.techPerf.length === 0 ? (
+   332→                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+   333→                  No technician data
+   334→                </div>
+   335→              ) : (
+   336→                <ResponsiveContainer width="100%" height="100%">
+   337→                  <BarChart data={data.techPerf} margin={{ left: -16, right: 8, top: 8, bottom: 0 }}>
+   338→                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+   339→                    <XAxis
+   340→                      dataKey="name"
+   341→                      tick={{ fontSize: 10 }}
+   342→                      className="fill-muted-foreground"
+   343→                      tickFormatter={(v: string) => (v.length > 10 ? v.split(" ")[0] : v)}
+   344→                    />
+   345→                    <YAxis className="fill-muted-foreground" tick={{ fontSize: 11 }} allowDecimals={false} />
+   346→                    <Tooltip content={<ChartTooltip />} />
+   347→                    <Bar dataKey="completed" fill="#10b981" radius={[4, 4, 0, 0]} barSize={28} />
+   348→                  </BarChart>
+   349→                </ResponsiveContainer>
+   350→              )}
+   351→            </div>
+   352→          </CardContent>
+   353→        </Card>
+   354→      </div>
+   355→
+   356→      {/* Charts row 3 — Abnormal Result Stats (2-col) + QC Stats card */}
+   357→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   358→        <Card className="lg:col-span-2">
+   359→          <CardHeader className="pb-2">
+   360→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   361→              <AlertTriangle className="w-4 h-4 text-rose-600" /> Abnormal Result Statistics
+   362→            </CardTitle>
+   363→          </CardHeader>
+   364→          <CardContent>
+   365→            <div style={{ height: 240 }}>
+   366→              {flagData.length === 0 ? (
+   367→                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+   368→                  No result flags
+   369→                </div>
+   370→              ) : (
+   371→                <ResponsiveContainer width="100%" height="100%">
+   372→                  <BarChart data={flagData} margin={{ left: -16, right: 8, top: 8, bottom: 0 }}>
+   373→                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+   374→                    <XAxis dataKey="name" className="fill-muted-foreground" tick={{ fontSize: 11 }} />
+   375→                    <YAxis className="fill-muted-foreground" tick={{ fontSize: 11 }} allowDecimals={false} />
+   376→                    <Tooltip content={<ChartTooltip />} />
+   377→                    <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={36}>
+   378→                      {flagData.map((d, i) => (
+   379→                        <Cell key={i} fill={d.color} />
+   380→                      ))}
+   381→                    </Bar>
+   382→                  </BarChart>
+   383→                </ResponsiveContainer>
+   384→              )}
+   385→            </div>
+   386→          </CardContent>
+   387→        </Card>
+   388→
+   389→        <Card>
+   390→          <CardHeader className="pb-2">
+   391→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   392→              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> QC Statistics
+   393→            </CardTitle>
+   394→          </CardHeader>
+   395→          <CardContent className="space-y-3">
+   396→            <div className="grid grid-cols-3 gap-2">
+   397→              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-2.5 text-center">
+   398→                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{data.qcStats.pass}</p>
+   399→                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pass</p>
+   400→              </div>
+   401→              <div className="rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 p-2.5 text-center">
+   402→                <p className="text-2xl font-bold text-rose-700 dark:text-rose-400">{data.qcStats.fail}</p>
+   403→                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Fail</p>
+   404→              </div>
+   405→              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2.5 text-center">
+   406→                <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{data.qcStats.warning}</p>
+   407→                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Warning</p>
+   408→              </div>
+   409→            </div>
+   410→            <div className="text-center pt-1">
+   411→              <p className="text-xs text-muted-foreground">
+   412→                Total QC runs: <span className="font-semibold text-foreground">{data.qcStats.total}</span>
+   413→              </p>
+   414→              <p className="text-xs text-muted-foreground">
+   415→                Pass rate:{" "}
+   416→                <span className="font-semibold text-emerald-600">
+   417→                  {data.qcStats.total > 0
+   418→                    ? Math.round((data.qcStats.pass / data.qcStats.total) * 100)
+   419→                    : 0}
+   420→                  %
+   421→                </span>
+   422→              </p>
+   423→            </div>
+   424→            {qcData.length > 0 && data.qcStats.total > 0 && (
+   425→              <div style={{ height: 80 }}>
+   426→                <ResponsiveContainer width="100%" height="100%">
+   427→                  <RadialBarChart
+   428→                    cx="50%"
+   429→                    cy="50%"
+   430→                    innerRadius="30%"
+   431→                    outerRadius="100%"
+   432→                    data={qcData}
+   433→                    startAngle={90}
+   434→                    endAngle={-270}
+   435→                  >
+   436→                    <RadialBar background dataKey="value" cornerRadius={6} />
+   437→                  </RadialBarChart>
+   438→                </ResponsiveContainer>
+   439→              </div>
+   440→            )}
+   441→          </CardContent>
+   442→        </Card>
+   443→      </div>
+   444→
+   445→      {/* Live panels — 2-col grid */}
+   446→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   447→        {/* Waiting Sample Collection */}
+   448→        <Card>
+   449→          <CardHeader className="pb-2">
+   450→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   451→              <ListChecks className="w-4 h-4 text-amber-600" /> Waiting Sample Collection
+   452→              <Badge variant="outline" className="ml-auto text-[10px]">{data.waitingCollection.length}</Badge>
+   453→            </CardTitle>
+   454→          </CardHeader>
+   455→          <CardContent className="pt-0">
+   456→            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+   457→              {data.waitingCollection.length === 0 ? (
+   458→                <p className="text-xs text-muted-foreground text-center py-6">No samples waiting for collection</p>
+   459→              ) : (
+   460→                data.waitingCollection.map((w) => (
+   461→                  <button
+   462→                    key={w.orderNo}
+   463→                    onClick={() => toast.info(`Order ${w.orderNo} · ${w.patient} · ${w.tests} tests`)}
+   464→                    className="w-full flex items-center justify-between gap-2 text-left rounded-md border border-border/60 hover:bg-accent/50 px-3 py-2 transition-colors"
+   465→                  >
+   466→                    <div className="min-w-0">
+   467→                      <p className="text-sm font-medium truncate">{w.patient}</p>
+   468→                      <p className="text-[11px] text-muted-foreground font-mono">{w.orderNo} · {w.tests} tests</p>
+   469→                    </div>
+   470→                    <Badge className={`text-[10px] ${PRIORITY_COLORS[w.priority] || PRIORITY_COLORS.normal}`}>
+   471→                      {statusLabel(w.priority)}
+   472→                    </Badge>
+   473→                  </button>
+   474→                ))
+   475→              )}
+   476→            </div>
+   477→          </CardContent>
+   478→        </Card>
+   479→
+   480→        {/* Urgent Tests */}
+   481→        <Card>
+   482→          <CardHeader className="pb-2">
+   483→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   484→              <AlertTriangle className="w-4 h-4 text-rose-600" /> Urgent Tests
+   485→              <Badge variant="outline" className="ml-auto text-[10px]">{data.urgentTests.length}</Badge>
+   486→            </CardTitle>
+   487→          </CardHeader>
+   488→          <CardContent className="pt-0">
+   489→            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+   490→              {data.urgentTests.length === 0 ? (
+   491→                <p className="text-xs text-muted-foreground text-center py-6">No urgent tests pending</p>
+   492→              ) : (
+   493→                data.urgentTests.map((u) => (
+   494→                  <div
+   495→                    key={u.orderNo}
+   496→                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2"
+   497→                  >
+   498→                    <div className="min-w-0">
+   499→                      <p className="text-sm font-medium truncate">{u.patient}</p>
+   500→                      <p className="text-[11px] text-muted-foreground font-mono">{u.orderNo}</p>
+   501→                    </div>
+   502→                    <Badge className={`text-[10px] ${PRIORITY_COLORS[u.priority] || PRIORITY_COLORS.urgent}`}>
+   503→                      {statusLabel(u.priority)}
+   504→                    </Badge>
+   505→                  </div>
+   506→                ))
+   507→              )}
+   508→            </div>
+   509→          </CardContent>
+   510→        </Card>
+   511→
+   512→        {/* Critical Alerts */}
+   513→        <Card>
+   514→          <CardHeader className="pb-2">
+   515→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   516→              <Bell className="w-4 h-4 text-rose-600" /> Critical Alerts
+   517→              <Badge variant="outline" className="ml-auto text-[10px]">{data.criticalAlerts.length}</Badge>
+   518→            </CardTitle>
+   519→          </CardHeader>
+   520→          <CardContent className="pt-0">
+   521→            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+   522→              {data.criticalAlerts.length === 0 ? (
+   523→                <p className="text-xs text-muted-foreground text-center py-6">No critical alerts 🎉</p>
+   524→              ) : (
+   525→                data.criticalAlerts.map((c, i) => (
+   526→                  <div
+   527→                    key={`${c.orderId}-${i}`}
+   528→                    className="flex items-center justify-between gap-2 rounded-md border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 px-3 py-2"
+   529→                  >
+   530→                    <div className="min-w-0">
+   531→                      <p className="text-sm font-medium truncate">{c.parameter}</p>
+   532→                      <p className="text-[11px] text-muted-foreground">
+   533→                        Value: <span className="font-semibold text-rose-700 dark:text-rose-400">{c.value}</span>
+   534→                      </p>
+   535→                    </div>
+   536→                    <div className="flex items-center gap-1.5">
+   537→                      <Badge className={`text-[10px] ${c.flag === "panic" ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"}`}>
+   538→                        {FLAG_LABELS[c.flag] || statusLabel(c.flag)}
+   539→                      </Badge>
+   540→                      <Button
+   541→                        size="sm"
+   542→                        variant="outline"
+   543→                        className="h-7 px-2 text-[11px] gap-1"
+   544→                        onClick={() => toast.info(`Notification sent for ${c.parameter} (order ${c.orderId})`)}
+   545→                      >
+   546→                        Notify
+   547→                      </Button>
+   548→                    </div>
+   549→                  </div>
+   550→                ))
+   551→              )}
+   552→            </div>
+   553→          </CardContent>
+   554→        </Card>
+   555→
+   556→        {/* Pending Approval */}
+   557→        <Card>
+   558→          <CardHeader className="pb-2">
+   559→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   560→              <FileText className="w-4 h-4 text-teal-600" /> Pending Approval
+   561→              <Badge variant="outline" className="ml-auto text-[10px]">{data.pendingApprovalList.length}</Badge>
+   562→            </CardTitle>
+   563→          </CardHeader>
+   564→          <CardContent className="pt-0">
+   565→            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+   566→              {data.pendingApprovalList.length === 0 ? (
+   567→                <p className="text-xs text-muted-foreground text-center py-6">No reports pending approval</p>
+   568→              ) : (
+   569→                data.pendingApprovalList.map((p) => (
+   570→                  <div
+   571→                    key={p.orderNo}
+   572→                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2"
+   573→                  >
+   574→                    <div className="min-w-0">
+   575→                      <p className="text-sm font-medium truncate">{p.patient}</p>
+   576→                      <p className="text-[11px] text-muted-foreground font-mono">{p.orderNo} · {p.tests} tests</p>
+   577→                    </div>
+   578→                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+   579→                  </div>
+   580→                ))
+   581→              )}
+   582→            </div>
+   583→          </CardContent>
+   584→        </Card>
+   585→      </div>
+   586→
+   587→      {/* Recently Released + Low Stock — 2-col grid */}
+   588→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   589→        {/* Recently Released */}
+   590→        <Card>
+   591→          <CardHeader className="pb-2">
+   592→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   593→              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Recently Released
+   594→            </CardTitle>
+   595→          </CardHeader>
+   596→          <CardContent className="pt-0">
+   597→            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+   598→              {data.recentlyReleased.length === 0 ? (
+   599→                <p className="text-xs text-muted-foreground text-center py-6">No reports released yet</p>
+   600→              ) : (
+   601→                data.recentlyReleased.map((r) => (
+   602→                  <div
+   603→                    key={r.orderNo}
+   604→                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2"
+   605→                  >
+   606→                    <div className="min-w-0">
+   607→                      <p className="text-sm font-medium truncate">{r.patient}</p>
+   608→                      <p className="text-[11px] text-muted-foreground font-mono">{r.orderNo}</p>
+   609→                    </div>
+   610→                    <p className="text-[11px] text-muted-foreground whitespace-nowrap">
+   611→                      {r.completedAt ? timeAgo(r.completedAt) : "—"}
+   612→                    </p>
+   613→                  </div>
+   614→                ))
+   615→              )}
+   616→            </div>
+   617→          </CardContent>
+   618→        </Card>
+   619→
+   620→        {/* Low Stock Inventory */}
+   621→        <Card>
+   622→          <CardHeader className="pb-2">
+   623→            <CardTitle className="text-sm font-medium flex items-center gap-2">
+   624→              <Package className="w-4 h-4 text-amber-600" /> Low Stock Inventory
+   625→              <Badge variant="outline" className="ml-auto text-[10px]">{data.lowStock.length}</Badge>
+   626→            </CardTitle>
+   627→          </CardHeader>
+   628→          <CardContent className="pt-0">
+   629→            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+   630→              {data.lowStock.length === 0 ? (
+   631→                <p className="text-xs text-muted-foreground text-center py-6">All inventory levels are healthy ✓</p>
+   632→              ) : (
+   633→                data.lowStock.map((s) => {
+   634→                  const ratio = s.reorderLevel > 0 ? (s.stockQty / s.reorderLevel) * 100 : 100;
+   635→                  return (
+   636→                    <div
+   637→                      key={s.id}
+   638→                      className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2"
+   639→                    >
+   640→                      <div className="min-w-0 flex-1">
+   641→                        <p className="text-sm font-medium truncate">{s.name}</p>
+   642→                        <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
+   643→                          <div
+   644→                            className={`h-full rounded-full ${ratio <= 50 ? "bg-rose-500" : "bg-amber-500"}`}
+   645→                            style={{ width: `${Math.min(ratio, 100)}%` }}
+   646→                          />
+   647→                        </div>
+   648→                      </div>
+   649→                      <div className="text-right whitespace-nowrap">
+   650→                        <p className="text-sm font-semibold text-rose-600">{s.stockQty}</p>
+   651→                        <p className="text-[10px] text-muted-foreground">/ {s.reorderLevel}</p>
+   652→                      </div>
+   653→                    </div>
+   654→                  );
+   655→                })
+   656→              )}
+   657→            </div>
+   658→          </CardContent>
+   659→        </Card>
+   660→      </div>
+   661→
+   662→      {/* Departments strip */}
+   663→      <Card>
+   664→        <CardHeader className="pb-2">
+   665→          <CardTitle className="text-sm font-medium flex items-center gap-2">
+   666→            <Building2 className="w-4 h-4 text-teal-600" /> Lab Departments
+   667→            <Badge variant="outline" className="ml-auto text-[10px]">{data.departments.length}</Badge>
+   668→          </CardTitle>
+   669→        </CardHeader>
+   670→        <CardContent>
+   671→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2.5">
+   672→            {data.departments.map((d) => (
+   673→              <div
+   674→                key={d.id}
+   675→                className="rounded-lg border border-border/60 p-3 hover:bg-accent/40 transition-colors"
+   676→              >
+   677→                <div className="flex items-center gap-2">
+   678→                  <span
+   679→                    className="w-2.5 h-2.5 rounded-full shrink-0"
+   680→                    style={{ backgroundColor: d.color || "#0d9488" }}
+   681→                  />
+   682→                  <p className="text-sm font-semibold truncate">{d.name}</p>
+   683→                </div>
+   684→                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{d.code}</p>
+   685→                <div className="flex items-center gap-3 mt-2 text-[11px]">
+   686→                  <span className="text-muted-foreground">{d.tests} tests</span>
+   687→                  <span className="text-muted-foreground">·</span>
+   688→                  <span className="text-muted-foreground">{d.equipment} equipment</span>
+   689→                </div>
+   690→              </div>
+   691→            ))}
+   692→          </div>
+   693→        </CardContent>
+   694→      </Card>
+   695→    </div>
+   696→  );
+   697→}
+   698→
+   699→/* ---------- Skeleton ---------- */
+   700→
+   701→function DashboardSkeleton() {
+   702→  return (
+   703→    <div className="space-y-4 animate-fade-in">
+   704→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   705→        <div className="space-y-2">
+   706→          <Skeleton className="h-6 w-56" />
+   707→          <Skeleton className="h-4 w-72" />
+   708→        </div>
+   709→        <div className="flex gap-2">
+   710→          <Skeleton className="h-9 w-24" />
+   711→          <Skeleton className="h-9 w-28" />
+   712→        </div>
+   713→      </div>
+   714→
+   715→      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+   716→        {Array.from({ length: 10 }).map((_, i) => (
+   717→          <Skeleton key={i} className="h-24 w-full rounded-lg" />
+   718→        ))}
+   719→      </div>
+   720→
+   721→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   722→        <Skeleton className="lg:col-span-2 h-[320px] rounded-lg" />
+   723→        <Skeleton className="h-[320px] rounded-lg" />
+   724→      </div>
+   725→
+   726→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   727→        <Skeleton className="h-[350px] rounded-lg" />
+   728→        <Skeleton className="h-[350px] rounded-lg" />
+   729→      </div>
+   730→
+   731→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   732→        <Skeleton className="lg:col-span-2 h-[310px] rounded-lg" />
+   733→        <Skeleton className="h-[310px] rounded-lg" />
+   734→      </div>
+   735→
+   736→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   737→        {Array.from({ length: 4 }).map((_, i) => (
+   738→          <Skeleton key={i} className="h-[260px] rounded-lg" />
+   739→        ))}
+   740→      </div>
+   741→
+   742→      <Skeleton className="h-[200px] rounded-lg" />
+   743→    </div>
+   744→  );
+   745→}
+   746→
+   747→export default LimsDashboard;
+   748→

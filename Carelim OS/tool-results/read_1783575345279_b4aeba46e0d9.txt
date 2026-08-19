@@ -1,0 +1,1213 @@
+     1→"use client";
+     2→
+     3→import { useFetch } from "@/lib/use-fetch";
+     4→import { useState, useMemo, useCallback, useEffect } from "react";
+     5→import { Card, CardContent } from "@/components/ui/card";
+     6→import { Input } from "@/components/ui/input";
+     7→import { Button } from "@/components/ui/button";
+     8→import { Badge } from "@/components/ui/badge";
+     9→import { Skeleton } from "@/components/ui/skeleton";
+    10→import { Label } from "@/components/ui/label";
+    11→import { Textarea } from "@/components/ui/textarea";
+    12→import {
+    13→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    14→} from "@/components/ui/table";
+    15→import {
+    16→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+    17→} from "@/components/ui/dialog";
+    18→import {
+    19→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    20→} from "@/components/ui/select";
+    21→import {
+    22→  Tabs, TabsList, TabsTrigger, TabsContent,
+    23→} from "@/components/ui/tabs";
+    24→import {
+    25→  Search, Plus, FlaskConical, ListChecks, CheckCircle2, Wallet,
+    26→  TestTube, Syringe, Microscope, CheckCheck, FileText, Download,
+    27→  ScanLine, Camera, Activity, ArrowUpDown,
+    28→} from "lucide-react";
+    29→import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
+    30→import { exportToCSV } from "@/lib/export-utils";
+    31→import { usePagination } from "@/lib/use-pagination";
+    32→import { Pagination } from "@/components/cms/pagination";
+    33→import { toast } from "sonner";
+    34→import { motion } from "framer-motion";
+    35→
+    36→interface LabTest {
+    37→  id: string;
+    38→  testCode: string;
+    39→  patientId: string;
+    40→  testName: string;
+    41→  category: string;
+    42→  doctorId: string | null;
+    43→  status: string;
+    44→  result: string | null;
+    45→  referenceRange: string | null;
+    46→  unit: string | null;
+    47→  fee: number;
+    48→  orderedAt: string;
+    49→  completedAt: string | null;
+    50→  patient: { id: string; patientCode: string; name: string; age: number; gender: string };
+    51→}
+    52→
+    53→interface RadiologyTest {
+    54→  id: string;
+    55→  testCode: string;
+    56→  patientId: string;
+    57→  modality: string;
+    58→  bodyPart: string;
+    59→  findings: string | null;
+    60→  impression: string | null;
+    61→  radiologist: string | null;
+    62→  status: string;
+    63→  imageUrl: string | null;
+    64→  fee: number;
+    65→  orderedAt: string;
+    66→  completedAt: string | null;
+    67→  patient: { id: string; patientCode: string; name: string };
+    68→}
+    69→
+    70→interface PatientLite {
+    71→  id: string; patientCode: string; name: string; phone: string;
+    72→}
+    73→
+    74→interface DoctorLite {
+    75→  id: string; name: string; specialization: string;
+    76→  department?: { id: string; name: string } | null;
+    77→}
+    78→
+    79→const CATEGORIES = ["Hematology", "Biochemistry", "Pathology", "Radiology", "Cardiology", "Microbiology"] as const;
+    80→
+    81→const CATEGORY_COLORS: Record<string, string> = {
+    82→  Hematology: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+    83→  Biochemistry: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+    84→  Pathology: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+    85→  Radiology: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300",
+    86→  Cardiology: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+    87→  Microbiology: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
+    88→};
+    89→
+    90→const MODALITIES = ["X-Ray", "CT Scan", "MRI", "ECG", "Ultrasound"] as const;
+    91→
+    92→const MODALITY_COLORS: Record<string, string> = {
+    93→  "X-Ray": "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
+    94→  "CT Scan": "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+    95→  "MRI": "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+    96→  "ECG": "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+    97→  "Ultrasound": "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300",
+    98→};
+    99→
+   100→const LAB_STATUS_FILTERS = ["all", "pending", "collected", "processing", "completed", "approved"] as const;
+   101→const RAD_STATUS_FILTERS = ["all", "pending", "captured", "reported", "approved"] as const;
+   102→
+   103→const PENDING_STATUSES = ["pending", "collected", "processing"];
+   104→const COMPLETED_STATUSES = ["completed", "approved"];
+   105→
+   106→type LabSortKey = "testCode" | "testName" | "fee" | "orderedAt";
+   107→const LAB_SORT_OPTIONS: { value: LabSortKey; label: string }[] = [
+   108→  { value: "orderedAt", label: "Ordered" },
+   109→  { value: "testCode", label: "Test Code" },
+   110→  { value: "testName", label: "Test Name" },
+   111→  { value: "fee", label: "Fee" },
+   112→];
+   113→
+   114→type RadSortKey = "testCode" | "bodyPart" | "fee" | "orderedAt";
+   115→const RAD_SORT_OPTIONS: { value: RadSortKey; label: string }[] = [
+   116→  { value: "orderedAt", label: "Ordered" },
+   117→  { value: "testCode", label: "Test Code" },
+   118→  { value: "bodyPart", label: "Body Part" },
+   119→  { value: "fee", label: "Fee" },
+   120→];
+   121→
+   122→/* ---------- Helpers ---------- */
+   123→
+   124→// Critical-value heuristic: highlight if the result is non-numeric OR
+   125→// numeric but outside the parseable reference range. If the reference
+   126→// range can't be parsed (or is missing), show normally.
+   127→function isCriticalResult(result: string | null, refRange: string | null): boolean {
+   128→  if (!result || !result.trim()) return false;
+   129→  const r = result.trim();
+   130→  const num = Number(r);
+   131→  if (Number.isNaN(num)) {
+   132→    // Non-numeric result — only flag critical when we have a numeric ref range
+   133→    if (!refRange || !/-?\d+(\.\d+)?/.test(refRange)) return false;
+   134→    return true;
+   135→  }
+   136→  if (!refRange) return false;
+   137→  const nums = refRange.match(/-?\d+(\.\d+)?/g);
+   138→  if (!nums || nums.length < 2) return false;
+   139→  const [low, high] = nums.map(Number).sort((a, b) => a - b);
+   140→  return num < low || num > high;
+   141→}
+   142→
+   143→function sortList<T>(items: T[], key: keyof T | "orderedAt", dir: "asc" | "desc"): T[] {
+   144→  const d = dir === "asc" ? 1 : -1;
+   145→  return [...items].sort((a, b) => {
+   146→    const av = a[key as keyof T];
+   147→    const bv = b[key as keyof T];
+   148→    if (av == null) return 1;
+   149→    if (bv == null) return -1;
+   150→    if (typeof av === "number" && typeof bv === "number") return (av - bv) * d;
+   151→    if (key === "orderedAt") {
+   152→      return (new Date(av as unknown as string).getTime() - new Date(bv as unknown as string).getTime()) * d;
+   153→    }
+   154→    return String(av).localeCompare(String(bv)) * d;
+   155→  });
+   156→}
+   157→
+   158→export function LaboratoryView() {
+   159→  const [tab, setTab] = useState<"lab" | "radiology">("lab");
+   160→
+   161→  /* ---- Lab state ---- */
+   162→  const [labRefresh, setLabRefresh] = useState(0);
+   163→  const refreshLab = useCallback(() => setLabRefresh((k) => k + 1), []);
+   164→  const { data: labTests, loading: labLoading, error: labError } = useFetch<LabTest[]>(
+   165→    labRefresh ? `/api/lab-tests?_r=${labRefresh}` : "/api/lab-tests",
+   166→  );
+   167→  const [labQ, setLabQ] = useState("");
+   168→  const [labStatus, setLabStatus] = useState<string>("all");
+   169→  const [labCat, setLabCat] = useState<string>("all");
+   170→  const [labSortKey, setLabSortKey] = useState<LabSortKey>("orderedAt");
+   171→  const [labSortDir, setLabSortDir] = useState<"asc" | "desc">("desc");
+   172→  const [labCreate, setLabCreate] = useState(false);
+   173→  const [labResult, setLabResult] = useState<LabTest | null>(null);
+   174→
+   175→  /* ---- Radiology state ---- */
+   176→  const [radRefresh, setRadRefresh] = useState(0);
+   177→  const refreshRad = useCallback(() => setRadRefresh((k) => k + 1), []);
+   178→  const { data: radTests, loading: radLoading, error: radError } = useFetch<RadiologyTest[]>(
+   179→    radRefresh ? `/api/radiology?_r=${radRefresh}` : "/api/radiology",
+   180→  );
+   181→  const [radQ, setRadQ] = useState("");
+   182→  const [radStatus, setRadStatus] = useState<string>("all");
+   183→  const [radModality, setRadModality] = useState<string>("all");
+   184→  const [radSortKey, setRadSortKey] = useState<RadSortKey>("orderedAt");
+   185→  const [radSortDir, setRadSortDir] = useState<"asc" | "desc">("desc");
+   186→  const [radCreate, setRadCreate] = useState(false);
+   187→  const [radReport, setRadReport] = useState<RadiologyTest | null>(null);
+   188→
+   189→  /* ---- Lab filtered + paged ---- */
+   190→  const labFiltered = useMemo(() => {
+   191→    if (!labTests) return [];
+   192→    const ql = labQ.toLowerCase();
+   193→    const list = labTests.filter((t) => {
+   194→      const matchesStatus = labStatus === "all" || t.status === labStatus;
+   195→      const matchesCat = labCat === "all" || t.category === labCat;
+   196→      const matchesSearch = !ql ||
+   197→        t.testCode.toLowerCase().includes(ql) ||
+   198→        t.patient.name.toLowerCase().includes(ql) ||
+   199→        t.testName.toLowerCase().includes(ql);
+   200→      return matchesStatus && matchesCat && matchesSearch;
+   201→    });
+   202→    return sortList(list, labSortKey as keyof LabTest, labSortDir);
+   203→  }, [labTests, labQ, labStatus, labCat, labSortKey, labSortDir]);
+   204→  const labPage = usePagination<LabTest>(labFiltered, 10);
+   205→
+   206→  /* ---- Rad filtered + paged ---- */
+   207→  const radFiltered = useMemo(() => {
+   208→    if (!radTests) return [];
+   209→    const ql = radQ.toLowerCase();
+   210→    const list = radTests.filter((t) => {
+   211→      const matchesStatus = radStatus === "all" || t.status === radStatus;
+   212→      const matchesMod = radModality === "all" || t.modality === radModality;
+   213→      const matchesSearch = !ql ||
+   214→        t.testCode.toLowerCase().includes(ql) ||
+   215→        t.patient.name.toLowerCase().includes(ql) ||
+   216→        t.bodyPart.toLowerCase().includes(ql) ||
+   217→        t.modality.toLowerCase().includes(ql);
+   218→      return matchesStatus && matchesMod && matchesSearch;
+   219→    });
+   220→    return sortList(list, radSortKey as keyof RadiologyTest, radSortDir);
+   221→  }, [radTests, radQ, radStatus, radModality, radSortKey, radSortDir]);
+   222→  const radPage = usePagination<RadiologyTest>(radFiltered, 10);
+   223→
+   224→  /* ---- Stats ---- */
+   225→  const labStats = useMemo(() => {
+   226→    if (!labTests) return { total: 0, pending: 0, completed: 0, revenue: 0 };
+   227→    return {
+   228→      total: labTests.length,
+   229→      pending: labTests.filter((t) => PENDING_STATUSES.includes(t.status)).length,
+   230→      completed: labTests.filter((t) => COMPLETED_STATUSES.includes(t.status)).length,
+   231→      revenue: labTests.filter((t) => COMPLETED_STATUSES.includes(t.status)).reduce((s, t) => s + (t.fee || 0), 0),
+   232→    };
+   233→  }, [labTests]);
+   234→
+   235→  const radStats = useMemo(() => {
+   236→    if (!radTests) return { total: 0, pending: 0, reported: 0, revenue: 0 };
+   237→    return {
+   238→      total: radTests.length,
+   239→      pending: radTests.filter((t) => t.status === "pending" || t.status === "captured").length,
+   240→      reported: radTests.filter((t) => t.status === "reported" || t.status === "approved").length,
+   241→      revenue: radTests.filter((t) => t.status === "reported" || t.status === "approved").reduce((s, t) => s + (t.fee || 0), 0),
+   242→    };
+   243→  }, [radTests]);
+   244→
+   245→  const handleExport = () => {
+   246→    if (tab === "lab") {
+   247→      if (!labFiltered.length) { toast.info("No lab tests to export"); return; }
+   248→      exportToCSV("lab-tests", [
+   249→        "Test Code", "Test Name", "Category", "Patient", "Ordered", "Result", "Status", "Fee",
+   250→      ], labFiltered.map((t) => [
+   251→        t.testCode, t.testName, t.category, t.patient.name,
+   252→        formatDate(t.orderedAt),
+   253→        t.result ? `${t.result}${t.unit ? ` ${t.unit}` : ""}` : "",
+   254→        statusLabel(t.status), t.fee,
+   255→      ]));
+   256→      toast.success(`Exported ${labFiltered.length} lab tests to CSV`);
+   257→    } else {
+   258→      if (!radFiltered.length) { toast.info("No radiology tests to export"); return; }
+   259→      exportToCSV("radiology-tests", [
+   260→        "Test Code", "Modality", "Body Part", "Patient", "Ordered", "Findings", "Status", "Fee",
+   261→      ], radFiltered.map((t) => [
+   262→        t.testCode, t.modality, t.bodyPart, t.patient.name,
+   263→        formatDate(t.orderedAt),
+   264→        t.findings || "", statusLabel(t.status), t.fee,
+   265→      ]));
+   266→      toast.success(`Exported ${radFiltered.length} radiology tests to CSV`);
+   267→    }
+   268→  };
+   269→
+   270→  if (labError || radError) {
+   271→    return (
+   272→      <div className="space-y-4 animate-fade-in">
+   273→        <Card>
+   274→          <CardContent className="p-10 text-center text-sm text-rose-600">
+   275→            Failed to load: {labError || radError}
+   276→          </CardContent>
+   277→        </Card>
+   278→      </div>
+   279→    );
+   280→  }
+   281→
+   282→  return (
+   283→    <div className="space-y-4 animate-fade-in">
+   284→      {/* Header */}
+   285→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   286→        <div>
+   287→          <h2 className="text-xl font-bold flex items-center gap-2">
+   288→            <FlaskConical className="w-5 h-5 text-teal-600" /> Laboratory
+   289→          </h2>
+   290→          <p className="text-sm text-muted-foreground">
+   291→            {tab === "lab"
+   292→              ? `${labTests?.length ?? 0} lab tests · ${labStats.pending} in progress · ${labStats.completed} completed`
+   293→              : `${radTests?.length ?? 0} radiology tests · ${radStats.pending} pending · ${radStats.reported} reported`}
+   294→          </p>
+   295→        </div>
+   296→        <div className="flex items-center gap-2">
+   297→          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
+   298→            <Download className="w-4 h-4" /> Export CSV
+   299→          </Button>
+   300→          <Button
+   301→            size="sm"
+   302→            className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
+   303→            onClick={() => tab === "lab" ? setLabCreate(true) : setRadCreate(true)}
+   304→          >
+   305→            <Plus className="w-4 h-4" />
+   306→            {tab === "lab" ? "Order Test" : "Order Radiology"}
+   307→          </Button>
+   308→        </div>
+   309→      </div>
+   310→
+   311→      {/* Stat cards (tab-aware) */}
+   312→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+   313→        {tab === "lab" ? (
+   314→          [
+   315→            { label: "Total Tests", value: String(labStats.total), icon: TestTube, accent: "from-teal-500 to-teal-600" },
+   316→            { label: "In Progress", value: String(labStats.pending), icon: ListChecks, accent: "from-amber-500 to-orange-500" },
+   317→            { label: "Completed", value: String(labStats.completed), icon: CheckCircle2, accent: "from-emerald-500 to-emerald-600" },
+   318→            { label: "Lab Revenue", value: formatRs(labStats.revenue), icon: Wallet, accent: "from-teal-500 to-emerald-600" },
+   319→          ].map((s, i) => (
+   320→            <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+   321→              <StatCard {...s} />
+   322→            </motion.div>
+   323→          ))
+   324→        ) : (
+   325→          [
+   326→            { label: "Total Tests", value: String(radStats.total), icon: ScanLine, accent: "from-teal-500 to-teal-600" },
+   327→            { label: "Pending", value: String(radStats.pending), icon: Camera, accent: "from-amber-500 to-orange-500" },
+   328→            { label: "Reported", value: String(radStats.reported), icon: CheckCircle2, accent: "from-emerald-500 to-emerald-600" },
+   329→            { label: "Revenue", value: formatRs(radStats.revenue), icon: Wallet, accent: "from-teal-500 to-emerald-600" },
+   330→          ].map((s, i) => (
+   331→            <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+   332→              <StatCard {...s} />
+   333→            </motion.div>
+   334→          ))
+   335→        )}
+   336→      </div>
+   337→
+   338→      {/* Tabs */}
+   339→      <Tabs value={tab} onValueChange={(v) => setTab(v as "lab" | "radiology")}>
+   340→        <TabsList>
+   341→          <TabsTrigger value="lab" className="gap-1.5">
+   342→            <FlaskConical className="w-3.5 h-3.5" /> Laboratory
+   343→          </TabsTrigger>
+   344→          <TabsTrigger value="radiology" className="gap-1.5">
+   345→            <ScanLine className="w-3.5 h-3.5" /> Radiology
+   346→          </TabsTrigger>
+   347→        </TabsList>
+   348→
+   349→        {/* ===== Lab tab ===== */}
+   350→        <TabsContent value="lab">
+   351→          <Card>
+   352→            <CardContent className="p-4 space-y-3">
+   353→              {/* Filter bar */}
+   354→              <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+   355→                <div className="relative flex-1 max-w-md">
+   356→                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   357→                  <Input
+   358→                    placeholder="Search test code, patient or test name…"
+   359→                    value={labQ}
+   360→                    onChange={(e) => setLabQ(e.target.value)}
+   361→                    className="pl-9"
+   362→                  />
+   363→                </div>
+   364→                <div className="flex items-center gap-2">
+   365→                  <Label className="text-xs text-muted-foreground whitespace-nowrap">Category</Label>
+   366→                  <Select value={labCat} onValueChange={setLabCat}>
+   367→                    <SelectTrigger className="w-[160px] h-9"><SelectValue /></SelectTrigger>
+   368→                    <SelectContent>
+   369→                      <SelectItem value="all">All Categories</SelectItem>
+   370→                      {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+   371→                    </SelectContent>
+   372→                  </Select>
+   373→                </div>
+   374→                <div className="flex items-center gap-2">
+   375→                  <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
+   376→                  <Select value={labSortKey} onValueChange={(v) => setLabSortKey(v as LabSortKey)}>
+   377→                    <SelectTrigger className="w-[130px] h-9"><SelectValue /></SelectTrigger>
+   378→                    <SelectContent>
+   379→                      {LAB_SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+   380→                    </SelectContent>
+   381→                  </Select>
+   382→                  <Button variant="outline" size="sm" className="h-9 px-2 text-xs"
+   383→                    onClick={() => setLabSortDir((d) => (d === "asc" ? "desc" : "asc"))}>
+   384→                    {labSortDir === "asc" ? "Asc" : "Desc"}
+   385→                  </Button>
+   386→                </div>
+   387→                <div className="flex flex-wrap gap-1.5">
+   388→                  {LAB_STATUS_FILTERS.map((s) => (
+   389→                    <button key={s} onClick={() => setLabStatus(s)}
+   390→                      className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+   391→                        labStatus === s
+   392→                          ? "bg-teal-600 text-white border-teal-600"
+   393→                          : "bg-card hover:bg-accent border-border"
+   394→                      }`}>
+   395→                      {s === "all" ? "All" : statusLabel(s)}
+   396→                    </button>
+   397→                  ))}
+   398→                </div>
+   399→              </div>
+   400→
+   401→              {/* Table */}
+   402→              <div className="rounded-lg border overflow-hidden">
+   403→                <Table>
+   404→                  <TableHeader>
+   405→                    <TableRow className="bg-muted/50">
+   406→                      <TableHead className="w-[110px]">Test Code</TableHead>
+   407→                      <TableHead>Test</TableHead>
+   408→                      <TableHead className="hidden md:table-cell">Category</TableHead>
+   409→                      <TableHead>Patient</TableHead>
+   410→                      <TableHead className="hidden sm:table-cell">Ordered</TableHead>
+   411→                      <TableHead className="hidden lg:table-cell">Result</TableHead>
+   412→                      <TableHead className="text-center">Status</TableHead>
+   413→                      <TableHead className="text-right hidden md:table-cell">Fee</TableHead>
+   414→                      <TableHead className="text-right">Actions</TableHead>
+   415→                    </TableRow>
+   416→                  </TableHeader>
+   417→                  <TableBody>
+   418→                    {labLoading ? (
+   419→                      Array.from({ length: 8 }).map((_, i) => (
+   420→                        <TableRow key={i}>
+   421→                          <TableCell colSpan={9}><Skeleton className="h-8 w-full" /></TableCell>
+   422→                        </TableRow>
+   423→                      ))
+   424→                    ) : labPage.paged.length === 0 ? (
+   425→                      <TableRow>
+   426→                        <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">
+   427→                          <FlaskConical className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+   428→                          No lab tests found
+   429→                        </TableCell>
+   430→                      </TableRow>
+   431→                    ) : labPage.paged.map((t) => {
+   432→                      const critical = isCriticalResult(t.result, t.referenceRange);
+   433→                      return (
+   434→                        <TableRow key={t.id} className="hover:bg-accent/40">
+   435→                          <TableCell className="font-mono text-xs">{t.testCode}</TableCell>
+   436→                          <TableCell>
+   437→                            <p className="font-medium text-sm">{t.testName}</p>
+   438→                            <p className="text-xs text-muted-foreground md:hidden">{t.category}</p>
+   439→                          </TableCell>
+   440→                          <TableCell className="hidden md:table-cell">
+   441→                            <Badge variant="outline" className={`text-[10px] ${CATEGORY_COLORS[t.category] || "bg-gray-100"}`}>
+   442→                              {t.category}
+   443→                            </Badge>
+   444→                          </TableCell>
+   445→                          <TableCell>
+   446→                            <p className="font-medium text-sm">{t.patient.name}</p>
+   447→                            <p className="text-xs text-muted-foreground font-mono">{t.patient.patientCode}</p>
+   448→                          </TableCell>
+   449→                          <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+   450→                            {formatDate(t.orderedAt)}
+   451→                          </TableCell>
+   452→                          <TableCell className="hidden lg:table-cell text-sm">
+   453→                            {t.result ? (
+   454→                              <span className={`font-medium ${critical ? "text-rose-600 dark:text-rose-400" : ""}`}>
+   455→                                {t.result}
+   456→                                {t.unit && <span className="text-muted-foreground ml-1 font-normal">{t.unit}</span>}
+   457→                                {critical && (
+   458→                                  <span className="ml-1 text-[10px] uppercase tracking-wide font-bold text-rose-600">⚠</span>
+   459→                                )}
+   460→                              </span>
+   461→                            ) : (
+   462→                              <span className="text-muted-foreground">—</span>
+   463→                            )}
+   464→                          </TableCell>
+   465→                          <TableCell className="text-center">
+   466→                            <Badge className={`text-[10px] ${statusColors[t.status] || "bg-gray-100"}`}>
+   467→                              {statusLabel(t.status)}
+   468→                            </Badge>
+   469→                          </TableCell>
+   470→                          <TableCell className="text-right hidden md:table-cell text-sm font-medium">
+   471→                            {formatRs(t.fee)}
+   472→                          </TableCell>
+   473→                          <TableCell className="text-right">
+   474→                            <LabWorkflowActions
+   475→                              test={t}
+   476→                              onResult={() => setLabResult(t)}
+   477→                              onActioned={refreshLab}
+   478→                            />
+   479→                          </TableCell>
+   480→                        </TableRow>
+   481→                      );
+   482→                    })}
+   483→                  </TableBody>
+   484→                </Table>
+   485→              </div>
+   486→
+   487→              <Pagination
+   488→                page={labPage.page}
+   489→                totalPages={labPage.totalPages}
+   490→                setPage={labPage.setPage}
+   491→                size={labPage.size}
+   492→                setSize={labPage.setSize}
+   493→                range={labPage.range}
+   494→              />
+   495→            </CardContent>
+   496→          </Card>
+   497→        </TabsContent>
+   498→
+   499→        {/* ===== Radiology tab ===== */}
+   500→        <TabsContent value="radiology">
+   501→          <Card>
+   502→            <CardContent className="p-4 space-y-3">
+   503→              {/* Filter bar */}
+   504→              <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+   505→                <div className="relative flex-1 max-w-md">
+   506→                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   507→                  <Input
+   508→                    placeholder="Search test code, patient, modality or body part…"
+   509→                    value={radQ}
+   510→                    onChange={(e) => setRadQ(e.target.value)}
+   511→                    className="pl-9"
+   512→                  />
+   513→                </div>
+   514→                <div className="flex items-center gap-2">
+   515→                  <Label className="text-xs text-muted-foreground whitespace-nowrap">Modality</Label>
+   516→                  <Select value={radModality} onValueChange={setRadModality}>
+   517→                    <SelectTrigger className="w-[150px] h-9"><SelectValue /></SelectTrigger>
+   518→                    <SelectContent>
+   519→                      <SelectItem value="all">All Modalities</SelectItem>
+   520→                      {MODALITIES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+   521→                    </SelectContent>
+   522→                  </Select>
+   523→                </div>
+   524→                <div className="flex items-center gap-2">
+   525→                  <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
+   526→                  <Select value={radSortKey} onValueChange={(v) => setRadSortKey(v as RadSortKey)}>
+   527→                    <SelectTrigger className="w-[130px] h-9"><SelectValue /></SelectTrigger>
+   528→                    <SelectContent>
+   529→                      {RAD_SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+   530→                    </SelectContent>
+   531→                  </Select>
+   532→                  <Button variant="outline" size="sm" className="h-9 px-2 text-xs"
+   533→                    onClick={() => setRadSortDir((d) => (d === "asc" ? "desc" : "asc"))}>
+   534→                    {radSortDir === "asc" ? "Asc" : "Desc"}
+   535→                  </Button>
+   536→                </div>
+   537→                <div className="flex flex-wrap gap-1.5">
+   538→                  {RAD_STATUS_FILTERS.map((s) => (
+   539→                    <button key={s} onClick={() => setRadStatus(s)}
+   540→                      className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+   541→                        radStatus === s
+   542→                          ? "bg-teal-600 text-white border-teal-600"
+   543→                          : "bg-card hover:bg-accent border-border"
+   544→                      }`}>
+   545→                      {s === "all" ? "All" : statusLabel(s)}
+   546→                    </button>
+   547→                  ))}
+   548→                </div>
+   549→              </div>
+   550→
+   551→              {/* Table */}
+   552→              <div className="rounded-lg border overflow-hidden">
+   553→                <Table>
+   554→                  <TableHeader>
+   555→                    <TableRow className="bg-muted/50">
+   556→                      <TableHead className="w-[110px]">Test Code</TableHead>
+   557→                      <TableHead className="hidden md:table-cell">Modality</TableHead>
+   558→                      <TableHead>Body Part</TableHead>
+   559→                      <TableHead>Patient</TableHead>
+   560→                      <TableHead className="hidden sm:table-cell">Ordered</TableHead>
+   561→                      <TableHead className="hidden lg:table-cell">Findings</TableHead>
+   562→                      <TableHead className="text-center">Status</TableHead>
+   563→                      <TableHead className="text-right hidden md:table-cell">Fee</TableHead>
+   564→                      <TableHead className="text-right">Actions</TableHead>
+   565→                    </TableRow>
+   566→                  </TableHeader>
+   567→                  <TableBody>
+   568→                    {radLoading ? (
+   569→                      Array.from({ length: 8 }).map((_, i) => (
+   570→                        <TableRow key={i}>
+   571→                          <TableCell colSpan={9}><Skeleton className="h-8 w-full" /></TableCell>
+   572→                        </TableRow>
+   573→                      ))
+   574→                    ) : radPage.paged.length === 0 ? (
+   575→                      <TableRow>
+   576→                        <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">
+   577→                          <ScanLine className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+   578→                          No radiology tests found
+   579→                        </TableCell>
+   580→                      </TableRow>
+   581→                    ) : radPage.paged.map((t) => (
+   582→                      <TableRow key={t.id} className="hover:bg-accent/40">
+   583→                        <TableCell className="font-mono text-xs">{t.testCode}</TableCell>
+   584→                        <TableCell className="hidden md:table-cell">
+   585→                          <Badge variant="outline" className={`text-[10px] ${MODALITY_COLORS[t.modality] || "bg-gray-100"}`}>
+   586→                            {t.modality}
+   587→                          </Badge>
+   588→                        </TableCell>
+   589→                        <TableCell>
+   590→                          <p className="font-medium text-sm">{t.bodyPart}</p>
+   591→                          <p className="text-xs text-muted-foreground md:hidden">{t.modality}</p>
+   592→                        </TableCell>
+   593→                        <TableCell>
+   594→                          <p className="font-medium text-sm">{t.patient.name}</p>
+   595→                          <p className="text-xs text-muted-foreground font-mono">{t.patient.patientCode}</p>
+   596→                        </TableCell>
+   597→                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+   598→                          {formatDate(t.orderedAt)}
+   599→                        </TableCell>
+   600→                        <TableCell className="hidden lg:table-cell text-sm max-w-xs">
+   601→                          {t.findings ? (
+   602→                            <span className="line-clamp-2 text-muted-foreground">{t.findings}</span>
+   603→                          ) : (
+   604→                            <span className="text-muted-foreground">—</span>
+   605→                          )}
+   606→                        </TableCell>
+   607→                        <TableCell className="text-center">
+   608→                          <Badge className={`text-[10px] ${statusColors[t.status] || "bg-gray-100"}`}>
+   609→                            {statusLabel(t.status)}
+   610→                          </Badge>
+   611→                        </TableCell>
+   612→                        <TableCell className="text-right hidden md:table-cell text-sm font-medium">
+   613→                          {formatRs(t.fee)}
+   614→                        </TableCell>
+   615→                        <TableCell className="text-right">
+   616→                          <RadWorkflowActions
+   617→                            test={t}
+   618→                            onReport={() => setRadReport(t)}
+   619→                            onActioned={refreshRad}
+   620→                          />
+   621→                        </TableCell>
+   622→                      </TableRow>
+   623→                    ))}
+   624→                  </TableBody>
+   625→                </Table>
+   626→              </div>
+   627→
+   628→              <Pagination
+   629→                page={radPage.page}
+   630→                totalPages={radPage.totalPages}
+   631→                setPage={radPage.setPage}
+   632→                size={radPage.size}
+   633→                setSize={radPage.setSize}
+   634→                range={radPage.range}
+   635→              />
+   636→            </CardContent>
+   637→          </Card>
+   638→        </TabsContent>
+   639→      </Tabs>
+   640→
+   641→      {/* Order lab test dialog */}
+   642→      <OrderTestDialog
+   643→        open={labCreate}
+   644→        onOpenChange={setLabCreate}
+   645→        onCreated={() => { setLabCreate(false); refreshLab(); toast.success("Lab test ordered successfully"); }}
+   646→      />
+   647→
+   648→      {/* Enter lab result dialog */}
+   649→      <EnterResultDialog
+   650→        test={labResult}
+   651→        onOpenChange={(o) => !o && setLabResult(null)}
+   652→        onSaved={() => { setLabResult(null); refreshLab(); }}
+   653→      />
+   654→
+   655→      {/* Order radiology dialog */}
+   656→      <OrderRadiologyDialog
+   657→        open={radCreate}
+   658→        onOpenChange={setRadCreate}
+   659→        onCreated={() => { setRadCreate(false); refreshRad(); toast.success("Radiology test ordered successfully"); }}
+   660→      />
+   661→
+   662→      {/* Report radiology dialog */}
+   663→      <ReportRadiologyDialog
+   664→        test={radReport}
+   665→        onOpenChange={(o) => !o && setRadReport(null)}
+   666→        onSaved={() => { setRadReport(null); refreshRad(); }}
+   667→      />
+   668→    </div>
+   669→  );
+   670→}
+   671→
+   672→/* ---------- Stat card ---------- */
+   673→function StatCard({ label, value, icon: Icon, accent }: {
+   674→  label: string; value: string; icon: React.ComponentType<{ className?: string }>; accent: string;
+   675→}) {
+   676→  return (
+   677→    <Card className="hover:shadow-md transition-shadow">
+   678→      <CardContent className="p-4 sm:p-5">
+   679→        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${accent} flex items-center justify-center shadow-sm`}>
+   680→          <Icon className="w-5 h-5 text-white" />
+   681→        </div>
+   682→        <p className="mt-3 text-xl sm:text-2xl font-bold tracking-tight">{value}</p>
+   683→        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{label}</p>
+   684→      </CardContent>
+   685→    </Card>
+   686→  );
+   687→}
+   688→
+   689→/* ---------- Lab Workflow Actions ---------- */
+   690→
+   691→function LabWorkflowActions({
+   692→  test, onResult, onActioned,
+   693→}: {
+   694→  test: LabTest;
+   695→  onResult: () => void;
+   696→  onActioned: () => void;
+   697→}) {
+   698→  const [saving, setSaving] = useState(false);
+   699→
+   700→  const patch = async (body: Record<string, unknown>, successMsg: string) => {
+   701→    setSaving(true);
+   702→    try {
+   703→      const res = await fetch(`/api/lab-tests/${test.id}`, {
+   704→        method: "PATCH",
+   705→        headers: { "Content-Type": "application/json" },
+   706→        body: JSON.stringify(body),
+   707→      });
+   708→      if (!res.ok) throw new Error("Failed");
+   709→      toast.success(successMsg);
+   710→      onActioned();
+   711→    } catch {
+   712→      toast.error("Action failed");
+   713→    } finally {
+   714→      setSaving(false);
+   715→    }
+   716→  };
+   717→
+   718→  if (test.status === "pending") {
+   719→    return (
+   720→      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={saving}
+   721→        onClick={() => patch({ status: "collected" }, `Sample collected for ${test.testCode}`)}>
+   722→        <Syringe className="w-3 h-3" /> Collect
+   723→      </Button>
+   724→    );
+   725→  }
+   726→  if (test.status === "collected") {
+   727→    return (
+   728→      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={saving}
+   729→        onClick={() => patch({ status: "processing" }, `${test.testName} processing started`)}>
+   730→        <Microscope className="w-3 h-3" /> Process
+   731→      </Button>
+   732→    );
+   733→  }
+   734→  if (test.status === "processing") {
+   735→    return (
+   736→      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-amber-50 hover:bg-amber-100 border-amber-200 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 dark:border-amber-900"
+   737→        onClick={onResult}>
+   738→        <FileText className="w-3 h-3" /> Enter Result
+   739→      </Button>
+   740→    );
+   741→  }
+   742→  if (test.status === "completed") {
+   743→    return (
+   744→      <Button size="sm" className="h-7 gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" disabled={saving}
+   745→        onClick={() => patch({ status: "approved" }, `${test.testCode} approved`)}>
+   746→        <CheckCheck className="w-3 h-3" /> Approve
+   747→      </Button>
+   748→    );
+   749→  }
+   750→  return (
+   751→    <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-200 dark:border-emerald-900">
+   752→      <CheckCheck className="w-3 h-3 mr-1" /> Done
+   753→    </Badge>
+   754→  );
+   755→}
+   756→
+   757→/* ---------- Radiology Workflow Actions ---------- */
+   758→
+   759→function RadWorkflowActions({
+   760→  test, onReport, onActioned,
+   761→}: {
+   762→  test: RadiologyTest;
+   763→  onReport: () => void;
+   764→  onActioned: () => void;
+   765→}) {
+   766→  const [saving, setSaving] = useState(false);
+   767→
+   768→  const patch = async (body: Record<string, unknown>, successMsg: string) => {
+   769→    setSaving(true);
+   770→    try {
+   771→      const res = await fetch(`/api/radiology/${test.id}`, {
+   772→        method: "PATCH",
+   773→        headers: { "Content-Type": "application/json" },
+   774→        body: JSON.stringify(body),
+   775→      });
+   776→      if (!res.ok) throw new Error("Failed");
+   777→      toast.success(successMsg);
+   778→      onActioned();
+   779→    } catch {
+   780→      toast.error("Action failed");
+   781→    } finally {
+   782→      setSaving(false);
+   783→    }
+   784→  };
+   785→
+   786→  if (test.status === "pending") {
+   787→    return (
+   788→      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={saving}
+   789→        onClick={() => patch({ status: "captured" }, `Image captured for ${test.testCode}`)}>
+   790→        <Camera className="w-3 h-3" /> Capture
+   791→      </Button>
+   792→    );
+   793→  }
+   794→  if (test.status === "captured") {
+   795→    return (
+   796→      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-amber-50 hover:bg-amber-100 border-amber-200 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 dark:border-amber-900"
+   797→        onClick={onReport}>
+   798→        <FileText className="w-3 h-3" /> Report
+   799→      </Button>
+   800→    );
+   801→  }
+   802→  if (test.status === "reported") {
+   803→    return (
+   804→      <Button size="sm" className="h-7 gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" disabled={saving}
+   805→        onClick={() => patch({ status: "approved" }, `${test.testCode} approved`)}>
+   806→        <CheckCheck className="w-3 h-3" /> Approve
+   807→      </Button>
+   808→    );
+   809→  }
+   810→  return (
+   811→    <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-200 dark:border-emerald-900">
+   812→      <CheckCheck className="w-3 h-3 mr-1" /> Done
+   813→    </Badge>
+   814→  );
+   815→}
+   816→
+   817→/* ---------- Order Test Dialog (lab) ---------- */
+   818→
+   819→function OrderTestDialog({
+   820→  open, onOpenChange, onCreated,
+   821→}: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+   822→  const { data: patients } = useFetch<PatientLite[]>("/api/patients");
+   823→  const { data: doctors } = useFetch<DoctorLite[]>("/api/doctors");
+   824→  const [patientId, setPatientId] = useState("");
+   825→  const [testName, setTestName] = useState("");
+   826→  const [category, setCategory] = useState<string>("Hematology");
+   827→  const [fee, setFee] = useState(0);
+   828→  const [doctorId, setDoctorId] = useState("");
+   829→  const [saving, setSaving] = useState(false);
+   830→
+   831→  const reset = () => {
+   832→    setPatientId(""); setTestName(""); setCategory("Hematology");
+   833→    setFee(0); setDoctorId("");
+   834→  };
+   835→
+   836→  const submit = async (e: React.FormEvent) => {
+   837→    e.preventDefault();
+   838→    if (!patientId) { toast.error("Please select a patient"); return; }
+   839→    if (!testName.trim()) { toast.error("Enter a test name"); return; }
+   840→    setSaving(true);
+   841→    try {
+   842→      const res = await fetch("/api/lab-tests", {
+   843→        method: "POST",
+   844→        headers: { "Content-Type": "application/json" },
+   845→        body: JSON.stringify({
+   846→          patientId,
+   847→          testName: testName.trim(),
+   848→          category,
+   849→          fee: Number(fee) || 0,
+   850→          doctorId: doctorId || undefined,
+   851→          status: "pending",
+   852→        }),
+   853→      });
+   854→      if (!res.ok) throw new Error("Failed");
+   855→      reset();
+   856→      onCreated();
+   857→    } catch {
+   858→      toast.error("Failed to order lab test");
+   859→    } finally {
+   860→      setSaving(false);
+   861→    }
+   862→  };
+   863→
+   864→  return (
+   865→    <Dialog open={open} onOpenChange={onOpenChange}>
+   866→      <DialogContent className="max-w-lg">
+   867→        <DialogHeader>
+   868→          <DialogTitle className="flex items-center gap-2">
+   869→            <FlaskConical className="w-4 h-4 text-teal-600" /> Order Lab Test
+   870→          </DialogTitle>
+   871→          <DialogDescription>A unique test code will be auto-generated.</DialogDescription>
+   872→        </DialogHeader>
+   873→        <form onSubmit={submit} className="space-y-3">
+   874→          <div className="space-y-1.5">
+   875→            <Label>Patient *</Label>
+   876→            <Select value={patientId} onValueChange={setPatientId}>
+   877→              <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
+   878→              <SelectContent>
+   879→                {patients?.slice(0, 100).map((p) => (
+   880→                  <SelectItem key={p.id} value={p.id}>
+   881→                    {p.name} · <span className="font-mono text-xs">{p.patientCode}</span>
+   882→                  </SelectItem>
+   883→                ))}
+   884→              </SelectContent>
+   885→            </Select>
+   886→          </div>
+   887→          <div className="space-y-1.5">
+   888→            <Label>Test Name *</Label>
+   889→            <Input placeholder="e.g. Complete Blood Count" value={testName}
+   890→              onChange={(e) => setTestName(e.target.value)} />
+   891→          </div>
+   892→          <div className="grid grid-cols-2 gap-3">
+   893→            <div className="space-y-1.5">
+   894→              <Label>Category</Label>
+   895→              <Select value={category} onValueChange={setCategory}>
+   896→                <SelectTrigger><SelectValue /></SelectTrigger>
+   897→                <SelectContent>
+   898→                  {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+   899→                </SelectContent>
+   900→              </Select>
+   901→            </div>
+   902→            <div className="space-y-1.5">
+   903→              <Label>Fee (Rs)</Label>
+   904→              <Input type="number" value={fee} onChange={(e) => setFee(Number(e.target.value))} placeholder="0" />
+   905→            </div>
+   906→          </div>
+   907→          <div className="space-y-1.5">
+   908→            <Label>Referring Doctor</Label>
+   909→            <Select value={doctorId} onValueChange={setDoctorId}>
+   910→              <SelectTrigger><SelectValue placeholder="Select doctor (optional)" /></SelectTrigger>
+   911→              <SelectContent>
+   912→                {doctors?.map((d) => (
+   913→                  <SelectItem key={d.id} value={d.id}>
+   914→                    {d.name} · {d.specialization}
+   915→                  </SelectItem>
+   916→                ))}
+   917→              </SelectContent>
+   918→            </Select>
+   919→          </div>
+   920→          <DialogFooter>
+   921→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   922→            <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
+   923→              {saving ? "Ordering…" : "Order Test"}
+   924→            </Button>
+   925→          </DialogFooter>
+   926→        </form>
+   927→      </DialogContent>
+   928→    </Dialog>
+   929→  );
+   930→}
+   931→
+   932→/* ---------- Enter Result Dialog (lab) ---------- */
+   933→
+   934→function EnterResultDialog({
+   935→  test, onOpenChange, onSaved,
+   936→}: {
+   937→  test: LabTest | null;
+   938→  onOpenChange: (v: boolean) => void;
+   939→  onSaved: () => void;
+   940→}) {
+   941→  const [result, setResult] = useState("");
+   942→  const [referenceRange, setReferenceRange] = useState("");
+   943→  const [unit, setUnit] = useState("");
+   944→  const [saving, setSaving] = useState(false);
+   945→
+   946→  useEffect(() => {
+   947→    if (test) {
+   948→      setResult(test.result || "");
+   949→      setReferenceRange(test.referenceRange || "");
+   950→      setUnit(test.unit || "");
+   951→    }
+   952→  }, [test]);
+   953→
+   954→  if (!test) return null;
+   955→
+   956→  const submit = async (e: React.FormEvent) => {
+   957→    e.preventDefault();
+   958→    if (!result.trim()) { toast.error("Enter a result value"); return; }
+   959→    setSaving(true);
+   960→    try {
+   961→      const res = await fetch(`/api/lab-tests/${test.id}`, {
+   962→        method: "PATCH",
+   963→        headers: { "Content-Type": "application/json" },
+   964→        body: JSON.stringify({
+   965→          status: "completed",
+   966→          result: result.trim(),
+   967→          referenceRange: referenceRange.trim() || null,
+   968→          unit: unit.trim() || null,
+   969→        }),
+   970→      });
+   971→      if (!res.ok) throw new Error("Failed");
+   972→      toast.success(`Result saved for ${test.testCode}`);
+   973→      onSaved();
+   974→    } catch {
+   975→      toast.error("Failed to save result");
+   976→    } finally {
+   977→      setSaving(false);
+   978→    }
+   979→  };
+   980→
+   981→  return (
+   982→    <Dialog open={!!test} onOpenChange={onOpenChange}>
+   983→      <DialogContent className="max-w-lg">
+   984→        <DialogHeader>
+   985→          <DialogTitle className="flex items-center gap-2">
+   986→            <FileText className="w-4 h-4 text-teal-600" /> Enter Test Result
+   987→          </DialogTitle>
+   988→          <DialogDescription>
+   989→            <span className="font-mono">{test.testCode}</span> · {test.testName} · {test.patient.name}
+   990→          </DialogDescription>
+   991→        </DialogHeader>
+   992→        <form onSubmit={submit} className="space-y-3">
+   993→          <div className="space-y-1.5">
+   994→            <Label>Result Value *</Label>
+   995→            <Input placeholder="e.g. 13.5" value={result}
+   996→              onChange={(e) => setResult(e.target.value)} autoFocus />
+   997→          </div>
+   998→          <div className="grid grid-cols-2 gap-3">
+   999→            <div className="space-y-1.5">
+  1000→              <Label>Reference Range</Label>
+  1001→              <Input placeholder="e.g. 12.0 - 16.0" value={referenceRange}
+  1002→                onChange={(e) => setReferenceRange(e.target.value)} />
+  1003→            </div>
+  1004→            <div className="space-y-1.5">
+  1005→              <Label>Unit</Label>
+  1006→              <Input placeholder="e.g. g/dL" value={unit}
+  1007→                onChange={(e) => setUnit(e.target.value)} />
+  1008→            </div>
+  1009→          </div>
+  1010→          <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300">
+  1011→            On save, status will be set to <span className="font-semibold">Completed</span>. The test can then be approved from the table.
+  1012→          </div>
+  1013→          <DialogFooter>
+  1014→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+  1015→            <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
+  1016→              {saving ? "Saving…" : "Save Result"}
+  1017→            </Button>
+  1018→          </DialogFooter>
+  1019→        </form>
+  1020→      </DialogContent>
+  1021→    </Dialog>
+  1022→  );
+  1023→}
+  1024→
+  1025→/* ---------- Order Radiology Dialog ---------- */
+  1026→
+  1027→function OrderRadiologyDialog({
+  1028→  open, onOpenChange, onCreated,
+  1029→}: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+  1030→  const { data: patients } = useFetch<PatientLite[]>("/api/patients");
+  1031→  const [patientId, setPatientId] = useState("");
+  1032→  const [modality, setModality] = useState<string>("X-Ray");
+  1033→  const [bodyPart, setBodyPart] = useState("");
+  1034→  const [fee, setFee] = useState(0);
+  1035→  const [saving, setSaving] = useState(false);
+  1036→
+  1037→  const reset = () => {
+  1038→    setPatientId(""); setModality("X-Ray"); setBodyPart(""); setFee(0);
+  1039→  };
+  1040→
+  1041→  const submit = async (e: React.FormEvent) => {
+  1042→    e.preventDefault();
+  1043→    if (!patientId) { toast.error("Please select a patient"); return; }
+  1044→    if (!bodyPart.trim()) { toast.error("Enter the body part to be imaged"); return; }
+  1045→    setSaving(true);
+  1046→    try {
+  1047→      const res = await fetch("/api/radiology", {
+  1048→        method: "POST",
+  1049→        headers: { "Content-Type": "application/json" },
+  1050→        body: JSON.stringify({
+  1051→          patientId,
+  1052→          modality,
+  1053→          bodyPart: bodyPart.trim(),
+  1054→          fee: Number(fee) || 0,
+  1055→          status: "pending",
+  1056→        }),
+  1057→      });
+  1058→      if (!res.ok) throw new Error("Failed");
+  1059→      reset();
+  1060→      onCreated();
+  1061→    } catch {
+  1062→      toast.error("Failed to order radiology test");
+  1063→    } finally {
+  1064→      setSaving(false);
+  1065→    }
+  1066→  };
+  1067→
+  1068→  return (
+  1069→    <Dialog open={open} onOpenChange={onOpenChange}>
+  1070→      <DialogContent className="max-w-lg">
+  1071→        <DialogHeader>
+  1072→          <DialogTitle className="flex items-center gap-2">
+  1073→            <ScanLine className="w-4 h-4 text-teal-600" /> Order Radiology Test
+  1074→          </DialogTitle>
+  1075→          <DialogDescription>A unique test code (RAD-#####) will be auto-generated.</DialogDescription>
+  1076→        </DialogHeader>
+  1077→        <form onSubmit={submit} className="space-y-3">
+  1078→          <div className="space-y-1.5">
+  1079→            <Label>Patient *</Label>
+  1080→            <Select value={patientId} onValueChange={setPatientId}>
+  1081→              <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
+  1082→              <SelectContent>
+  1083→                {patients?.slice(0, 100).map((p) => (
+  1084→                  <SelectItem key={p.id} value={p.id}>
+  1085→                    {p.name} · <span className="font-mono text-xs">{p.patientCode}</span>
+  1086→                  </SelectItem>
+  1087→                ))}
+  1088→              </SelectContent>
+  1089→            </Select>
+  1090→          </div>
+  1091→          <div className="grid grid-cols-2 gap-3">
+  1092→            <div className="space-y-1.5">
+  1093→              <Label>Modality *</Label>
+  1094→              <Select value={modality} onValueChange={setModality}>
+  1095→                <SelectTrigger><SelectValue /></SelectTrigger>
+  1096→                <SelectContent>
+  1097→                  {MODALITIES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+  1098→                </SelectContent>
+  1099→              </Select>
+  1100→            </div>
+  1101→            <div className="space-y-1.5">
+  1102→              <Label>Fee (Rs)</Label>
+  1103→              <Input type="number" value={fee} onChange={(e) => setFee(Number(e.target.value))} placeholder="0" />
+  1104→            </div>
+  1105→          </div>
+  1106→          <div className="space-y-1.5">
+  1107→            <Label>Body Part / Region *</Label>
+  1108→            <Input placeholder="e.g. Chest, Left Knee, Abdomen" value={bodyPart}
+  1109→              onChange={(e) => setBodyPart(e.target.value)} />
+  1110→          </div>
+  1111→          <DialogFooter>
+  1112→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+  1113→            <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
+  1114→              {saving ? "Ordering…" : "Order Radiology"}
+  1115→            </Button>
+  1116→          </DialogFooter>
+  1117→        </form>
+  1118→      </DialogContent>
+  1119→    </Dialog>
+  1120→  );
+  1121→}
+  1122→
+  1123→/* ---------- Report Radiology Dialog ---------- */
+  1124→
+  1125→function ReportRadiologyDialog({
+  1126→  test, onOpenChange, onSaved,
+  1127→}: {
+  1128→  test: RadiologyTest | null;
+  1129→  onOpenChange: (v: boolean) => void;
+  1130→  onSaved: () => void;
+  1131→}) {
+  1132→  const [findings, setFindings] = useState("");
+  1133→  const [impression, setImpression] = useState("");
+  1134→  const [radiologist, setRadiologist] = useState("");
+  1135→  const [saving, setSaving] = useState(false);
+  1136→
+  1137→  useEffect(() => {
+  1138→    if (test) {
+  1139→      setFindings(test.findings || "");
+  1140→      setImpression(test.impression || "");
+  1141→      setRadiologist(test.radiologist || "");
+  1142→    }
+  1143→  }, [test]);
+  1144→
+  1145→  if (!test) return null;
+  1146→
+  1147→  const submit = async (e: React.FormEvent) => {
+  1148→    e.preventDefault();
+  1149→    if (!findings.trim()) { toast.error("Enter findings before reporting"); return; }
+  1150→    setSaving(true);
+  1151→    try {
+  1152→      const res = await fetch(`/api/radiology/${test.id}`, {
+  1153→        method: "PATCH",
+  1154→        headers: { "Content-Type": "application/json" },
+  1155→        body: JSON.stringify({
+  1156→          status: "reported",
+  1157→          findings: findings.trim(),
+  1158→          impression: impression.trim() || null,
+  1159→          radiologist: radiologist.trim() || null,
+  1160→        }),
+  1161→      });
+  1162→      if (!res.ok) throw new Error("Failed");
+  1163→      toast.success(`Report filed for ${test.testCode}`);
+  1164→      onSaved();
+  1165→    } catch {
+  1166→      toast.error("Failed to file report");
+  1167→    } finally {
+  1168→      setSaving(false);
+  1169→    }
+  1170→  };
+  1171→
+  1172→  return (
+  1173→    <Dialog open={!!test} onOpenChange={onOpenChange}>
+  1174→      <DialogContent className="max-w-2xl">
+  1175→        <DialogHeader>
+  1176→          <DialogTitle className="flex items-center gap-2">
+  1177→            <Activity className="w-4 h-4 text-teal-600" /> Report Radiology Findings
+  1178→          </DialogTitle>
+  1179→          <DialogDescription>
+  1180→            <span className="font-mono">{test.testCode}</span> · {test.modality} · {test.bodyPart} · {test.patient.name}
+  1181→          </DialogDescription>
+  1182→        </DialogHeader>
+  1183→        <form onSubmit={submit} className="space-y-3">
+  1184→          <div className="space-y-1.5">
+  1185→            <Label>Findings *</Label>
+  1186→            <Textarea rows={5} placeholder="Describe observations from the imaging study…"
+  1187→              value={findings} onChange={(e) => setFindings(e.target.value)} autoFocus />
+  1188→          </div>
+  1189→          <div className="space-y-1.5">
+  1190→            <Label>Impression</Label>
+  1191→            <Textarea rows={3} placeholder="Radiologist's overall impression / conclusion…"
+  1192→              value={impression} onChange={(e) => setImpression(e.target.value)} />
+  1193→          </div>
+  1194→          <div className="space-y-1.5">
+  1195→            <Label>Radiologist</Label>
+  1196→            <Input placeholder="Name of reviewing radiologist" value={radiologist}
+  1197→              onChange={(e) => setRadiologist(e.target.value)} />
+  1198→          </div>
+  1199→          <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300">
+  1200→            On save, status will be set to <span className="font-semibold">Reported</span>. The test can then be approved from the table.
+  1201→          </div>
+  1202→          <DialogFooter>
+  1203→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+  1204→            <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
+  1205→              {saving ? "Saving…" : "File Report"}
+  1206→            </Button>
+  1207→          </DialogFooter>
+  1208→        </form>
+  1209→      </DialogContent>
+  1210→    </Dialog>
+  1211→  );
+  1212→}
+  1213→

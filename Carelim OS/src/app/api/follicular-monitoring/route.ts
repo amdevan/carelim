@@ -1,0 +1,3 @@
+import { NextRequest, NextResponse } from "next/server"; import { db } from "@/lib/db";
+export async function GET(req: NextRequest) { const { searchParams } = new URL(req.url); const cycleId = searchParams.get("cycleId"); const where: Record<string, unknown> = {}; if (cycleId) where.cycleId = cycleId; const r = await db.follicularMonitoring.findMany({ where, orderBy: { monitoringDate: "asc" } }); return NextResponse.json(r); }
+export async function POST(req: NextRequest) { const body = await req.json(); const r = await db.follicularMonitoring.create({ data: { ...body, monitoringDate: body.monitoringDate ? new Date(body.monitoringDate) : new Date() } }); return NextResponse.json(r, { status: 201 }); }

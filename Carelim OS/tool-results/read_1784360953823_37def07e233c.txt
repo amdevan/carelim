@@ -1,0 +1,867 @@
+     1→"use client";
+     2→
+     3→import { useState, useEffect, useMemo } from "react";
+     4→import Image from "next/image";
+     5→import { useTheme } from "next-themes";
+     6→import { motion, AnimatePresence } from "framer-motion";
+     7→import { cn } from "@/lib/utils";
+     8→import { Button } from "@/components/ui/button";
+     9→import { Input } from "@/components/ui/input";
+    10→import { Label } from "@/components/ui/label";
+    11→import { Badge } from "@/components/ui/badge";
+    12→import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+    13→import { Card, CardContent } from "@/components/ui/card";
+    14→import {
+    15→  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+    16→  DropdownMenuSeparator, DropdownMenuTrigger,
+    17→} from "@/components/ui/dropdown-menu";
+    18→import {
+    19→  Popover, PopoverContent, PopoverTrigger,
+    20→} from "@/components/ui/popover";
+    21→import { IvfDashboard } from "@/components/ivf/dashboard";
+    22→import { IvfCycles } from "@/components/ivf/cycles";
+    23→import {
+    24→  IvfAssessments, IvfProtocols, IvfFollicular, IvfOPU, IvfAndrology,
+    25→  IvfEmbryology, IvfCryobank, IvfTransfer, IvfPregnancy, IvfDonors,
+    26→  IvfConsents, IvfPackagesView, IvfReports,
+    27→} from "@/components/ivf/modules";
+    28→import { toast } from "sonner";
+    29→import {
+    30→  HeartPulse, LayoutDashboard, Users, FlaskConical, Stethoscope, Activity,
+    31→  Microscope, Egg, TestTubes, TestTube2, Snowflake, Syringe, Baby,
+    32→  FileText, BarChart3, Settings as SettingsIcon, ChevronDown, ChevronRight,
+    33→  Search, Bell, Sun, Moon, Menu, X, LogOut, UserCircle, Plus, Zap,
+    34→  ChevronLeft, Lock, Mail, Eye, EyeOff, ArrowRight, ShieldCheck, Sparkles,
+    35→  CircleDot,
+    36→} from "lucide-react";
+    37→
+    38→// =====================================================================
+    39→// Navigation
+    40→// =====================================================================
+    41→type ViewTab =
+    42→  | "dashboard" | "couples" | "cycles" | "protocols" | "stimulation"
+    43→  | "follicular" | "opu" | "andrology" | "embryology" | "cryobank"
+    44→  | "transfer" | "pregnancy" | "donors" | "consents" | "packages" | "reports" | "settings";
+    45→
+    46→interface NavItem {
+    47→  label: string;
+    48→  icon: React.ComponentType<{ className?: string }>;
+    49→  tab: ViewTab;
+    50→  description: string;
+    51→  available: boolean;
+    52→}
+    53→
+    54→interface NavGroup {
+    55→  label: string;
+    56→  items: NavItem[];
+    57→}
+    58→
+    59→const NAV_GROUPS: NavGroup[] = [
+    60→  {
+    61→    label: "Overview",
+    62→    items: [
+    63→      { label: "Dashboard", icon: LayoutDashboard, tab: "dashboard", description: "IVF KPIs, cycle trends, status breakdown", available: true },
+    64→    ],
+    65→  },
+    66→  {
+    67→    label: "Treatment",
+    68→    items: [
+    69→      { label: "Couple Management", icon: Users, tab: "couples", description: "Patient & partner fertility profiles", available: false },
+    70→      { label: "IVF Cycles", icon: FlaskConical, tab: "cycles", description: "Plan, monitor & track IVF cycles", available: true },
+    71→      { label: "Treatment Protocols", icon: Stethoscope, tab: "protocols", description: "Antagonist, agonist, natural & mild protocols", available: false },
+    72→      { label: "Stimulation", icon: Activity, tab: "stimulation", description: "Gonadotropin stimulation schedules", available: false },
+    73→      { label: "Follicular Monitoring", icon: Microscope, tab: "follicular", description: "Serial ultrasounds & E2 tracking", available: false },
+    74→      { label: "Egg Retrieval (OPU)", icon: Egg, tab: "opu", description: "Oocyte pick-up procedure records", available: false },
+    75→    ],
+    76→  },
+    77→  {
+    78→    label: "Laboratory",
+    79→    items: [
+    80→      { label: "Andrology", icon: TestTubes, tab: "andrology", description: "Semen analysis & processing", available: false },
+    81→      { label: "Embryology Lab", icon: TestTube2, tab: "embryology", description: "Embryo culture, grading & ICSI", available: false },
+    82→      { label: "Cryobank", icon: Snowflake, tab: "cryobank", description: "Frozen embryos, oocytes & sperm storage", available: false },
+    83→    ],
+    84→  },
+    85→  {
+    86→    label: "Outcomes",
+    87→    items: [
+    88→      { label: "Embryo Transfer", icon: Syringe, tab: "transfer", description: "Fresh, frozen & donor transfers", available: false },
+    89→      { label: "Pregnancy Tracking", icon: Baby, tab: "pregnancy", description: "β-hCG, ultrasound & EDD follow-ups", available: false },
+    90→    ],
+    91→  },
+    92→  {
+    93→    label: "Administration",
+    94→    items: [
+    95→      { label: "Donor Management", icon: HeartPulse, tab: "donors", description: "Egg, sperm & embryo donor registry", available: false },
+    96→      { label: "Consent Forms", icon: FileText, tab: "consents", description: "IVF, ICSI, freezing & donor consents", available: false },
+    97→      { label: "IVF Reports", icon: BarChart3, tab: "reports", description: "Success rates, SART-style reports", available: false },
+    98→      { label: "Settings", icon: SettingsIcon, tab: "settings", description: "Module configuration & preferences", available: false },
+    99→    ],
+   100→  },
+   101→];
+   102→
+   103→const VIEW_LABELS: Record<ViewTab, string> = {
+   104→  dashboard: "Dashboard",
+   105→  couples: "Couple Management",
+   106→  cycles: "IVF Cycles",
+   107→  protocols: "Treatment Protocols",
+   108→  stimulation: "Stimulation",
+   109→  follicular: "Follicular Monitoring",
+   110→  opu: "Egg Retrieval (OPU)",
+   111→  andrology: "Andrology",
+   112→  embryology: "Embryology Lab",
+   113→  cryobank: "Cryobank",
+   114→  transfer: "Embryo Transfer",
+   115→  pregnancy: "Pregnancy Tracking",
+   116→  donors: "Donor Management",
+   117→  consents: "Consent Forms",
+   118→  packages: "IVF Packages",
+   119→  reports: "IVF Reports",
+   120→  settings: "Settings",
+   121→};
+   122→
+   123→const NOTIFICATIONS = [
+   124→  { title: "OPU scheduled", desc: "Cycle IVF-00021 scheduled for egg retrieval tomorrow", time: "12m", type: "info" },
+   125→  { title: "β-hCG positive", desc: "Cycle IVF-00018 tested positive — pregnancy confirmed", time: "2h", type: "success" },
+   126→  { title: "Embryo frozen", desc: "2 blastocysts vitrified and added to cryobank (tank T-3)", time: "5h", type: "info" },
+   127→  { title: "Consent pending", desc: "IVF treatment consent awaiting patient signature", time: "1d", type: "warn" },
+   128→  { title: "Cryobank alert", desc: "Tank T-2 liquid nitrogen level low — refill required", time: "2d", type: "error" },
+   129→];
+   130→
+   131→// =====================================================================
+   132→// Page
+   133→// =====================================================================
+   134→export default function IvfPage() {
+   135→  const [authed, setAuthed] = useState(false);
+   136→  const [tab, setTab] = useState<ViewTab>("dashboard");
+   137→  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+   138→  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+   139→  const [search, setSearch] = useState("");
+   140→  const { theme, setTheme } = useTheme();
+   141→  const [mounted, setMounted] = useState(false);
+   142→
+   143→  // eslint-disable-next-line react-hooks/set-state-in-effect
+   144→  useEffect(() => { if (!mounted) setMounted(true); }, [mounted]);
+   145→
+   146→  const allNavItems = useMemo(() => NAV_GROUPS.flatMap((g) => g.items), []);
+   147→
+   148→  const searchResults = useMemo(() => {
+   149→    if (!search) return [];
+   150→    const q = search.toLowerCase();
+   151→    return allNavItems
+   152→      .filter((i) => i.label.toLowerCase().includes(q) || i.description.toLowerCase().includes(q))
+   153→      .slice(0, 8);
+   154→  }, [search, allNavItems]);
+   155→
+   156→  const navigate = (newTab: ViewTab) => {
+   157→    setTab(newTab);
+   158→    setMobileSidebarOpen(false);
+   159→    setSearch("");
+   160→  };
+   161→
+   162→  if (!authed) return <IvfLogin onLogin={() => setAuthed(true)} />;
+   163→
+   164→  return (
+   165→    <div className="flex min-h-screen bg-background">
+   166→      {/* Add-on banner */}
+   167→      <div className="fixed top-0 left-0 right-0 z-40 h-0.5 bg-gradient-to-r from-teal-500 via-emerald-500 to-pink-500" />
+   168→
+   169→      {/* Desktop Sidebar */}
+   170→      <motion.aside
+   171→        animate={{ width: sidebarCollapsed ? 76 : 264 }}
+   172→        transition={{ type: "spring", stiffness: 260, damping: 30 }}
+   173→        className="hidden md:flex flex-col shrink-0 border-r border-sidebar-border bg-sidebar sticky top-0 h-screen z-30"
+   174→      >
+   175→        <SidebarBrand collapsed={sidebarCollapsed} />
+   176→        <SidebarNav
+   177→          collapsed={sidebarCollapsed}
+   178→          activeTab={tab}
+   179→          navigate={navigate}
+   180→        />
+   181→        <SidebarFooter collapsed={sidebarCollapsed} />
+   182→      </motion.aside>
+   183→
+   184→      {/* Mobile Sidebar */}
+   185→      <AnimatePresence>
+   186→        {mobileSidebarOpen && (
+   187→          <>
+   188→            <motion.div
+   189→              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+   190→              className="md:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+   191→              onClick={() => setMobileSidebarOpen(false)}
+   192→            />
+   193→            <motion.aside
+   194→              initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }}
+   195→              transition={{ type: "spring", stiffness: 260, damping: 30 }}
+   196→              className="md:hidden fixed left-0 top-0 bottom-0 w-72 bg-sidebar border-r border-sidebar-border z-50 flex flex-col"
+   197→            >
+   198→              <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
+   199→                <SidebarBrand collapsed={false} compact />
+   200→                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMobileSidebarOpen(false)}>
+   201→                  <X className="w-4 h-4" />
+   202→                </Button>
+   203→              </div>
+   204→              <SidebarNav collapsed={false} activeTab={tab} navigate={navigate} />
+   205→              <SidebarFooter collapsed={false} />
+   206→            </motion.aside>
+   207→          </>
+   208→        )}
+   209→      </AnimatePresence>
+   210→
+   211→      {/* Main */}
+   212→      <div className="flex-1 flex flex-col min-w-0">
+   213→        <IvfHeader
+   214→          tab={tab}
+   215→          theme={theme}
+   216→          mounted={mounted}
+   217→          setTheme={setTheme}
+   218→          toggleSidebar={() => setSidebarCollapsed((v) => !v)}
+   219→          openMobile={() => setMobileSidebarOpen(true)}
+   220→          search={search}
+   221→          setSearch={setSearch}
+   222→          searchResults={searchResults}
+   223→          navigate={navigate}
+   224→          logout={() => { setAuthed(false); toast.success("Signed out of IVF Module"); }}
+   225→        />
+   226→
+   227→        {/* Add-on enabled banner */}
+   228→        <div className="px-4 sm:px-5 lg:px-6 pt-4">
+   229→          <div className="rounded-xl border border-teal-200 dark:border-teal-900/50 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30 px-4 py-2.5 flex items-center gap-3">
+   230→            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shrink-0">
+   231→              <Sparkles className="w-4 h-4 text-white" />
+   232→            </div>
+   233→            <div className="flex-1 min-w-0">
+   234→              <p className="text-sm font-semibold text-teal-800 dark:text-teal-200">
+   235→                IVF &amp; Fertility Module — Add-on Enabled
+   236→              </p>
+   237→              <p className="text-[11px] text-teal-700/80 dark:text-teal-300/70 hidden sm:block">
+   238→                Full ART workflow: cycles, follicular monitoring, embryology, cryobank, pregnancy tracking.
+   239→              </p>
+   240→            </div>
+   241→            <Badge className="text-[9px] bg-teal-600 text-white hidden sm:flex gap-1">
+   242→              <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-pulse" /> Active
+   243→            </Badge>
+   244→          </div>
+   245→        </div>
+   246→
+   247→        <main className="flex-1 p-4 sm:p-5 lg:p-6">
+   248→          <AnimatePresence mode="wait">
+   249→            <motion.div
+   250→              key={tab}
+   251→              initial={{ opacity: 0, y: 6 }}
+   252→              animate={{ opacity: 1, y: 0 }}
+   253→              exit={{ opacity: 0 }}
+   254→              transition={{ duration: 0.2 }}
+   255→            >
+   256→              <ViewRenderer tab={tab} navigate={navigate} />
+   257→            </motion.div>
+   258→          </AnimatePresence>
+   259→        </main>
+   260→      </div>
+   261→    </div>
+   262→  );
+   263→}
+   264→
+   265→// =====================================================================
+   266→// View renderer
+   267→// =====================================================================
+   268→function ViewRenderer({ tab, navigate }: { tab: ViewTab; navigate: (t: ViewTab) => void }) {
+   269→  switch (tab) {
+   270→    case "dashboard": return <IvfDashboard />;
+   271→    case "cycles": return <IvfCycles />;
+   272→    case "couples": return <IvfAssessments />;
+   273→    case "protocols": return <IvfProtocols />;
+   274→    case "stimulation": return <IvfFollicular />;
+   275→    case "follicular": return <IvfFollicular />;
+   276→    case "opu": return <IvfOPU />;
+   277→    case "andrology": return <IvfAndrology />;
+   278→    case "embryology": return <IvfEmbryology />;
+   279→    case "cryobank": return <IvfCryobank />;
+   280→    case "transfer": return <IvfTransfer />;
+   281→    case "pregnancy": return <IvfPregnancy />;
+   282→    case "donors": return <IvfDonors />;
+   283→    case "consents": return <IvfConsents />;
+   284→    case "packages": return <IvfPackagesView />;
+   285→    case "reports": return <IvfReports />;
+   286→    default: return <IvfDashboard />;
+   287→  }
+   288→}
+   289→
+   290→// =====================================================================
+   291→// Module placeholder
+   292→// =====================================================================
+   293→function ModulePlaceholder({
+   294→  item, navigate,
+   295→}: {
+   296→  item: NavItem;
+   297→  navigate: (t: ViewTab) => void;
+   298→}) {
+   299→  const Icon = item.icon;
+   300→  return (
+   301→    <div className="space-y-4 animate-fade-in">
+   302→      <div>
+   303→        <h2 className="text-xl font-bold leading-tight">{item.label}</h2>
+   304→        <p className="text-xs text-muted-foreground">{item.description}</p>
+   305→      </div>
+   306→      <Card className="border-dashed">
+   307→        <CardContent className="py-16 px-6 flex flex-col items-center text-center">
+   308→          <div className="relative mb-5">
+   309→            <div className="absolute inset-0 bg-teal-500/10 rounded-2xl blur-xl" />
+   310→            <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/40 dark:to-emerald-950/40 border border-teal-100 dark:border-teal-900/50 flex items-center justify-center">
+   311→              <Icon className="w-10 h-10 text-teal-500 dark:text-teal-400" />
+   312→            </div>
+   313→          </div>
+   314→          <Badge className="mb-3 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 gap-1">
+   315→            <Lock className="w-3 h-3" /> Coming soon
+   316→          </Badge>
+   317→          <h3 className="text-base font-semibold text-foreground mb-1">{item.label}</h3>
+   318→          <p className="text-sm text-muted-foreground max-w-md mb-5">
+   319→            This sub-module of the IVF &amp; Fertility Add-on is being wired up.
+   320→            The Dashboard and IVF Cycles views are fully operational today.
+   321→          </p>
+   322→          <div className="flex flex-wrap items-center justify-center gap-2">
+   323→            <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5" onClick={() => navigate("dashboard")}>
+   324→              <LayoutDashboard className="w-4 h-4" /> Go to Dashboard
+   325→            </Button>
+   326→            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate("cycles")}>
+   327→              <FlaskConical className="w-4 h-4" /> Open IVF Cycles
+   328→            </Button>
+   329→          </div>
+   330→        </CardContent>
+   331→      </Card>
+   332→    </div>
+   333→  );
+   334→}
+   335→
+   336→// =====================================================================
+   337→// Sidebar brand
+   338→// =====================================================================
+   339→function SidebarBrand({ collapsed, compact }: { collapsed: boolean; compact?: boolean }) {
+   340→  return (
+   341→    <div className={cn(
+   342→      "flex items-center gap-2.5 border-b border-sidebar-border bg-gradient-to-r from-teal-50/50 to-transparent dark:from-teal-950/20",
+   343→      compact ? "p-0" : "h-16 px-4",
+   344→    )}>
+   345→      <AnimatePresence>
+   346→        {!collapsed ? (
+   347→          <motion.div
+   348→            initial={{ opacity: 0, width: 0 }}
+   349→            animate={{ opacity: 1, width: "auto" }}
+   350→            exit={{ opacity: 0, width: 0 }}
+   351→            className="overflow-hidden"
+   352→          >
+   353→            <Image src="/images/carelim-os.png" alt="Carelim OS" width={130} height={40} className="shrink-0" />
+   354→          </motion.div>
+   355→        ) : (
+   356→          <Image src="/images/carelim-os.png" alt="Carelim OS" width={32} height={32} className="shrink-0 rounded-lg" />
+   357→        )}
+   358→      </AnimatePresence>
+   359→    </div>
+   360→  );
+   361→}
+   362→
+   363→// =====================================================================
+   364→// Sidebar nav
+   365→// =====================================================================
+   366→function SidebarNav({
+   367→  collapsed, activeTab, navigate,
+   368→}: {
+   369→  collapsed: boolean;
+   370→  activeTab: ViewTab;
+   371→  navigate: (tab: ViewTab) => void;
+   372→}) {
+   373→  return (
+   374→    <nav className="flex-1 overflow-y-auto scrollbar-thin py-3 px-2.5">
+   375→      {NAV_GROUPS.map((group) => (
+   376→        <div key={group.label} className="mb-3">
+   377→          <AnimatePresence>
+   378→            {!collapsed && (
+   379→              <motion.p
+   380→                initial={{ opacity: 0 }}
+   381→                animate={{ opacity: 1 }}
+   382→                exit={{ opacity: 0 }}
+   383→                className="px-2.5 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70"
+   384→              >
+   385→                {group.label}
+   386→              </motion.p>
+   387→            )}
+   388→          </AnimatePresence>
+   389→          <div className="space-y-0.5">
+   390→            {group.items.map((item) => (
+   391→              <SidebarItem
+   392→                key={item.label}
+   393→                item={item}
+   394→                collapsed={collapsed}
+   395→                activeTab={activeTab}
+   396→                navigate={navigate}
+   397→              />
+   398→            ))}
+   399→          </div>
+   400→        </div>
+   401→      ))}
+   402→    </nav>
+   403→  );
+   404→}
+   405→
+   406→function SidebarItem({
+   407→  item, collapsed, activeTab, navigate,
+   408→}: {
+   409→  item: NavItem;
+   410→  collapsed: boolean;
+   411→  activeTab: ViewTab;
+   412→  navigate: (tab: ViewTab) => void;
+   413→}) {
+   414→  const Icon = item.icon;
+   415→  const isActive = item.tab === activeTab;
+   416→  return (
+   417→    <button
+   418→      onClick={() => navigate(item.tab)}
+   419→      title={collapsed ? item.label : undefined}
+   420→      className={cn(
+   421→        "group relative flex items-center gap-3 w-full rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-200",
+   422→        isActive
+   423→          ? "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-500/20"
+   424→          : "text-sidebar-foreground/75 hover:bg-teal-50 dark:hover:bg-teal-950/30",
+   425→        collapsed && "justify-center",
+   426→      )}
+   427→    >
+   428→      <Icon className="w-[18px] h-[18px] shrink-0" />
+   429→      <AnimatePresence>
+   430→        {!collapsed && (
+   431→          <motion.span
+   432→            initial={{ opacity: 0, x: -6 }}
+   433→            animate={{ opacity: 1, x: 0 }}
+   434→            exit={{ opacity: 0, x: -6 }}
+   435→            className="flex-1 text-left truncate flex items-center gap-1.5"
+   436→          >
+   437→            {item.label}
+   438→            {!item.available && (
+   439→              <Lock className="w-2.5 h-2.5 text-muted-foreground/60 inline" />
+   440→            )}
+   441→          </motion.span>
+   442→        )}
+   443→      </AnimatePresence>
+   444→    </button>
+   445→  );
+   446→}
+   447→
+   448→function SidebarFooter({ collapsed }: { collapsed: boolean }) {
+   449→  return (
+   450→    <div className="border-t border-sidebar-border p-3">
+   451→      <div className={cn(
+   452→        "rounded-lg bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/40 dark:to-emerald-950/40 border border-teal-100 dark:border-teal-900/50 p-2.5",
+   453→        collapsed && "flex justify-center",
+   454→      )}>
+   455→        {collapsed ? (
+   456→          <HeartPulse className="w-4 h-4 text-teal-600" />
+   457→        ) : (
+   458→          <>
+   459→            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 dark:text-teal-300">
+   460→              <HeartPulse className="w-3 h-3" /> IVF Module
+   461→            </div>
+   462→            <p className="text-[10px] text-muted-foreground mt-0.5">Add-on enabled</p>
+   463→            <div className="mt-1.5 flex items-center gap-1.5">
+   464→              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+   465→              <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">Operational</span>
+   466→            </div>
+   467→          </>
+   468→        )}
+   469→      </div>
+   470→    </div>
+   471→  );
+   472→}
+   473→
+   474→// =====================================================================
+   475→// Header
+   476→// =====================================================================
+   477→function IvfHeader({
+   478→  tab, theme, mounted, setTheme, toggleSidebar, openMobile, search, setSearch, searchResults, navigate, logout,
+   479→}: {
+   480→  tab: ViewTab;
+   481→  theme: string | undefined;
+   482→  mounted: boolean;
+   483→  setTheme: (t: string) => void;
+   484→  toggleSidebar: () => void;
+   485→  openMobile: () => void;
+   486→  search: string;
+   487→  setSearch: (s: string) => void;
+   488→  searchResults: NavItem[];
+   489→  navigate: (t: ViewTab) => void;
+   490→  logout: () => void;
+   491→}) {
+   492→  return (
+   493→    <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-border bg-background/80 backdrop-blur-xl px-3 sm:px-5">
+   494→      <Button variant="ghost" size="icon" className="md:hidden shrink-0" onClick={openMobile}>
+   495→        <Menu className="w-5 h-5" />
+   496→      </Button>
+   497→      <Button variant="ghost" size="icon" className="hidden md:flex shrink-0" onClick={toggleSidebar}>
+   498→        <ChevronLeft className="w-[18px] h-[18px]" />
+   499→      </Button>
+   500→
+   501→      <div className="flex items-center gap-2 shrink-0">
+   502→        <div className="hidden sm:flex flex-col leading-tight">
+   503→          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+   504→            <span>Carelim OS</span>
+   505→            <ChevronRight className="w-3 h-3" />
+   506→            <span>IVF Module</span>
+   507→            <ChevronRight className="w-3 h-3" />
+   508→            <span className="text-foreground font-medium">{VIEW_LABELS[tab]}</span>
+   509→          </div>
+   510→          <p className="text-base font-semibold text-foreground">{VIEW_LABELS[tab]}</p>
+   511→        </div>
+   512→      </div>
+   513→
+   514→      {/* Search */}
+   515→      <div className="relative ml-auto w-9 sm:w-48 md:w-56 lg:w-72">
+   516→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+   517→        <Input
+   518→          value={search}
+   519→          onChange={(e) => setSearch(e.target.value)}
+   520→          placeholder="Search IVF module…"
+   521→          className="pl-9 h-9 text-sm"
+   522→        />
+   523→        {search && searchResults.length > 0 && (
+   524→          <div className="absolute top-full mt-1 left-0 right-0 bg-popover border border-border rounded-lg shadow-elevated overflow-hidden z-50">
+   525→            {searchResults.map((r, i) => (
+   526→              <button
+   527→                key={i}
+   528→                onClick={() => navigate(r.tab)}
+   529→                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+   530→              >
+   531→                <r.icon className="w-3.5 h-3.5 text-muted-foreground" />
+   532→                <div className="flex-1 min-w-0">
+   533→                  <p className="text-sm font-medium truncate">{r.label}</p>
+   534→                  <p className="text-[10px] text-muted-foreground truncate">{r.description}</p>
+   535→                </div>
+   536→                {!r.available && <Lock className="w-3 h-3 text-muted-foreground" />}
+   537→                <ChevronRight className="w-3 h-3 text-muted-foreground" />
+   538→              </button>
+   539→            ))}
+   540→          </div>
+   541→        )}
+   542→      </div>
+   543→
+   544→      {/* Quick action */}
+   545→      <DropdownMenu>
+   546→        <DropdownMenuTrigger asChild>
+   547→          <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5 hidden sm:flex">
+   548→            <Plus className="w-4 h-4" /> Quick Action
+   549→          </Button>
+   550→        </DropdownMenuTrigger>
+   551→        <DropdownMenuContent align="end" className="w-52">
+   552→          <DropdownMenuLabel className="text-[10px] uppercase">IVF Quick Actions</DropdownMenuLabel>
+   553→          <DropdownMenuItem onClick={() => navigate("cycles")}>
+   554→            <FlaskConical className="w-4 h-4" /> New IVF Cycle
+   555→          </DropdownMenuItem>
+   556→          <DropdownMenuItem onClick={() => navigate("donors")}>
+   557→            <HeartPulse className="w-4 h-4" /> Register Donor
+   558→          </DropdownMenuItem>
+   559→          <DropdownMenuItem onClick={() => navigate("consents")}>
+   560→            <FileText className="w-4 h-4" /> New Consent Form
+   561→          </DropdownMenuItem>
+   562→          <DropdownMenuItem onClick={() => navigate("cryobank")}>
+   563→            <Snowflake className="w-4 h-4" /> Cryobank Entry
+   564→          </DropdownMenuItem>
+   565→          <DropdownMenuSeparator />
+   566→          <DropdownMenuItem onClick={() => navigate("reports")}>
+   567→            <BarChart3 className="w-4 h-4" /> View Reports
+   568→          </DropdownMenuItem>
+   569→        </DropdownMenuContent>
+   570→      </DropdownMenu>
+   571→
+   572→      {/* Notifications */}
+   573→      <Popover>
+   574→        <PopoverTrigger asChild>
+   575→          <Button variant="ghost" size="icon" className="relative">
+   576→            <Bell className="w-[18px] h-[18px]" />
+   577→            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-background" />
+   578→          </Button>
+   579→        </PopoverTrigger>
+   580→        <PopoverContent align="end" className="w-80 p-0">
+   581→          <div className="flex items-center justify-between p-3 border-b">
+   582→            <p className="text-sm font-semibold">IVF Notifications</p>
+   583→            <Badge className="text-[9px] bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">{NOTIFICATIONS.length} new</Badge>
+   584→          </div>
+   585→          <div className="max-h-80 overflow-y-auto scrollbar-thin">
+   586→            {NOTIFICATIONS.map((n, i) => (
+   587→              <div key={i} className="flex gap-2.5 p-3 border-b last:border-0 hover:bg-accent/50 transition-colors">
+   588→                <div className={cn(
+   589→                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+   590→                  n.type === "info" ? "bg-teal-50 dark:bg-teal-950/40 text-teal-600" :
+   591→                  n.type === "warn" ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600" :
+   592→                  n.type === "error" ? "bg-rose-50 dark:bg-rose-950/40 text-rose-600" :
+   593→                  "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600",
+   594→                )}>
+   595→                  <CircleDot className="w-4 h-4" />
+   596→                </div>
+   597→                <div className="flex-1 min-w-0">
+   598→                  <p className="text-sm font-medium">{n.title}</p>
+   599→                  <p className="text-xs text-muted-foreground truncate">{n.desc}</p>
+   600→                  <p className="text-[10px] text-muted-foreground mt-0.5">{n.time} ago</p>
+   601→                </div>
+   602→              </div>
+   603→            ))}
+   604→          </div>
+   605→          <div className="p-2 border-t">
+   606→            <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => toast.info("Marked all as read")}>
+   607→              Mark all as read
+   608→            </Button>
+   609→          </div>
+   610→        </PopoverContent>
+   611→      </Popover>
+   612→
+   613→      {/* Theme toggle */}
+   614→      <Button
+   615→        variant="ghost"
+   616→        size="icon"
+   617→        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+   618→        title="Toggle theme"
+   619→      >
+   620→        {mounted && theme === "dark" ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
+   621→      </Button>
+   622→
+   623→      {/* Profile */}
+   624→      <DropdownMenu>
+   625→        <DropdownMenuTrigger asChild>
+   626→          <button className="flex items-center gap-2 rounded-lg p-1 pl-1 hover:bg-accent transition-colors">
+   627→            <Avatar className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600">
+   628→              <AvatarFallback className="bg-transparent text-white text-xs font-semibold">IVF</AvatarFallback>
+   629→            </Avatar>
+   630→            <div className="hidden lg:flex flex-col leading-tight pr-1">
+   631→              <span className="text-xs font-semibold">IVF Coordinator</span>
+   632→              <span className="text-[10px] text-muted-foreground">ivf@carelim.com</span>
+   633→            </div>
+   634→            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground hidden lg:block" />
+   635→          </button>
+   636→        </DropdownMenuTrigger>
+   637→        <DropdownMenuContent align="end" className="w-56">
+   638→          <DropdownMenuLabel>
+   639→            <div className="flex flex-col">
+   640→              <span className="text-sm font-semibold">IVF Coordinator</span>
+   641→              <span className="text-[11px] text-muted-foreground">ivf@carelim.com</span>
+   642→            </div>
+   643→          </DropdownMenuLabel>
+   644→          <DropdownMenuSeparator />
+   645→          <DropdownMenuItem onClick={() => navigate("settings")}>
+   646→            <UserCircle className="w-4 h-4" /> Profile
+   647→          </DropdownMenuItem>
+   648→          <DropdownMenuItem onClick={() => navigate("settings")}>
+   649→            <SettingsIcon className="w-4 h-4" /> Settings
+   650→          </DropdownMenuItem>
+   651→          <DropdownMenuItem onClick={() => navigate("consents")}>
+   652→            <Lock className="w-4 h-4" /> Consents
+   653→          </DropdownMenuItem>
+   654→          <DropdownMenuSeparator />
+   655→          <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={logout}>
+   656→            <LogOut className="w-4 h-4" /> Sign Out
+   657→          </DropdownMenuItem>
+   658→        </DropdownMenuContent>
+   659→      </DropdownMenu>
+   660→    </header>
+   661→  );
+   662→}
+   663→
+   664→// =====================================================================
+   665→// Login wall
+   666→// =====================================================================
+   667→function IvfLogin({ onLogin }: { onLogin: () => void }) {
+   668→  const [email, setEmail] = useState("ivf@carelim.com");
+   669→  const [password, setPassword] = useState("carelim123");
+   670→  const [showPwd, setShowPwd] = useState(false);
+   671→  const [loading, setLoading] = useState(false);
+   672→  const { theme, setTheme } = useTheme();
+   673→  const [mounted, setMounted] = useState(false);
+   674→
+   675→  // eslint-disable-next-line react-hooks/set-state-in-effect
+   676→  useEffect(() => { if (!mounted) setMounted(true); }, [mounted]);
+   677→
+   678→  const submit = (e: React.FormEvent) => {
+   679→    e.preventDefault();
+   680→    if (email !== "ivf@carelim.com" || password !== "carelim123") {
+   681→      toast.error("Invalid credentials", { description: "Try ivf@carelim.com / carelim123" });
+   682→      return;
+   683→    }
+   684→    setLoading(true);
+   685→    setTimeout(() => {
+   686→      onLogin();
+   687→      toast.success("Welcome to IVF Module", { description: "IVF & Fertility Add-on signed in" });
+   688→      setLoading(false);
+   689→    }, 700);
+   690→  };
+   691→
+   692→  return (
+   693→    <div className="min-h-screen flex">
+   694→      {/* Left brand panel */}
+   695→      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-teal-700 via-teal-800 to-emerald-900">
+   696→        <div className="absolute inset-0 grid-pattern opacity-20" />
+   697→        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-emerald-400/20 blur-3xl" />
+   698→        <div className="absolute -bottom-32 -left-20 w-96 h-96 rounded-full bg-teal-300/20 blur-3xl" />
+   699→        <div className="absolute top-1/3 left-1/2 w-72 h-72 rounded-full bg-pink-400/10 blur-3xl" />
+   700→
+   701→        <div className="relative z-10 flex flex-col justify-between p-12 text-white w-full">
+   702→          <div className="flex items-center gap-3">
+   703→            <Image src="/images/carelim-os.png" alt="Carelim OS" width={140} height={43} className="rounded-lg" />
+   704→          </div>
+   705→
+   706→          <div className="space-y-6">
+   707→            <motion.div
+   708→              initial={{ opacity: 0, y: 20 }}
+   709→              animate={{ opacity: 1, y: 0 }}
+   710→              transition={{ duration: 0.6 }}
+   711→            >
+   712→              <Badge className="mb-4 bg-white/15 text-white border-white/20 gap-1.5">
+   713→                <Sparkles className="w-3 h-3" /> Add-on Module
+   714→              </Badge>
+   715→              <h1 className="text-4xl font-bold leading-tight text-balance">
+   716→                IVF &amp; Fertility management, end-to-end.
+   717→              </h1>
+   718→              <p className="mt-4 text-teal-100/90 text-lg max-w-md">
+   719→                Plan cycles, track stimulation, manage the embryology lab, run the cryobank and follow pregnancies — all inside Carelim OS.
+   720→              </p>
+   721→            </motion.div>
+   722→
+   723→            <div className="grid grid-cols-2 gap-3 max-w-lg">
+   724→              {[
+   725→                { icon: FlaskConical, title: "Cycle Tracking", desc: "Plan → Stim → OPU → Transfer → Pregnancy" },
+   726→                { icon: Microscope, title: "Follicular Monitoring", desc: "Daily ultrasounds & hormone trends" },
+   727→                { icon: TestTube2, title: "Embryology Lab", desc: "Embryo grading, ICSI & culture logs" },
+   728→                { icon: Snowflake, title: "Cryobank", desc: "Frozen embryos, oocytes & sperm" },
+   729→                { icon: Baby, title: "Pregnancy Tracking", desc: "β-hCG, ultrasound & EDD follow-ups" },
+   730→                { icon: HeartPulse, title: "Donor Registry", desc: "Egg, sperm & embryo donors" },
+   731→              ].map((f, i) => (
+   732→                <motion.div
+   733→                  key={f.title}
+   734→                  initial={{ opacity: 0, y: 20 }}
+   735→                  animate={{ opacity: 1, y: 0 }}
+   736→                  transition={{ duration: 0.5, delay: 0.2 + i * 0.08 }}
+   737→                  className="rounded-xl bg-white/10 backdrop-blur border border-white/15 p-3.5"
+   738→                >
+   739→                  <f.icon className="w-5 h-5 mb-1.5 text-emerald-200" />
+   740→                  <p className="text-sm font-semibold leading-tight">{f.title}</p>
+   741→                  <p className="text-[11px] text-teal-100/70 mt-0.5 leading-snug">{f.desc}</p>
+   742→                </motion.div>
+   743→              ))}
+   744→            </div>
+   745→          </div>
+   746→
+   747→          <div className="flex items-center gap-6 text-sm text-teal-100/80">
+   748→            <span>16 Sub-modules</span>
+   749→            <span className="w-1 h-1 rounded-full bg-teal-300/50" />
+   750→            <span>ART Compliant</span>
+   751→            <span className="w-1 h-1 rounded-full bg-teal-300/50" />
+   752→            <span>HIPAA Ready</span>
+   753→            <span className="w-1 h-1 rounded-full bg-teal-300/50" />
+   754→            <span>Add-on Enabled</span>
+   755→          </div>
+   756→        </div>
+   757→      </div>
+   758→
+   759→      {/* Right form */}
+   760→      <div className="flex-1 flex items-center justify-center p-6 sm:p-12 bg-background relative">
+   761→        <button
+   762→          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+   763→          className="absolute top-5 right-5 w-9 h-9 rounded-lg border border-border bg-card hover:bg-accent flex items-center justify-center transition-colors"
+   764→          title="Toggle theme"
+   765→        >
+   766→          {mounted && theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+   767→        </button>
+   768→
+   769→        <motion.div
+   770→          initial={{ opacity: 0, y: 16 }}
+   771→          animate={{ opacity: 1, y: 0 }}
+   772→          transition={{ duration: 0.5 }}
+   773→          className="w-full max-w-md"
+   774→        >
+   775→          <div className="lg:hidden flex items-center gap-2.5 mb-8">
+   776→            <Image src="/images/carelim-os.png" alt="Carelim OS" width={120} height={37} />
+   777→          </div>
+   778→
+   779→          <div className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900/50 px-3 py-1 text-[11px] font-medium text-teal-700 dark:text-teal-300 mb-4">
+   780→            <ShieldCheck className="w-3 h-3" /> IVF Module Access
+   781→          </div>
+   782→
+   783→          <h1 className="text-2xl font-bold tracking-tight">Sign in to IVF Module</h1>
+   784→          <p className="mt-1.5 text-sm text-muted-foreground">
+   785→            Welcome to the IVF &amp; Fertility Add-on. Manage cycles, embryos & pregnancies.
+   786→          </p>
+   787→
+   788→          <form onSubmit={submit} className="mt-7 space-y-4">
+   789→            <div className="space-y-1.5">
+   790→              <Label htmlFor="ivf-email">Email address</Label>
+   791→              <div className="relative">
+   792→                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   793→                <Input
+   794→                  id="ivf-email"
+   795→                  type="email"
+   796→                  value={email}
+   797→                  onChange={(e) => setEmail(e.target.value)}
+   798→                  className="pl-9"
+   799→                  placeholder="ivf@carelim.com"
+   800→                  required
+   801→                />
+   802→              </div>
+   803→            </div>
+   804→
+   805→            <div className="space-y-1.5">
+   806→              <div className="flex items-center justify-between">
+   807→                <Label htmlFor="ivf-password">Password</Label>
+   808→                <button
+   809→                  type="button"
+   810→                  className="text-xs text-teal-600 hover:underline"
+   811→                  onClick={() => toast.info("Reset link sent to your email")}
+   812→                >
+   813→                  Forgot password?
+   814→                </button>
+   815→              </div>
+   816→              <div className="relative">
+   817→                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   818→                <Input
+   819→                  id="ivf-password"
+   820→                  type={showPwd ? "text" : "password"}
+   821→                  value={password}
+   822→                  onChange={(e) => setPassword(e.target.value)}
+   823→                  className="pl-9 pr-9"
+   824→                  placeholder="••••••••"
+   825→                  required
+   826→                />
+   827→                <button
+   828→                  type="button"
+   829→                  onClick={() => setShowPwd((v) => !v)}
+   830→                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+   831→                >
+   832→                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+   833→                </button>
+   834→              </div>
+   835→            </div>
+   836→
+   837→            <div className="flex items-center justify-between text-sm">
+   838→              <label className="flex items-center gap-2 text-muted-foreground cursor-pointer">
+   839→                <input type="checkbox" defaultChecked className="rounded border-input accent-teal-600" />
+   840→                Remember this device
+   841→              </label>
+   842→            </div>
+   843→
+   844→            <Button
+   845→              type="submit"
+   846→              disabled={loading}
+   847→              className="w-full h-10 bg-teal-600 hover:bg-teal-700 text-white gap-2"
+   848→            >
+   849→              {loading ? "Signing in…" : <>Sign In <ArrowRight className="w-4 h-4" /></>}
+   850→            </Button>
+   851→
+   852→            <div className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2.5 text-[11px] text-muted-foreground text-center">
+   853→              <span className="font-medium text-foreground">Demo credentials</span> — ivf@carelim.com / carelim123
+   854→            </div>
+   855→          </form>
+   856→
+   857→          <p className="mt-6 text-center text-xs text-muted-foreground">
+   858→            Protected by enterprise-grade encryption. By signing in you agree to our{" "}
+   859→            <span className="text-teal-600 hover:underline cursor-pointer">Terms</span> &amp;{" "}
+   860→            <span className="text-teal-600 hover:underline cursor-pointer">Privacy Policy</span>.
+   861→          </p>
+   862→        </motion.div>
+   863→      </div>
+   864→    </div>
+   865→  );
+   866→}
+   867→

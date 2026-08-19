@@ -1,0 +1,730 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useFetch } from "@/lib/use-fetch";
+     4→     4→import { useState, useMemo, useCallback, useEffect } from "react";
+     5→     5→import { Card, CardContent } from "@/components/ui/card";
+     6→     6→import { Input } from "@/components/ui/input";
+     7→     7→import { Button } from "@/components/ui/button";
+     8→     8→import { Badge } from "@/components/ui/badge";
+     9→     9→import { Skeleton } from "@/components/ui/skeleton";
+    10→    10→import { Label } from "@/components/ui/label";
+    11→    11→import {
+    12→    12→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    13→    13→} from "@/components/ui/table";
+    14→    14→import {
+    15→    15→  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+    16→    16→} from "@/components/ui/sheet";
+    17→    17→import {
+    18→    18→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+    19→    19→} from "@/components/ui/dialog";
+    20→    20→import {
+    21→    21→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    22→    22→} from "@/components/ui/select";
+    23→    23→import {
+    24→    24→  Search, Plus, Receipt, Wallet, TrendingUp, AlertTriangle,
+    25→    25→  Eye, CreditCard, Printer, FileDown, X,
+    26→    26→} from "lucide-react";
+    27→    27→import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
+    28→    28→import { toast } from "sonner";
+    29→    29→import { motion } from "framer-motion";
+    30→    30→
+    31→    31→interface InvoiceItem {
+    32→    32→  id?: string;
+    33→    33→  description: string;
+    34→    34→  qty: number;
+    35→    35→  rate: number;
+    36→    36→  amount: number;
+    37→    37→}
+    38→    38→
+    39→    39→interface Invoice {
+    40→    40→  id: string;
+    41→    41→  invoiceNo: string;
+    42→    42→  patientId: string;
+    43→    43→  type: string;
+    44→    44→  subtotal: number;
+    45→    45→  discount: number;
+    46→    46→  tax: number;
+    47→    47→  total: number;
+    48→    48→  paid: number;
+    49→    49→  due: number;
+    50→    50→  status: string;
+    51→    51→  paymentMethod: string | null;
+    52→    52→  date: string;
+    53→    53→  patient: { id: string; patientCode: string; name: string; phone: string };
+    54→    54→  items: InvoiceItem[];
+    55→    55→}
+    56→    56→
+    57→    57→interface PatientLite {
+    58→    58→  id: string;
+    59→    59→  patientCode: string;
+    60→    60→  name: string;
+    61→    61→  phone: string;
+    62→    62→}
+    63→    63→
+    64→    64→const TYPE_COLORS: Record<string, string> = {
+    65→    65→  consultation: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
+    66→    66→  pharmacy: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+    67→    67→  lab: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300",
+    68→    68→  package: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+    69→    69→};
+    70→    70→
+    71→    71→const PAYMENT_METHODS = ["Cash", "Card", "Bank", "eSewa", "Khalti", "FonePay", "Stripe", "PayPal"];
+    72→    72→
+    73→    73→const STATUS_FILTERS = ["all", "paid", "partial", "unpaid"] as const;
+    74→    74→
+    75→    75→export function BillingView() {
+    76→    76→  const [refreshKey, setRefreshKey] = useState(0);
+    77→    77→  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+    78→    78→  const { data: invoices, loading, error } = useFetch<Invoice[]>(
+    79→    79→    refreshKey ? `/api/invoices?_r=${refreshKey}` : "/api/invoices",
+    80→    80→  );
+    81→    81→  const [q, setQ] = useState("");
+    82→    82→  const [statusFilter, setStatusFilter] = useState<string>("all");
+    83→    83→  const [createOpen, setCreateOpen] = useState(false);
+    84→    84→  const [viewId, setViewId] = useState<string | null>(null);
+    85→    85→  const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
+    86→    86→
+    87→    87→  const filtered = useMemo(() => {
+    88→    88→    if (!invoices) return [];
+    89→    89→    const ql = q.toLowerCase();
+    90→    90→    return invoices.filter((inv) => {
+    91→    91→      const matchesStatus = statusFilter === "all" || inv.status === statusFilter;
+    92→    92→      const matchesSearch = !ql ||
+    93→    93→        inv.invoiceNo.toLowerCase().includes(ql) ||
+    94→    94→        inv.patient.name.toLowerCase().includes(ql);
+    95→    95→      return matchesStatus && matchesSearch;
+    96→    96→    });
+    97→    97→  }, [invoices, q, statusFilter]);
+    98→    98→
+    99→    99→  const stats = useMemo(() => {
+   100→   100→    if (!invoices) return { revenue: 0, collected: 0, due: 0, overdue: 0 };
+   101→   101→    return {
+   102→   102→      revenue: invoices.reduce((s, i) => s + (i.total || 0), 0),
+   103→   103→      collected: invoices.reduce((s, i) => s + (i.paid || 0), 0),
+   104→   104→      due: invoices.reduce((s, i) => s + (i.due || 0), 0),
+   105→   105→      overdue: invoices.filter((i) => i.status === "unpaid").length,
+   106→   106→    };
+   107→   107→  }, [invoices]);
+   108→   108→
+   109→   109→  const selected = invoices?.find((i) => i.id === viewId) || null;
+   110→   110→
+   111→   111→  if (error) {
+   112→   112→    return (
+   113→   113→      <div className="space-y-4 animate-fade-in">
+   114→   114→        <Card>
+   115→   115→          <CardContent className="p-10 text-center text-sm text-rose-600">
+   116→   116→            Failed to load invoices: {error}
+   117→   117→          </CardContent>
+   118→   118→        </Card>
+   119→   119→      </div>
+   120→   120→    );
+   121→   121→  }
+   122→   122→
+   123→   123→  return (
+   124→   124→    <div className="space-y-4 animate-fade-in">
+   125→   125→      {/* Header */}
+   126→   126→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   127→   127→        <div>
+   128→   128→          <h2 className="text-xl font-bold flex items-center gap-2">
+   129→   129→            <Receipt className="w-5 h-5 text-teal-600" /> Billing &amp; Invoices
+   130→   130→          </h2>
+   131→   131→          <p className="text-sm text-muted-foreground">
+   132→   132→            {invoices?.length ?? 0} invoices · {formatRs(stats.collected)} collected
+   133→   133→          </p>
+   134→   134→        </div>
+   135→   135→        <Button
+   136→   136→          size="sm"
+   137→   137→          className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
+   138→   138→          onClick={() => setCreateOpen(true)}
+   139→   139→        >
+   140→   140→          <Plus className="w-4 h-4" /> Create Invoice
+   141→   141→        </Button>
+   142→   142→      </div>
+   143→   143→
+   144→   144→      {/* Stat cards */}
+   145→   145→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+   146→   146→        {[
+   147→   147→          { label: "Total Revenue", value: formatRs(stats.revenue), icon: TrendingUp, accent: "from-teal-500 to-teal-600" },
+   148→   148→          { label: "Collected", value: formatRs(stats.collected), icon: Wallet, accent: "from-emerald-500 to-emerald-600" },
+   149→   149→          { label: "Outstanding Due", value: formatRs(stats.due), icon: AlertTriangle, accent: "from-amber-500 to-orange-500" },
+   150→   150→          { label: "Overdue Invoices", value: String(stats.overdue), icon: Receipt, accent: "from-rose-500 to-rose-600" },
+   151→   151→        ].map((s, i) => (
+   152→   152→          <motion.div
+   153→   153→            key={s.label}
+   154→   154→            initial={{ opacity: 0, y: 10 }}
+   155→   155→            animate={{ opacity: 1, y: 0 }}
+   156→   156→            transition={{ delay: i * 0.05 }}
+   157→   157→          >
+   158→   158→            <Card className="hover:shadow-md transition-shadow">
+   159→   159→              <CardContent className="p-4 sm:p-5">
+   160→   160→                <div className="flex items-start justify-between">
+   161→   161→                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.accent} flex items-center justify-center shadow-sm`}>
+   162→   162→                    <s.icon className="w-5 h-5 text-white" />
+   163→   163→                  </div>
+   164→   164→                </div>
+   165→   165→                <p className="mt-3 text-xl sm:text-2xl font-bold tracking-tight">{s.value}</p>
+   166→   166→                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{s.label}</p>
+   167→   167→              </CardContent>
+   168→   168→            </Card>
+   169→   169→          </motion.div>
+   170→   170→        ))}
+   171→   171→      </div>
+   172→   172→
+   173→   173→      {/* Filters */}
+   174→   174→      <Card>
+   175→   175→        <CardContent className="p-4 space-y-3">
+   176→   176→          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+   177→   177→            <div className="relative flex-1 max-w-md">
+   178→   178→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   179→   179→              <Input
+   180→   180→                placeholder="Search invoice no. or patient name…"
+   181→   181→                value={q}
+   182→   182→                onChange={(e) => setQ(e.target.value)}
+   183→   183→                className="pl-9"
+   184→   184→              />
+   185→   185→            </div>
+   186→   186→            <div className="flex flex-wrap gap-1.5">
+   187→   187→              {STATUS_FILTERS.map((s) => (
+   188→   188→                <button
+   189→   189→                  key={s}
+   190→   190→                  onClick={() => setStatusFilter(s)}
+   191→   191→                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors capitalize ${
+   192→   192→                    statusFilter === s
+   193→   193→                      ? "bg-teal-600 text-white border-teal-600"
+   194→   194→                      : "bg-card hover:bg-accent border-border"
+   195→   195→                  }`}
+   196→   196→                >
+   197→   197→                  {s === "all" ? "All" : statusLabel(s)}
+   198→   198→                  {s !== "all" && (
+   199→   199→                    <span className="ml-1 opacity-70">
+   200→   200→                      ({invoices?.filter((i) => i.status === s).length ?? 0})
+   201→   201→                    </span>
+   202→   202→                  )}
+   203→   203→                </button>
+   204→   204→              ))}
+   205→   205→            </div>
+   206→   206→          </div>
+   207→   207→
+   208→   208→          {/* Table */}
+   209→   209→          <div className="rounded-lg border overflow-hidden">
+   210→   210→            <Table>
+   211→   211→              <TableHeader>
+   212→   212→                <TableRow className="bg-muted/50">
+   213→   213→                  <TableHead className="w-[120px]">Invoice No</TableHead>
+   214→   214→                  <TableHead className="hidden sm:table-cell">Date</TableHead>
+   215→   215→                  <TableHead>Patient</TableHead>
+   216→   216→                  <TableHead className="hidden md:table-cell">Type</TableHead>
+   217→   217→                  <TableHead className="text-right">Total</TableHead>
+   218→   218→                  <TableHead className="hidden sm:table-cell text-right">Paid</TableHead>
+   219→   219→                  <TableHead className="text-right">Due</TableHead>
+   220→   220→                  <TableHead className="text-center">Status</TableHead>
+   221→   221→                  <TableHead className="text-right">Actions</TableHead>
+   222→   222→                </TableRow>
+   223→   223→              </TableHeader>
+   224→   224→              <TableBody>
+   225→   225→                {loading ? (
+   226→   226→                  Array.from({ length: 8 }).map((_, i) => (
+   227→   227→                    <TableRow key={i}>
+   228→   228→                      <TableCell colSpan={9}><Skeleton className="h-8 w-full" /></TableCell>
+   229→   229→                    </TableRow>
+   230→   230→                  ))
+   231→   231→                ) : filtered.length === 0 ? (
+   232→   232→                  <TableRow>
+   233→   233→                    <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">
+   234→   234→                      No invoices found
+   235→   235→                    </TableCell>
+   236→   236→                  </TableRow>
+   237→   237→                ) : filtered.map((inv) => (
+   238→   238→                  <TableRow key={inv.id} className="hover:bg-accent/40">
+   239→   239→                    <TableCell className="font-mono text-xs">{inv.invoiceNo}</TableCell>
+   240→   240→                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+   241→   241→                      {formatDate(inv.date)}
+   242→   242→                    </TableCell>
+   243→   243→                    <TableCell>
+   244→   244→                      <p className="font-medium text-sm">{inv.patient.name}</p>
+   245→   245→                      <p className="text-xs text-muted-foreground font-mono">{inv.patient.patientCode}</p>
+   246→   246→                    </TableCell>
+   247→   247→                    <TableCell className="hidden md:table-cell">
+   248→   248→                      <Badge variant="outline" className={`text-[10px] capitalize ${TYPE_COLORS[inv.type] || "bg-gray-100"}`}>
+   249→   249→                        {inv.type}
+   250→   250→                      </Badge>
+   251→   251→                    </TableCell>
+   252→   252→                    <TableCell className="text-right font-semibold text-sm">{formatRs(inv.total)}</TableCell>
+   253→   253→                    <TableCell className="hidden sm:table-cell text-right text-sm text-emerald-600">
+   254→   254→                      {formatRs(inv.paid)}
+   255→   255→                    </TableCell>
+   256→   256→                    <TableCell className={`text-right text-sm font-medium ${inv.due > 0 ? "text-rose-600" : "text-muted-foreground"}`}>
+   257→   257→                      {formatRs(inv.due)}
+   258→   258→                    </TableCell>
+   259→   259→                    <TableCell className="text-center">
+   260→   260→                      <Badge className={`text-[10px] ${statusColors[inv.status] || "bg-gray-100"}`}>
+   261→   261→                        {statusLabel(inv.status)}
+   262→   262→                      </Badge>
+   263→   263→                    </TableCell>
+   264→   264→                    <TableCell className="text-right">
+   265→   265→                      <div className="flex items-center justify-end gap-1">
+   266→   266→                        {(inv.status === "unpaid" || inv.status === "partial") && (
+   267→   267→                          <Button
+   268→   268→                            variant="outline"
+   269→   269→                            size="sm"
+   270→   270→                            className="h-7 gap-1 text-xs"
+   271→   271→                            onClick={() => setPayInvoice(inv)}
+   272→   272→                          >
+   273→   273→                            <CreditCard className="w-3 h-3" /> Pay
+   274→   274→                          </Button>
+   275→   275→                        )}
+   276→   276→                        <Button
+   277→   277→                          variant="ghost"
+   278→   278→                          size="sm"
+   279→   279→                          className="h-7 text-teal-600 text-xs"
+   280→   280→                          onClick={() => setViewId(inv.id)}
+   281→   281→                        >
+   282→   282→                          <Eye className="w-3 h-3" /> View
+   283→   283→                        </Button>
+   284→   284→                      </div>
+   285→   285→                    </TableCell>
+   286→   286→                  </TableRow>
+   287→   287→                ))}
+   288→   288→              </TableBody>
+   289→   289→            </Table>
+   290→   290→          </div>
+   291→   291→        </CardContent>
+   292→   292→      </Card>
+   293→   293→
+   294→   294→      {/* Create invoice dialog */}
+   295→   295→      <CreateInvoiceDialog
+   296→   296→        open={createOpen}
+   297→   297→        onOpenChange={setCreateOpen}
+   298→   298→        onCreated={() => { setCreateOpen(false); refresh(); toast.success("Invoice created successfully"); }}
+   299→   299→      />
+   300→   300→
+   301→   301→      {/* Collect payment dialog */}
+   302→   302→      <CollectPaymentDialog
+   303→   303→        invoice={payInvoice}
+   304→   304→        onOpenChange={(o) => !o && setPayInvoice(null)}
+   305→   305→        onPaid={() => { setPayInvoice(null); refresh(); }}
+   306→   306→      />
+   307→   307→
+   308→   308→      {/* View invoice sheet */}
+   309→   309→      <Sheet open={!!viewId} onOpenChange={(o) => !o && setViewId(null)}>
+   310→   310→        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto scrollbar-thin p-0">
+   311→   311→          {selected && <InvoiceDetail invoice={selected} />}
+   312→   312→        </SheetContent>
+   313→   313→      </Sheet>
+   314→   314→    </div>
+   315→   315→  );
+   316→   316→}
+   317→   317→
+   318→   318→/* ---------- Create Invoice Dialog ---------- */
+   319→   319→
+   320→   320→function CreateInvoiceDialog({
+   321→   321→  open, onOpenChange, onCreated,
+   322→   322→}: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+   323→   323→  const { data: patients } = useFetch<PatientLite[]>("/api/patients");
+   324→   324→  const [patientId, setPatientId] = useState("");
+   325→   325→  const [type, setType] = useState("consultation");
+   326→   326→  const [items, setItems] = useState<InvoiceItem[]>([{ description: "", qty: 1, rate: 0, amount: 0 }]);
+   327→   327→  const [discount, setDiscount] = useState(0);
+   328→   328→  const [taxRate, setTaxRate] = useState(13);
+   329→   329→  const [paymentMethod, setPaymentMethod] = useState("Cash");
+   330→   330→  const [paid, setPaid] = useState(0);
+   331→   331→  const [saving, setSaving] = useState(false);
+   332→   332→
+   333→   333→  const subtotal = useMemo(
+   334→   334→    () => items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0),
+   335→   335→    [items],
+   336→   336→  );
+   337→   337→  const taxAmount = useMemo(() => (subtotal - discount) * (taxRate / 100), [subtotal, discount, taxRate]);
+   338→   338→  const total = Math.max(0, subtotal - discount + taxAmount);
+   339→   339→  const due = Math.max(0, total - paid);
+   340→   340→
+   341→   341→  const updateItem = (idx: number, patch: Partial<InvoiceItem>) => {
+   342→   342→    setItems((prev) => prev.map((it, i) => {
+   343→   343→      if (i !== idx) return it;
+   344→   344→      const next = { ...it, ...patch };
+   345→   345→      next.amount = (Number(next.qty) || 0) * (Number(next.rate) || 0);
+   346→   346→      return next;
+   347→   347→    }));
+   348→   348→  };
+   349→   349→
+   350→   350→  const addItem = () => setItems((p) => [...p, { description: "", qty: 1, rate: 0, amount: 0 }]);
+   351→   351→  const removeItem = (idx: number) => setItems((p) => p.filter((_, i) => i !== idx));
+   352→   352→
+   353→   353→  const reset = () => {
+   354→   354→    setPatientId("");
+   355→   355→    setType("consultation");
+   356→   356→    setItems([{ description: "", qty: 1, rate: 0, amount: 0 }]);
+   357→   357→    setDiscount(0);
+   358→   358→    setTaxRate(13);
+   359→   359→    setPaymentMethod("Cash");
+   360→   360→    setPaid(0);
+   361→   361→  };
+   362→   362→
+   363→   363→  const submit = async (e: React.FormEvent) => {
+   364→   364→    e.preventDefault();
+   365→   365→    if (!patientId) { toast.error("Please select a patient"); return; }
+   366→   366→    if (items.length === 0 || items.every((i) => !i.description)) {
+   367→   367→      toast.error("Add at least one invoice item"); return;
+   368→   368→    }
+   369→   369→    setSaving(true);
+   370→   370→    try {
+   371→   371→      const body = {
+   372→   372→        patientId,
+   373→   373→        type,
+   374→   374→        subtotal,
+   375→   375→        discount: Number(discount) || 0,
+   376→   376→        tax: taxAmount,
+   377→   377→        total,
+   378→   378→        paid: Number(paid) || 0,
+   379→   379→        due,
+   380→   380→        status: paid >= total ? "paid" : paid > 0 ? "partial" : "unpaid",
+   381→   381→        paymentMethod,
+   382→   382→        items: items.filter((i) => i.description).map((i) => ({
+   383→   383→          description: i.description,
+   384→   384→          qty: Number(i.qty) || 0,
+   385→   385→          rate: Number(i.rate) || 0,
+   386→   386→          amount: (Number(i.qty) || 0) * (Number(i.rate) || 0),
+   387→   387→        })),
+   388→   388→      };
+   389→   389→      const res = await fetch("/api/invoices", {
+   390→   390→        method: "POST",
+   391→   391→        headers: { "Content-Type": "application/json" },
+   392→   392→        body: JSON.stringify(body),
+   393→   393→      });
+   394→   394→      if (!res.ok) throw new Error("Failed to create invoice");
+   395→   395→      reset();
+   396→   396→      onCreated();
+   397→   397→    } catch {
+   398→   398→      toast.error("Failed to create invoice");
+   399→   399→    } finally {
+   400→   400→      setSaving(false);
+   401→   401→    }
+   402→   402→  };
+   403→   403→
+   404→   404→  return (
+   405→   405→    <Dialog open={open} onOpenChange={onOpenChange}>
+   406→   406→      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+   407→   407→        <DialogHeader>
+   408→   408→          <DialogTitle>Create New Invoice</DialogTitle>
+   409→   409→          <DialogDescription>Fill in patient and line items. Totals compute automatically.</DialogDescription>
+   410→   410→        </DialogHeader>
+   411→   411→        <form onSubmit={submit} className="space-y-4">
+   412→   412→          {/* Patient + type */}
+   413→   413→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   414→   414→            <div className="space-y-1.5">
+   415→   415→              <Label>Patient *</Label>
+   416→   416→              <Select value={patientId} onValueChange={setPatientId}>
+   417→   417→                <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
+   418→   418→                <SelectContent>
+   419→   419→                  {patients?.slice(0, 100).map((p) => (
+   420→   420→                    <SelectItem key={p.id} value={p.id}>
+   421→   421→                      {p.name} · <span className="font-mono text-xs">{p.patientCode}</span>
+   422→   422→                    </SelectItem>
+   423→   423→                  ))}
+   424→   424→                </SelectContent>
+   425→   425→              </Select>
+   426→   426→            </div>
+   427→   427→            <div className="space-y-1.5">
+   428→   428→              <Label>Invoice Type</Label>
+   429→   429→              <Select value={type} onValueChange={setType}>
+   430→   430→                <SelectTrigger><SelectValue /></SelectTrigger>
+   431→   431→                <SelectContent>
+   432→   432→                  <SelectItem value="consultation">Consultation</SelectItem>
+   433→   433→                  <SelectItem value="pharmacy">Pharmacy</SelectItem>
+   434→   434→                  <SelectItem value="lab">Lab</SelectItem>
+   435→   435→                  <SelectItem value="package">Package</SelectItem>
+   436→   436→                </SelectContent>
+   437→   437→              </Select>
+   438→   438→            </div>
+   439→   439→          </div>
+   440→   440→
+   441→   441→          {/* Items */}
+   442→   442→          <div className="space-y-2">
+   443→   443→            <div className="flex items-center justify-between">
+   444→   444→              <Label>Line Items</Label>
+   445→   445→              <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={addItem}>
+   446→   446→                <Plus className="w-3 h-3" /> Add Item
+   447→   447→              </Button>
+   448→   448→            </div>
+   449→   449→            <div className="space-y-2 rounded-lg border p-2 bg-muted/30 max-h-56 overflow-y-auto scrollbar-thin">
+   450→   450→              {items.map((it, idx) => (
+   451→   451→                <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+   452→   452→                  <Input
+   453→   453→                    className="col-span-12 sm:col-span-5 h-8 text-sm"
+   454→   454→                    placeholder="Description"
+   455→   455→                    value={it.description}
+   456→   456→                    onChange={(e) => updateItem(idx, { description: e.target.value })}
+   457→   457→                  />
+   458→   458→                  <Input
+   459→   459→                    type="number"
+   460→   460→                    className="col-span-3 sm:col-span-2 h-8 text-sm"
+   461→   461→                    placeholder="Qty"
+   462→   462→                    value={it.qty}
+   463→   463→                    onChange={(e) => updateItem(idx, { qty: Number(e.target.value) })}
+   464→   464→                  />
+   465→   465→                  <Input
+   466→   466→                    type="number"
+   467→   467→                    className="col-span-4 sm:col-span-2 h-8 text-sm"
+   468→   468→                    placeholder="Rate"
+   469→   469→                    value={it.rate}
+   470→   470→                    onChange={(e) => updateItem(idx, { rate: Number(e.target.value) })}
+   471→   471→                  />
+   472→   472→                  <div className="col-span-4 sm:col-span-2 text-right text-sm font-medium">
+   473→   473→                    {formatRs(it.amount)}
+   474→   474→                  </div>
+   475→   475→                  <Button
+   476→   476→                    type="button"
+   477→   477→                    variant="ghost"
+   478→   478→                    size="sm"
+   479→   479→                    className="col-span-1 h-8 w-8 p-0 text-rose-500"
+   480→   480→                    onClick={() => removeItem(idx)}
+   481→   481→                    disabled={items.length === 1}
+   482→   482→                  >
+   483→   483→                    <X className="w-3.5 h-3.5" />
+   484→   484→                  </Button>
+   485→   485→                </div>
+   486→   486→              ))}
+   487→   487→            </div>
+   488→   488→          </div>
+   489→   489→
+   490→   490→          {/* Discount / tax / payment */}
+   491→   491→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   492→   492→            <div className="space-y-1.5">
+   493→   493→              <Label className="text-xs">Discount (Rs)</Label>
+   494→   494→              <Input type="number" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} className="h-8" />
+   495→   495→            </div>
+   496→   496→            <div className="space-y-1.5">
+   497→   497→              <Label className="text-xs">Tax Rate (%)</Label>
+   498→   498→              <Input type="number" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value))} className="h-8" />
+   499→   499→            </div>
+   500→   500→            <div className="space-y-1.5">
+   501→   501→              <Label className="text-xs">Payment Method</Label>
+   502→   502→              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+   503→   503→                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+   504→   504→                <SelectContent>
+   505→   505→                  {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+   506→   506→                </SelectContent>
+   507→   507→              </Select>
+   508→   508→            </div>
+   509→   509→            <div className="space-y-1.5">
+   510→   510→              <Label className="text-xs">Paid (Rs)</Label>
+   511→   511→              <Input type="number" value={paid} onChange={(e) => setPaid(Number(e.target.value))} className="h-8" />
+   512→   512→            </div>
+   513→   513→          </div>
+   514→   514→
+   515→   515→          {/* Totals */}
+   516→   516→          <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+   517→   517→            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatRs(subtotal)}</span></div>
+   518→   518→            <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-rose-600">- {formatRs(discount)}</span></div>
+   519→   519→            <div className="flex justify-between"><span className="text-muted-foreground">Tax ({taxRate}%)</span><span>+ {formatRs(taxAmount)}</span></div>
+   520→   520→            <div className="flex justify-between font-semibold border-t pt-1 mt-1"><span>Total</span><span>{formatRs(total)}</span></div>
+   521→   521→            <div className="flex justify-between text-emerald-600"><span>Paid</span><span>{formatRs(paid)}</span></div>
+   522→   522→            <div className="flex justify-between font-semibold text-rose-600"><span>Due</span><span>{formatRs(due)}</span></div>
+   523→   523→          </div>
+   524→   524→
+   525→   525→          <DialogFooter>
+   526→   526→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   527→   527→            <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
+   528→   528→              {saving ? "Creating…" : "Create Invoice"}
+   529→   529→            </Button>
+   530→   530→          </DialogFooter>
+   531→   531→        </form>
+   532→   532→      </DialogContent>
+   533→   533→    </Dialog>
+   534→   534→  );
+   535→   535→}
+   536→   536→
+   537→   537→/* ---------- Collect Payment Dialog ---------- */
+   538→   538→
+   539→   539→function CollectPaymentDialog({
+   540→   540→  invoice, onOpenChange, onPaid,
+   541→   541→}: {
+   542→   542→  invoice: Invoice | null;
+   543→   543→  onOpenChange: (v: boolean) => void;
+   544→   544→  onPaid: () => void;
+   545→   545→}) {
+   546→   546→  const [amount, setAmount] = useState(0);
+   547→   547→  const [method, setMethod] = useState("Cash");
+   548→   548→  const [saving, setSaving] = useState(false);
+   549→   549→
+   550→   550→  // Reset amount when invoice changes
+   551→   551→  useEffect(() => {
+   552→   552→    if (invoice) {
+   553→   553→      setAmount(invoice.due || 0);
+   554→   554→      setMethod(invoice.paymentMethod || "Cash");
+   555→   555→    }
+   556→   556→  }, [invoice]);
+   557→   557→
+   558→   558→  if (!invoice) return null;
+   559→   559→
+   560→   560→  const newPaidTotal = (invoice.paid || 0) + (Number(amount) || 0);
+   561→   561→  const newDue = Math.max(0, invoice.total - newPaidTotal);
+   562→   562→  const newStatus = newDue <= 0 ? "paid" : newPaidTotal > 0 ? "partial" : "unpaid";
+   563→   563→
+   564→   564→  const submit = async (e: React.FormEvent) => {
+   565→   565→    e.preventDefault();
+   566→   566→    if (amount <= 0) { toast.error("Enter a valid amount"); return; }
+   567→   567→    setSaving(true);
+   568→   568→    try {
+   569→   569→      const res = await fetch(`/api/invoices/${invoice.id}`, {
+   570→   570→        method: "PATCH",
+   571→   571→        headers: { "Content-Type": "application/json" },
+   572→   572→        body: JSON.stringify({ paid: newPaidTotal, status: newStatus, paymentMethod: method }),
+   573→   573→      });
+   574→   574→      if (!res.ok) throw new Error("Failed to record payment");
+   575→   575→      toast.success(`Payment of ${formatRs(amount)} recorded for ${invoice.invoiceNo}`);
+   576→   576→      onPaid();
+   577→   577→    } catch {
+   578→   578→      toast.error("Failed to record payment");
+   579→   579→    } finally {
+   580→   580→      setSaving(false);
+   581→   581→    }
+   582→   582→  };
+   583→   583→
+   584→   584→  return (
+   585→   585→    <Dialog open={!!invoice} onOpenChange={onOpenChange}>
+   586→   586→      <DialogContent className="max-w-md">
+   587→   587→        <DialogHeader>
+   588→   588→          <DialogTitle className="flex items-center gap-2">
+   589→   589→            <CreditCard className="w-4 h-4 text-teal-600" /> Collect Payment
+   590→   590→          </DialogTitle>
+   591→   591→          <DialogDescription>
+   592→   592→            Invoice <span className="font-mono">{invoice.invoiceNo}</span> · {invoice.patient.name}
+   593→   593→          </DialogDescription>
+   594→   594→        </DialogHeader>
+   595→   595→        <form onSubmit={submit} className="space-y-3">
+   596→   596→          <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+   597→   597→            <div className="flex justify-between"><span className="text-muted-foreground">Invoice Total</span><span className="font-medium">{formatRs(invoice.total)}</span></div>
+   598→   598→            <div className="flex justify-between"><span className="text-muted-foreground">Already Paid</span><span className="text-emerald-600">{formatRs(invoice.paid)}</span></div>
+   599→   599→            <div className="flex justify-between font-semibold"><span>Outstanding Due</span><span className="text-rose-600">{formatRs(invoice.due)}</span></div>
+   600→   600→          </div>
+   601→   601→          <div className="grid grid-cols-2 gap-3">
+   602→   602→            <div className="space-y-1.5">
+   603→   603→              <Label>Amount (Rs) *</Label>
+   604→   604→              <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} min={0} max={invoice.due} />
+   605→   605→            </div>
+   606→   606→            <div className="space-y-1.5">
+   607→   607→              <Label>Method</Label>
+   608→   608→              <Select value={method} onValueChange={setMethod}>
+   609→   609→                <SelectTrigger><SelectValue /></SelectTrigger>
+   610→   610→                <SelectContent>
+   611→   611→                  {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+   612→   612→                </SelectContent>
+   613→   613→              </Select>
+   614→   614→            </div>
+   615→   615→          </div>
+   616→   616→          <div className="rounded-lg border bg-teal-50 dark:bg-teal-950/20 p-3 text-sm space-y-1">
+   617→   617→            <div className="flex justify-between"><span className="text-muted-foreground">New Paid Total</span><span className="text-emerald-600 font-medium">{formatRs(newPaidTotal)}</span></div>
+   618→   618→            <div className="flex justify-between"><span className="text-muted-foreground">Remaining Due</span><span className="font-medium">{formatRs(newDue)}</span></div>
+   619→   619→            <div className="flex justify-between"><span className="text-muted-foreground">New Status</span>
+   620→   620→              <Badge className={`text-[10px] ${statusColors[newStatus]}`}>{statusLabel(newStatus)}</Badge>
+   621→   621→            </div>
+   622→   622→          </div>
+   623→   623→          <DialogFooter>
+   624→   624→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   625→   625→            <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
+   626→   626→              {saving ? "Recording…" : "Record Payment"}
+   627→   627→            </Button>
+   628→   628→          </DialogFooter>
+   629→   629→        </form>
+   630→   630→      </DialogContent>
+   631→   631→    </Dialog>
+   632→   632→  );
+   633→   633→}
+   634→   634→
+   635→   635→/* ---------- Invoice Detail Sheet ---------- */
+   636→   636→
+   637→   637→function InvoiceDetail({ invoice }: { invoice: Invoice }) {
+   638→   638→  return (
+   639→   639→    <div>
+   640→   640→      <SheetHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30">
+   641→   641→        <div className="flex items-start justify-between gap-3">
+   642→   642→          <div className="flex-1 min-w-0">
+   643→   643→            <SheetTitle className="text-xl flex items-center gap-2">
+   644→   644→              <Receipt className="w-5 h-5 text-teal-600" />
+   645→   645→              <span className="font-mono">{invoice.invoiceNo}</span>
+   646→   646→            </SheetTitle>
+   647→   647→            <SheetDescription className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+   648→   648→              <span>{formatDate(invoice.date)}</span>
+   649→   649→              <Badge variant="outline" className={`text-[10px] capitalize ${TYPE_COLORS[invoice.type] || "bg-gray-100"}`}>
+   650→   650→                {invoice.type}
+   651→   651→              </Badge>
+   652→   652→              <Badge className={`text-[10px] ${statusColors[invoice.status]}`}>{statusLabel(invoice.status)}</Badge>
+   653→   653→              {invoice.paymentMethod && (
+   654→   654→                <span className="text-xs">via {invoice.paymentMethod}</span>
+   655→   655→              )}
+   656→   656→            </SheetDescription>
+   657→   657→          </div>
+   658→   658→          <div className="flex gap-2 shrink-0">
+   659→   659→            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.success("Generating PDF…")}>
+   660→   660→              <FileDown className="w-4 h-4" /> PDF
+   661→   661→            </Button>
+   662→   662→            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.success("Printing invoice…")}>
+   663→   663→              <Printer className="w-4 h-4" /> Print
+   664→   664→            </Button>
+   665→   665→          </div>
+   666→   666→        </div>
+   667→   667→      </SheetHeader>
+   668→   668→
+   669→   669→      <div className="p-6 space-y-5">
+   670→   670→        {/* Patient info */}
+   671→   671→        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   672→   672→          <div className="rounded-lg border bg-card p-3">
+   673→   673→            <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Bill To</p>
+   674→   674→            <p className="font-semibold mt-0.5">{invoice.patient.name}</p>
+   675→   675→            <p className="text-xs text-muted-foreground font-mono">{invoice.patient.patientCode}</p>
+   676→   676→            <p className="text-xs text-muted-foreground">{invoice.patient.phone}</p>
+   677→   677→          </div>
+   678→   678→          <div className="rounded-lg border bg-card p-3">
+   679→   679→            <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Invoice Total</p>
+   680→   680→            <p className="text-2xl font-bold text-teal-700 dark:text-teal-400 mt-0.5">{formatRs(invoice.total)}</p>
+   681→   681→            <p className="text-xs text-muted-foreground mt-0.5">
+   682→   682→              Paid <span className="text-emerald-600 font-medium">{formatRs(invoice.paid)}</span> · Due{" "}
+   683→   683→              <span className={`font-medium ${invoice.due > 0 ? "text-rose-600" : ""}`}>{formatRs(invoice.due)}</span>
+   684→   684→            </p>
+   685→   685→          </div>
+   686→   686→        </div>
+   687→   687→
+   688→   688→        {/* Items table */}
+   689→   689→        <div>
+   690→   690→          <h4 className="text-sm font-semibold mb-2">Line Items</h4>
+   691→   691→          <div className="rounded-lg border overflow-hidden">
+   692→   692→            <Table>
+   693→   693→              <TableHeader>
+   694→   694→                <TableRow className="bg-muted/50">
+   695→   695→                  <TableHead>Description</TableHead>
+   696→   696→                  <TableHead className="text-right w-16">Qty</TableHead>
+   697→   697→                  <TableHead className="text-right w-24">Rate</TableHead>
+   698→   698→                  <TableHead className="text-right w-28">Amount</TableHead>
+   699→   699→                </TableRow>
+   700→   700→              </TableHeader>
+   701→   701→              <TableBody>
+   702→   702→                {invoice.items.length === 0 ? (
+   703→   703→                  <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-6">No items</TableCell></TableRow>
+   704→   704→                ) : invoice.items.map((it) => (
+   705→   705→                  <TableRow key={it.id || it.description}>
+   706→   706→                    <TableCell className="text-sm">{it.description}</TableCell>
+   707→   707→                    <TableCell className="text-right text-sm">{it.qty}</TableCell>
+   708→   708→                    <TableCell className="text-right text-sm">{formatRs(it.rate)}</TableCell>
+   709→   709→                    <TableCell className="text-right text-sm font-medium">{formatRs(it.amount)}</TableCell>
+   710→   710→                  </TableRow>
+   711→   711→                ))}
+   712→   712→              </TableBody>
+   713→   713→            </Table>
+   714→   714→          </div>
+   715→   715→        </div>
+   716→   716→
+   717→   717→        {/* Totals breakdown */}
+   718→   718→        <div className="rounded-lg border bg-muted/30 p-4 space-y-1.5 text-sm ml-auto max-w-xs">
+   719→   719→          <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatRs(invoice.subtotal)}</span></div>
+   720→   720→          <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-rose-600">- {formatRs(invoice.discount)}</span></div>
+   721→   721→          <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span>+ {formatRs(invoice.tax)}</span></div>
+   722→   722→          <div className="flex justify-between font-semibold border-t pt-1.5 mt-1.5 text-base"><span>Total</span><span>{formatRs(invoice.total)}</span></div>
+   723→   723→          <div className="flex justify-between text-emerald-600"><span>Paid</span><span>{formatRs(invoice.paid)}</span></div>
+   724→   724→          <div className="flex justify-between font-semibold text-rose-600"><span>Due</span><span>{formatRs(invoice.due)}</span></div>
+   725→   725→        </div>
+   726→   726→      </div>
+   727→   727→    </div>
+   728→   728→  );
+   729→   729→}
+   730→   730→

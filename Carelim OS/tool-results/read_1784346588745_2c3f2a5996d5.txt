@@ -1,0 +1,669 @@
+     1→"use client";
+     2→
+     3→import { useFetch } from "@/lib/use-fetch";
+     4→import { useState, useMemo, useCallback } from "react";
+     5→import { Card, CardContent } from "@/components/ui/card";
+     6→import { Badge } from "@/components/ui/badge";
+     7→import { Button } from "@/components/ui/button";
+     8→import { Input } from "@/components/ui/input";
+     9→import { Skeleton } from "@/components/ui/skeleton";
+    10→import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+    11→import { Switch } from "@/components/ui/switch";
+    12→import { Label } from "@/components/ui/label";
+    13→import { Progress } from "@/components/ui/progress";
+    14→import { Separator } from "@/components/ui/separator";
+    15→import {
+    16→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    17→} from "@/components/ui/table";
+    18→import {
+    19→  Sheet, SheetContent, SheetHeader, SheetTitle,
+    20→} from "@/components/ui/sheet";
+    21→import {
+    22→  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+    23→} from "@/components/ui/dropdown-menu";
+    24→import {
+    25→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    26→} from "@/components/ui/select";
+    27→import {
+    28→  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+    29→  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+    30→} from "@/components/ui/alert-dialog";
+    31→import {
+    32→  Search, MoreVertical, Building2, Mail, Phone, MapPin, Calendar, Globe,
+    33→  LogIn, Pause, Play, Trash2, CreditCard, Activity, HardDrive, Server,
+    34→  Cpu, Stethoscope, Users, CalendarClock, ShieldCheck, Download, Filter,
+    35→} from "lucide-react";
+    36→import { formatRs, formatDate, formatDateTime, timeAgo, statusColors, statusLabel } from "@/lib/format";
+    37→import { exportToCSV } from "@/lib/export-utils";
+    38→import { usePagination } from "@/lib/use-pagination";
+    39→import { Pagination } from "@/components/cms/pagination";
+    40→import { EmptyState } from "@/components/cms/empty-state";
+    41→import { toast } from "sonner";
+    42→
+    43→interface Plan {
+    44→  id: string; name: string; priceMonthly: number; priceYearly: number; maxDoctors: number; maxUsers: number; maxStorage: number;
+    45→}
+    46→
+    47→interface Tenant {
+    48→  id: string;
+    49→  name: string;
+    50→  domain: string | null;
+    51→  ownerName: string;
+    52→  ownerEmail: string;
+    53→  ownerPhone: string;
+    54→  address: string | null;
+    55→  city: string | null;
+    56→  country: string;
+    57→  registrationNo: string | null;
+    58→  planId: string | null;
+    59→  plan: Plan | null;
+    60→  status: string;
+    61→  trialEndsAt: string | null;
+    62→  createdAt: string;
+    63→  lastLoginAt: string | null;
+    64→  usageRecords: Array<{
+    65→    date: string; userCount: number; doctorCount: number; patientCount: number;
+    66→    appointmentCount: number; storageUsedMB: number; apiCalls: number;
+    67→  }>;
+    68→}
+    69→
+    70→interface TenantDetail extends Tenant {
+    71→  invoices: Array<{ id: string; invoiceNo: string; amount: number; total: number; status: string; date: string }>;
+    72→  tenantModules: Array<{ id: string; enabled: boolean; module: { id: string; name: string; category: string } }>;
+    73→  supportTickets: Array<{ id: string; ticketNo: string; subject: string; status: string; priority: string; createdAt: string }>;
+    74→}
+    75→
+    76→interface SaasTenantsProps {
+    77→  filter?: string;
+    78→}
+    79→
+    80→const STATUS_FILTERS = [
+    81→  { value: "all", label: "All", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
+    82→  { value: "active", label: "Active", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
+    83→  { value: "trial", label: "Trial", color: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" },
+    84→  { value: "suspended", label: "Suspended", color: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" },
+    85→];
+    86→
+    87→export function SaasTenants({ filter: initialFilter }: SaasTenantsProps) {
+    88→  const [refresh, setRefresh] = useState(0);
+    89→  const refreshFn = useCallback(() => setRefresh((r) => r + 1), []);
+    90→  const { data: tenants, loading } = useFetch<Tenant[]>(
+    91→    refresh ? `/api/tenants?_r=${refresh}` : "/api/tenants"
+    92→  );
+    93→  const { data: plans } = useFetch<Plan[]>("/api/plans");
+    94→
+    95→  const [search, setSearch] = useState("");
+    96→  const [statusFilter, setStatusFilter] = useState<string>(
+    97→    initialFilter && initialFilter !== "all" ? initialFilter : "all"
+    98→  );
+    99→  const [selectedId, setSelectedId] = useState<string | null>(null);
+   100→  const [deleteId, setDeleteId] = useState<string | null>(null);
+   101→  const [changePlanId, setChangePlanId] = useState<string | null>(null);
+   102→  const [newPlanId, setNewPlanId] = useState<string>("");
+   103→
+   104→  const filtered = useMemo(() => {
+   105→    const list = tenants || [];
+   106→    return list.filter((t) => {
+   107→      if (statusFilter !== "all" && t.status !== statusFilter) return false;
+   108→      if (search) {
+   109→        const q = search.toLowerCase();
+   110→        return (
+   111→          t.name.toLowerCase().includes(q) ||
+   112→          t.ownerName.toLowerCase().includes(q) ||
+   113→          t.ownerEmail.toLowerCase().includes(q) ||
+   114→          (t.city || "").toLowerCase().includes(q) ||
+   115→          (t.domain || "").toLowerCase().includes(q)
+   116→        );
+   117→      }
+   118→      return true;
+   119→    });
+   120→  }, [tenants, search, statusFilter]);
+   121→
+   122→  const pagination = usePagination<Tenant>(filtered, 10);
+   123→
+   124→  const handleExport = () => {
+   125→    if (!filtered.length) { toast.info("Nothing to export"); return; }
+   126→    exportToCSV("tenants", ["Name", "Owner", "Email", "Phone", "City", "Plan", "Status", "Created"],
+   127→      filtered.map((t) => [t.name, t.ownerName, t.ownerEmail, t.ownerPhone, t.city || "", t.plan?.name || "", t.status, formatDate(t.createdAt)]));
+   128→    toast.success("Tenants exported");
+   129→  };
+   130→
+   131→  const updateStatus = async (id: string, status: string) => {
+   132→    const res = await fetch(`/api/tenants/${id}`, {
+   133→      method: "PATCH",
+   134→      headers: { "Content-Type": "application/json" },
+   135→      body: JSON.stringify({ status }),
+   136→    });
+   137→    if (res.ok) {
+   138→      toast.success(`Tenant ${status === "active" ? "activated" : status === "suspended" ? "suspended" : "updated"}`);
+   139→      refreshFn();
+   140→    } else {
+   141→      toast.error("Failed to update tenant");
+   142→    }
+   143→  };
+   144→
+   145→  const handleDelete = async () => {
+   146→    if (!deleteId) return;
+   147→    const res = await fetch(`/api/tenants/${deleteId}`, { method: "DELETE" });
+   148→    if (res.ok) {
+   149→      toast.success("Tenant deleted");
+   150→      setDeleteId(null);
+   151→      refreshFn();
+   152→    } else {
+   153→      toast.error("Failed to delete tenant");
+   154→    }
+   155→  };
+   156→
+   157→  const handleChangePlan = async () => {
+   158→    if (!changePlanId || !newPlanId) return;
+   159→    const res = await fetch(`/api/tenants/${changePlanId}`, {
+   160→      method: "PATCH",
+   161→      headers: { "Content-Type": "application/json" },
+   162→      body: JSON.stringify({ planId: newPlanId }),
+   163→    });
+   164→    if (res.ok) {
+   165→      toast.success("Plan updated");
+   166→      setChangePlanId(null);
+   167→      setNewPlanId("");
+   168→      refreshFn();
+   169→    } else {
+   170→      toast.error("Failed to change plan");
+   171→    }
+   172→  };
+   173→
+   174→  const loginAs = (t: Tenant) => {
+   175→    toast.success(`Logging in as ${t.name}…`, { description: "Redirecting to tenant workspace" });
+   176→    setTimeout(() => { window.location.href = "/"; }, 600);
+   177→  };
+   178→
+   179→  if (loading) {
+   180→    return (
+   181→      <div className="space-y-4 animate-fade-in">
+   182→        <Skeleton className="h-20 rounded-xl" />
+   183→        <Skeleton className="h-96 rounded-xl" />
+   184→      </div>
+   185→    );
+   186→  }
+   187→
+   188→  return (
+   189→    <div className="space-y-4 animate-fade-in">
+   190→      {/* Header */}
+   191→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   192→        <div>
+   193→          <h2 className="text-xl font-bold leading-tight">Tenants</h2>
+   194→          <p className="text-xs text-muted-foreground">{filtered.length} of {tenants?.length || 0} clinics · manage workspaces, plans & status</p>
+   195→        </div>
+   196→        <div className="flex items-center gap-2">
+   197→          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
+   198→            <Download className="w-4 h-4" /> Export
+   199→          </Button>
+   200→        </div>
+   201→      </div>
+   202→
+   203→      {/* Search + Filters */}
+   204→      <Card>
+   205→        <CardContent className="p-3 space-y-3">
+   206→          <div className="flex flex-col sm:flex-row gap-2">
+   207→            <div className="relative flex-1">
+   208→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   209→              <Input
+   210→                value={search}
+   211→                onChange={(e) => setSearch(e.target.value)}
+   212→                placeholder="Search by name, owner, email, city or domain…"
+   213→                className="pl-9"
+   214→              />
+   215→            </div>
+   216→            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
+   217→              <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+   218→              {STATUS_FILTERS.map((f) => (
+   219→                <button
+   220→                  key={f.value}
+   221→                  onClick={() => setStatusFilter(f.value)}
+   222→                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+   223→                    statusFilter === f.value
+   224→                      ? "bg-teal-600 text-white shadow-sm"
+   225→                      : "bg-muted/60 text-muted-foreground hover:bg-muted"
+   226→                  }`}
+   227→                >
+   228→                  {f.label}
+   229→                  {f.value !== "all" && (
+   230→                    <span className="text-[10px] opacity-70">
+   231→                      ({(tenants || []).filter((t) => t.status === f.value).length})
+   232→                    </span>
+   233→                  )}
+   234→                </button>
+   235→              ))}
+   236→            </div>
+   237→          </div>
+   238→        </CardContent>
+   239→      </Card>
+   240→
+   241→      {/* Tenants table */}
+   242→      <Card>
+   243→        <CardContent className="p-0">
+   244→          {filtered.length === 0 ? (
+   245→            <EmptyState icon={Building2} title="No tenants found" description="Try adjusting search or filter" />
+   246→          ) : (
+   247→            <>
+   248→              <Table>
+   249→                <TableHeader>
+   250→                  <TableRow className="bg-muted/40">
+   251→                    <TableHead className="text-[11px] uppercase">Clinic</TableHead>
+   252→                    <TableHead className="text-[11px] uppercase">Owner</TableHead>
+   253→                    <TableHead className="text-[11px] uppercase hidden md:table-cell">City</TableHead>
+   254→                    <TableHead className="text-[11px] uppercase hidden lg:table-cell">Plan</TableHead>
+   255→                    <TableHead className="text-[11px] uppercase">Status</TableHead>
+   256→                    <TableHead className="text-[11px] uppercase hidden md:table-cell">Created</TableHead>
+   257→                    <TableHead className="text-[11px] uppercase text-right">Actions</TableHead>
+   258→                  </TableRow>
+   259→                </TableHeader>
+   260→                <TableBody>
+   261→                  {pagination.paged.map((t) => (
+   262→                    <TableRow
+   263→                      key={t.id}
+   264→                      className="table-row-hover cursor-pointer"
+   265→                      onClick={() => setSelectedId(t.id)}
+   266→                    >
+   267→                      <TableCell>
+   268→                        <div className="flex items-center gap-3">
+   269→                          <Avatar className="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-100 to-emerald-100 dark:from-teal-950/50 dark:to-emerald-950/50">
+   270→                            <AvatarFallback className="bg-transparent text-teal-700 dark:text-teal-300 text-xs font-semibold">
+   271→                              {t.name.slice(0, 2).toUpperCase()}
+   272→                            </AvatarFallback>
+   273→                          </Avatar>
+   274→                          <div className="min-w-0">
+   275→                            <p className="text-sm font-semibold truncate">{t.name}</p>
+   276→                            {t.domain && <p className="text-[11px] text-muted-foreground truncate">{t.domain}</p>}
+   277→                          </div>
+   278→                        </div>
+   279→                      </TableCell>
+   280→                      <TableCell>
+   281→                        <p className="text-sm font-medium">{t.ownerName}</p>
+   282→                        <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">{t.ownerEmail}</p>
+   283→                      </TableCell>
+   284→                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{t.city || "—"}</TableCell>
+   285→                      <TableCell className="hidden lg:table-cell">
+   286→                        {t.plan ? (
+   287→                          <Badge className="bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300">{t.plan.name}</Badge>
+   288→                        ) : (
+   289→                          <span className="text-xs text-muted-foreground">No plan</span>
+   290→                        )}
+   291→                      </TableCell>
+   292→                      <TableCell>
+   293→                        <Badge className={`text-[10px] ${statusColors[t.status] || "bg-gray-100 text-gray-600"}`}>
+   294→                          {statusLabel(t.status)}
+   295→                        </Badge>
+   296→                      </TableCell>
+   297→                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+   298→                        {formatDate(t.createdAt)}
+   299→                      </TableCell>
+   300→                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+   301→                        <DropdownMenu>
+   302→                          <DropdownMenuTrigger asChild>
+   303→                            <Button variant="ghost" size="icon" className="h-8 w-8">
+   304→                              <MoreVertical className="w-4 h-4" />
+   305→                            </Button>
+   306→                          </DropdownMenuTrigger>
+   307→                          <DropdownMenuContent align="end" className="w-44">
+   308→                            <DropdownMenuItem onClick={() => setSelectedId(t.id)}>
+   309→                              <Building2 className="w-4 h-4" /> View Profile
+   310→                            </DropdownMenuItem>
+   311→                            <DropdownMenuItem onClick={() => loginAs(t)}>
+   312→                              <LogIn className="w-4 h-4" /> Login As
+   313→                            </DropdownMenuItem>
+   314→                            <DropdownMenuSeparator />
+   315→                            {t.status === "suspended" ? (
+   316→                              <DropdownMenuItem onClick={() => updateStatus(t.id, "active")}>
+   317→                                <Play className="w-4 h-4 text-emerald-600" /> Activate
+   318→                              </DropdownMenuItem>
+   319→                            ) : (
+   320→                              <DropdownMenuItem onClick={() => updateStatus(t.id, "suspended")}>
+   321→                                <Pause className="w-4 h-4 text-amber-600" /> Suspend
+   322→                              </DropdownMenuItem>
+   323→                            )}
+   324→                            <DropdownMenuItem onClick={() => { setChangePlanId(t.id); setNewPlanId(t.planId || ""); }}>
+   325→                              <CreditCard className="w-4 h-4" /> Change Plan
+   326→                            </DropdownMenuItem>
+   327→                            <DropdownMenuSeparator />
+   328→                            <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => setDeleteId(t.id)}>
+   329→                              <Trash2 className="w-4 h-4" /> Delete
+   330→                            </DropdownMenuItem>
+   331→                          </DropdownMenuContent>
+   332→                        </DropdownMenu>
+   333→                      </TableCell>
+   334→                    </TableRow>
+   335→                  ))}
+   336→                </TableBody>
+   337→              </Table>
+   338→              <Pagination {...pagination} />
+   339→            </>
+   340→          )}
+   341→        </CardContent>
+   342→      </Card>
+   343→
+   344→      {/* Tenant profile sheet */}
+   345→      <TenantProfileSheet
+   346→        tenantId={selectedId}
+   347→        onClose={() => setSelectedId(null)}
+   348→        onSuspend={updateStatus}
+   349→        onLoginAs={loginAs}
+   350→        onRefresh={refreshFn}
+   351→        plans={plans || []}
+   352→        onChangePlan={(id, planId) => { setChangePlanId(id); setNewPlanId(planId); }}
+   353→      />
+   354→
+   355→      {/* Delete confirmation */}
+   356→      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+   357→        <AlertDialogContent>
+   358→          <AlertDialogHeader>
+   359→            <AlertDialogTitle>Delete this tenant?</AlertDialogTitle>
+   360→            <AlertDialogDescription>
+   361→              This will permanently delete the tenant, their invoices, modules, usage records, tickets and audit logs. This cannot be undone.
+   362→            </AlertDialogDescription>
+   363→          </AlertDialogHeader>
+   364→          <AlertDialogFooter>
+   365→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+   366→            <AlertDialogAction
+   367→              className="bg-rose-600 hover:bg-rose-700 text-white"
+   368→              onClick={handleDelete}
+   369→            >
+   370→              Delete Tenant
+   371→            </AlertDialogAction>
+   372→          </AlertDialogFooter>
+   373→        </AlertDialogContent>
+   374→      </AlertDialog>
+   375→
+   376→      {/* Change plan dialog */}
+   377→      <AlertDialog open={!!changePlanId} onOpenChange={(o) => !o && setChangePlanId(null)}>
+   378→        <AlertDialogContent>
+   379→          <AlertDialogHeader>
+   380→            <AlertDialogTitle>Change subscription plan</AlertDialogTitle>
+   381→            <AlertDialogDescription>
+   382→              Select a new plan for this tenant. Changes take effect immediately and will be reflected in the next invoice.
+   383→            </AlertDialogDescription>
+   384→          </AlertDialogHeader>
+   385→          <div className="py-2">
+   386→            <Select value={newPlanId} onValueChange={setNewPlanId}>
+   387→              <SelectTrigger><SelectValue placeholder="Select plan" /></SelectTrigger>
+   388→              <SelectContent>
+   389→                {(plans || []).map((p) => (
+   390→                  <SelectItem key={p.id} value={p.id}>
+   391→                    {p.name} — {formatRs(p.priceMonthly)}/mo · {p.maxDoctors} doctors
+   392→                  </SelectItem>
+   393→                ))}
+   394→              </SelectContent>
+   395→            </Select>
+   396→          </div>
+   397→          <AlertDialogFooter>
+   398→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+   399→            <AlertDialogAction
+   400→              className="bg-teal-600 hover:bg-teal-700 text-white"
+   401→              onClick={handleChangePlan}
+   402→              disabled={!newPlanId}
+   403→            >
+   404→              Update Plan
+   405→            </AlertDialogAction>
+   406→          </AlertDialogFooter>
+   407→        </AlertDialogContent>
+   408→      </AlertDialog>
+   409→    </div>
+   410→  );
+   411→}
+   412→
+   413→// ============== Tenant Profile Sheet ==============
+   414→function TenantProfileSheet({
+   415→  tenantId, onClose, onSuspend, onLoginAs, onRefresh, plans, onChangePlan,
+   416→}: {
+   417→  tenantId: string | null;
+   418→  onClose: () => void;
+   419→  onSuspend: (id: string, status: string) => void;
+   420→  onLoginAs: (t: Tenant) => void;
+   421→  onRefresh: () => void;
+   422→  plans: Plan[];
+   423→  onChangePlan: (id: string, planId: string) => void;
+   424→}) {
+   425→  const { data: tenant, loading } = useFetch<TenantDetail | null>(
+   426→    tenantId ? `/api/tenants/${tenantId}` : null
+   427→  );
+   428→
+   429→  return (
+   430→    <Sheet open={!!tenantId} onOpenChange={(o) => !o && onClose()}>
+   431→      <SheetContent className="w-full sm:max-w-xl overflow-y-auto scrollbar-thin p-0">
+   432→        {loading || !tenant ? (
+   433→          <div className="p-6"><Skeleton className="h-96 rounded-xl" /></div>
+   434→        ) : (
+   435→          <div className="p-6 space-y-5">
+   436→            {/* Header */}
+   437→            <SheetHeader>
+   438→              <div className="flex items-start justify-between gap-3">
+   439→                <div className="flex items-center gap-3">
+   440→                  <Avatar className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-emerald-100 dark:from-teal-950/50 dark:to-emerald-950/50">
+   441→                    <AvatarFallback className="bg-transparent text-teal-700 dark:text-teal-300 font-bold">
+   442→                      {tenant.name.slice(0, 2).toUpperCase()}
+   443→                    </AvatarFallback>
+   444→                  </Avatar>
+   445→                  <div>
+   446→                    <SheetTitle className="text-lg">{tenant.name}</SheetTitle>
+   447→                    <div className="flex items-center gap-2 mt-1">
+   448→                      <Badge className={`text-[10px] ${statusColors[tenant.status] || "bg-gray-100"}`}>
+   449→                        {statusLabel(tenant.status)}
+   450→                      </Badge>
+   451→                      {tenant.plan && (
+   452→                        <Badge className="text-[10px] bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300">
+   453→                          {tenant.plan.name}
+   454→                        </Badge>
+   455→                      )}
+   456→                    </div>
+   457→                  </div>
+   458→                </div>
+   459→              </div>
+   460→            </SheetHeader>
+   461→
+   462→            {/* Quick actions */}
+   463→            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+   464→              <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5" onClick={() => onLoginAs(tenant)}>
+   465→                <LogIn className="w-3.5 h-3.5" /> Login As
+   466→              </Button>
+   467→              {tenant.status === "suspended" ? (
+   468→                <Button size="sm" variant="outline" className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={() => onSuspend(tenant.id, "active")}>
+   469→                  <Play className="w-3.5 h-3.5" /> Activate
+   470→                </Button>
+   471→              ) : (
+   472→                <Button size="sm" variant="outline" className="gap-1.5 text-amber-600 border-amber-200 hover:bg-amber-50" onClick={() => onSuspend(tenant.id, "suspended")}>
+   473→                  <Pause className="w-3.5 h-3.5" /> Suspend
+   474→                </Button>
+   475→              )}
+   476→              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onChangePlan(tenant.id, tenant.planId || "")}>
+   477→                <CreditCard className="w-3.5 h-3.5" /> Plan
+   478→              </Button>
+   479→              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { toast.success("Tenant refreshed"); onRefresh(); }}>
+   480→                <Activity className="w-3.5 h-3.5" /> Refresh
+   481→              </Button>
+   482→            </div>
+   483→
+   484→            {/* Clinic info */}
+   485→            <div>
+   486→              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Clinic Information</p>
+   487→              <div className="rounded-xl border border-border bg-card/50 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+   488→                <InfoRow icon={Users} label="Owner" value={tenant.ownerName} />
+   489→                <InfoRow icon={Mail} label="Email" value={tenant.ownerEmail} />
+   490→                <InfoRow icon={Phone} label="Phone" value={tenant.ownerPhone} />
+   491→                <InfoRow icon={MapPin} label="Address" value={tenant.address || "—"} />
+   492→                <InfoRow icon={Globe} label="City / Country" value={`${tenant.city || "—"}, ${tenant.country}`} />
+   493→                <InfoRow icon={ShieldCheck} label="Reg. No" value={tenant.registrationNo || "—"} />
+   494→                <InfoRow icon={Calendar} label="Created" value={formatDate(tenant.createdAt)} />
+   495→                <InfoRow icon={Calendar} label="Last Login" value={tenant.lastLoginAt ? formatDateTime(tenant.lastLoginAt) : "Never"} />
+   496→                {tenant.trialEndsAt && (
+   497→                  <InfoRow icon={CalendarClock} label="Trial Ends" value={formatDate(tenant.trialEndsAt)} />
+   498→                )}
+   499→                {tenant.domain && (
+   500→                  <InfoRow icon={Globe} label="Domain" value={tenant.domain} />
+   501→                )}
+   502→              </div>
+   503→            </div>
+   504→
+   505→            {/* Plan & Billing */}
+   506→            <div>
+   507→              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Plan & Billing</p>
+   508→              <div className="rounded-xl border border-border bg-card/50 p-4">
+   509→                {tenant.plan ? (
+   510→                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+   511→                    <div>
+   512→                      <p className="text-[10px] uppercase text-muted-foreground">Plan</p>
+   513→                      <p className="font-semibold">{tenant.plan.name}</p>
+   514→                    </div>
+   515→                    <div>
+   516→                      <p className="text-[10px] uppercase text-muted-foreground">Monthly</p>
+   517→                      <p className="font-semibold tabular-nums">{formatRs(tenant.plan.priceMonthly)}</p>
+   518→                    </div>
+   519→                    <div>
+   520→                      <p className="text-[10px] uppercase text-muted-foreground">Yearly</p>
+   521→                      <p className="font-semibold tabular-nums">{formatRs(tenant.plan.priceYearly)}</p>
+   522→                    </div>
+   523→                    <div>
+   524→                      <p className="text-[10px] uppercase text-muted-foreground">Max Doctors</p>
+   525→                      <p className="font-semibold tabular-nums">{tenant.plan.maxDoctors}</p>
+   526→                    </div>
+   527→                  </div>
+   528→                ) : (
+   529→                  <p className="text-sm text-muted-foreground">No plan assigned</p>
+   530→                )}
+   531→                {tenant.invoices.length > 0 && (
+   532→                  <>
+   533→                    <Separator className="my-3" />
+   534→                    <p className="text-xs font-semibold mb-2">Recent Invoices</p>
+   535→                    <div className="space-y-1.5">
+   536→                      {tenant.invoices.slice(0, 5).map((inv) => (
+   537→                        <div key={inv.id} className="flex items-center justify-between text-xs">
+   538→                          <span className="font-mono">{inv.invoiceNo}</span>
+   539→                          <span className="text-muted-foreground">{formatDate(inv.date)}</span>
+   540→                          <span className="font-semibold tabular-nums">{formatRs(inv.total)}</span>
+   541→                          <Badge className={`text-[9px] ${statusColors[inv.status] || "bg-gray-100"}`}>{statusLabel(inv.status)}</Badge>
+   542→                        </div>
+   543→                      ))}
+   544→                    </div>
+   545→                  </>
+   546→                )}
+   547→              </div>
+   548→            </div>
+   549→
+   550→            {/* Usage monitoring */}
+   551→            <div>
+   552→              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Usage Monitoring</p>
+   553→              <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
+   554→                {(() => {
+   555→                  const latest = tenant.usageRecords[0];
+   556→                  if (!latest) return <p className="text-sm text-muted-foreground">No usage data yet</p>;
+   557→                  const maxStorage = tenant.plan?.maxStorage || 5;
+   558→                  const storagePct = Math.min((latest.storageUsedMB / (maxStorage * 1024)) * 100, 100);
+   559→                  return (
+   560→                    <>
+   561→                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   562→                        <UsageStat icon={Users} label="Users" value={latest.userCount} />
+   563→                        <UsageStat icon={Stethoscope} label="Doctors" value={latest.doctorCount} />
+   564→                        <UsageStat icon={Activity} label="Patients" value={latest.patientCount} />
+   565→                        <UsageStat icon={CalendarClock} label="Appointments" value={latest.appointmentCount} />
+   566→                      </div>
+   567→                      <Separator />
+   568→                      <div>
+   569→                        <div className="flex items-center justify-between text-xs mb-1.5">
+   570→                          <span className="flex items-center gap-1.5"><HardDrive className="w-3.5 h-3.5 text-muted-foreground" /> Storage Used</span>
+   571→                          <span className="font-semibold tabular-nums">{latest.storageUsedMB.toFixed(1)} MB / {maxStorage} GB</span>
+   572→                        </div>
+   573→                        <Progress value={storagePct} className="h-1.5" />
+   574→                      </div>
+   575→                      <div>
+   576→                        <div className="flex items-center justify-between text-xs mb-1.5">
+   577→                          <span className="flex items-center gap-1.5"><Server className="w-3.5 h-3.5 text-muted-foreground" /> API Calls (this period)</span>
+   578→                          <span className="font-semibold tabular-nums">{latest.apiCalls.toLocaleString()}</span>
+   579→                        </div>
+   580→                        <Progress value={Math.min((latest.apiCalls / 100000) * 100, 100)} className="h-1.5" />
+   581→                      </div>
+   582→                      <p className="text-[10px] text-muted-foreground text-right">Last reported: {timeAgo(latest.date)}</p>
+   583→                    </>
+   584→                  );
+   585→                })()}
+   586→              </div>
+   587→            </div>
+   588→
+   589→            {/* Enabled modules */}
+   590→            <div>
+   591→              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Enabled Modules</p>
+   592→              <div className="rounded-xl border border-border bg-card/50 p-4">
+   593→                {tenant.tenantModules.length === 0 ? (
+   594→                  <p className="text-sm text-muted-foreground">No modules enabled</p>
+   595→                ) : (
+   596→                  <div className="grid grid-cols-2 gap-2">
+   597→                    {tenant.tenantModules.map((tm) => (
+   598→                      <div key={tm.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+   599→                        <div className="flex items-center gap-2">
+   600→                          <Cpu className="w-3.5 h-3.5 text-teal-600" />
+   601→                          <div>
+   602→                            <p className="text-xs font-medium">{tm.module.name}</p>
+   603→                            <p className="text-[10px] text-muted-foreground capitalize">{tm.module.category}</p>
+   604→                          </div>
+   605→                        </div>
+   606→                        <Badge className={`text-[9px] ${tm.enabled ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" : "bg-gray-100 text-gray-600"}`}>
+   607→                          {tm.enabled ? "On" : "Off"}
+   608→                        </Badge>
+   609→                      </div>
+   610→                    ))}
+   611→                  </div>
+   612→                )}
+   613→              </div>
+   614→            </div>
+   615→
+   616→            {/* Recent tickets */}
+   617→            {tenant.supportTickets.length > 0 && (
+   618→              <div>
+   619→                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Recent Support Tickets</p>
+   620→                <div className="rounded-xl border border-border bg-card/50 p-4 space-y-2">
+   621→                  {tenant.supportTickets.slice(0, 4).map((tk) => (
+   622→                    <div key={tk.id} className="flex items-center justify-between text-xs">
+   623→                      <div className="min-w-0">
+   624→                        <p className="font-medium truncate">{tk.subject}</p>
+   625→                        <p className="text-[10px] text-muted-foreground font-mono">{tk.ticketNo}</p>
+   626→                      </div>
+   627→                      <div className="flex items-center gap-1.5">
+   628→                        <Badge className={`text-[9px] ${
+   629→                          tk.priority === "high" ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" :
+   630→                          tk.priority === "medium" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" :
+   631→                          "bg-gray-100 text-gray-600"
+   632→                        }`}>{tk.priority}</Badge>
+   633→                        <Badge className={`text-[9px] ${statusColors[tk.status] || "bg-gray-100"}`}>{statusLabel(tk.status)}</Badge>
+   634→                      </div>
+   635→                    </div>
+   636→                  ))}
+   637→                </div>
+   638→              </div>
+   639→            )}
+   640→          </div>
+   641→        )}
+   642→      </SheetContent>
+   643→    </Sheet>
+   644→  );
+   645→}
+   646→
+   647→function InfoRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+   648→  return (
+   649→    <div className="flex items-start gap-2">
+   650→      <Icon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+   651→      <div className="min-w-0">
+   652→        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+   653→        <p className="text-sm font-medium truncate">{value}</p>
+   654→      </div>
+   655→    </div>
+   656→  );
+   657→}
+   658→
+   659→function UsageStat({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: number }) {
+   660→  return (
+   661→    <div className="rounded-lg bg-muted/40 px-3 py-2">
+   662→      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+   663→        <Icon className="w-3 h-3" /> {label}
+   664→      </div>
+   665→      <p className="text-lg font-bold tabular-nums">{value.toLocaleString()}</p>
+   666→    </div>
+   667→  );
+   668→}
+   669→

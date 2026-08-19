@@ -1,0 +1,202 @@
+     1→# MedCore — Enterprise Clinic Management System
+     2→
+     3→## Project Status
+     4→Building a comprehensive Enterprise Clinic Management SaaS on Next.js 16 + TypeScript + Prisma (SQLite) + shadcn/ui + Recharts + Framer Motion + Zustand. Teal/emerald healthcare palette (no indigo/blue). Single `/` route with client-side view switching.
+     5→
+     6→## Completed (Phase 1 — Foundation)
+     7→- **Database**: Prisma schema with 14 models (Department, Doctor, Patient, Appointment, Prescription, PrescriptionItem, Medicine, Supplier, Purchase, Invoice, InvoiceItem, LabTest, Staff, StaffAttendance, AuditLog, Setting). Seeded with realistic demo data (8 depts, 19 doctors, 60 patients, ~120 appointments, 40 invoices, 30 lab tests, 12 staff, medicines, prescriptions, audit logs, settings).
+     8→- **API routes**: `/api/dashboard`, `/api/patients` (+[id]), `/api/doctors` (+[id]), `/api/appointments` (+[id]), `/api/medicines` (+[id]), `/api/invoices` (+[id]), `/api/lab-tests` (+[id]), `/api/staff`, `/api/audit-logs`, `/api/settings`, `/api/reports`.
+     9→- **Theme**: Custom teal/emerald palette in globals.css with light/dark, custom scrollbar, grid pattern, glass utility.
+    10→- **App shell**: Sidebar (collapsible, grouped nav, animated), Header (global search → command palette, notifications popover, theme toggle, profile dropdown, mobile nav), Footer (sticky), CommandPalette (Cmd+K), LoginScreen (split brand panel).
+    11→- **Zustand store**: `src/store/app-store.ts` — view, sidebar, auth, command palette.
+    12→- **Helpers**: `src/lib/format.ts` (formatRs, formatDate, timeAgo, statusColors, statusLabel), `src/lib/use-fetch.ts` (useFetch hook).
+    13→- **Views done**: Dashboard (KPI cards, revenue area chart, dept pie, patient growth bar, queue status, inventory alerts, recent activity, quick actions), Patients (table + search + register dialog + detail drawer with vitals/tabs for visits/rx/labs/invoices).
+    14→- **page.tsx**: Orchestrates shell + view switching with AnimatePresence.
+    15→
+    16→## Key Conventions (MUST follow for new views)
+    17→- Import shared helpers: `import { formatRs, formatDate, timeAgo, statusColors, statusLabel } from "@/lib/format"`.
+    18→- Fetch data: `import { useFetch } from "@/lib/use-fetch"; const { data, loading } = useFetch<T[]>("/api/...")`.
+    19→- Use shadcn/ui components from `@/components/ui/*`.
+    20→- Teal palette: primary actions use `className="bg-teal-600 hover:bg-teal-700 text-white"`.
+    21→- Wrap root in `<div className="space-y-4 animate-fade-in">`.
+    22→- Use `<Skeleton>` for loading states.
+    23→- Use `toast` from `sonner` for feedback.
+    24→- Each view is a named export `XxxView` in `src/components/cms/views/xxx.tsx`.
+    25→- API response shapes are defined by the route handlers above.
+    26→
+    27→## API Contracts
+    28→- `GET /api/doctors` → `Doctor[]` with `department` included. Doctor: `{id,name,email,phone,gender,qualification,specialization,departmentId,licenseNumber,experience,consultationFee,commissionPct,rating,workingDays,startTime,endTime,status,department:{id,name,color}}`
+    29→- `GET /api/appointments?date=YYYY-MM-DD&doctorId=&status=` → `Appointment[]` with patient+doctor.department. Appointment: `{id,tokenNo,patientId,doctorId,departmentId,date,time,type,reason,status,fee,patient:{...},doctor:{...,department:{...}}}`
+    30→- `POST /api/appointments` body: `{patientId,doctorId,date,time,type,reason,fee,status}` → created appt.
+    31→- `PATCH /api/appointments/[id]` body: `{status:"checked-in"|"in-consult"|"completed"|"cancelled"}` → updated.
+    32→- `GET /api/medicines` → `Medicine[]` with supplier. Medicine: `{id,name,genericName,category,manufacturer,batchNo,expiryDate,stockQty,reorderLevel,unitPrice,salePrice,barcode,location,status,supplier:{...}}`
+    33→- `POST /api/medicines` body: `{name,genericName,category,manufacturer,batchNo,expiryDate,stockQty,reorderLevel,unitPrice,salePrice}`
+    34→- `GET /api/invoices?status=` → `Invoice[]` with patient+items. Invoice: `{id,invoiceNo,patientId,type,subtotal,discount,tax,total,paid,due,status,paymentMethod,date,patient:{...},items:[]}`
+    35→- `POST /api/invoices` body: `{patientId,type,subtotal,discount,tax,total,paid,due,status,paymentMethod,items:[{description,qty,rate,amount}]}`
+    36→- `PATCH /api/invoices/[id]` body: `{paid,status}` to record payment.
+    37→- `GET /api/lab-tests?status=` → `LabTest[]` with patient. LabTest: `{id,testCode,patientId,testName,category,doctorId,status,result,referenceRange,unit,fee,orderedAt,completedAt,patient:{...}}`
+    38→- `POST /api/lab-tests` body: `{patientId,testName,category,fee,doctorId}`.
+    39→- `PATCH /api/lab-tests/[id]` body: `{status,result,referenceRange,unit}` — set status to "approved" to approve.
+    40→- `GET /api/staff` → `{staff: Staff[], departments: Department[], prescriptions: Prescription[]}`. Staff: `{id,name,email,phone,role,department,designation,salary,joinDate,status,attendance:[]}`. Prescription: `{id,code,patientId,doctorId,diagnosis,symptoms,vitals,advice,followUp,createdAt,patient:{...},doctor:{...},items:[]}`
+    41→- `GET /api/reports` → `{totalRevenue,totalCollection,totalDue,revenueByType,doctorPerf:[{name,patients,revenue}],monthlyRevenue:[{month,revenue,collection}],patientCount,appointmentCount}`
+    42→- `GET /api/audit-logs` → `AuditLog[]` `{id,user,action,module,detail,ip,createdAt}`
+    43→- `GET /api/settings` → `{key:value}` object. `PUT /api/settings` body: `{key:value,...}`
+    44→
+    45→## Goals / Next Phase
+    46→Implement remaining views: doctors, appointments, emr, pharmacy, laboratory, billing, inventory, reports, hr, settings, audit. Then lint, agent-browser QA, set up 15-min webDevReview cron.
+    47→
+    48→## Unresolved / Risks
+    49→- All 12 views must be created; page.tsx imports them all (currently only dashboard + patients exist — build will fail until stubs/full views exist).
+    50→
+    51→---
+    52→
+    53→## Task ID: 6
+    54→**Agent**: views-builder (general-purpose sub agent)
+    55→**Task description**: Build `DoctorsView` and `AppointmentsView` for the MedCore CMS — two new view files under `src/components/cms/views/`, exported as `DoctorsView` and `AppointmentsView` respectively, following the conventions established in `dashboard.tsx` and `patients.tsx`.
+    56→
+    57→### Work Log
+    58→- Read `worklog.md` to learn project status, API contracts, and styling conventions (teal palette, `useFetch`, `formatRs`/`statusColors`/`statusLabel`, `space-y-4 animate-fade-in` root wrapper, `bg-teal-600 hover:bg-teal-700 text-white` for primary actions, `Skeleton` loading states, `sonner` toast feedback).
+    59→- Inspected `patients.tsx` and `dashboard.tsx` to mirror component patterns (Card+CardContent layout, Dialog form with `useState` + `setSaving`, Sheet for detail drawer, motion for KPI card entrance, `statusColors[s]`/`statusLabel(s)` badges).
+    60→- Verified `/api/doctors`, `/api/appointments` (+`[id]`), and `/api/staff` route handlers to confirm request/response shapes and PATCH body contract.
+    61→- Created **`/home/z/my-project/src/components/cms/views/doctors.tsx`** (`DoctorsView`):
+    62→  - Header "Doctor Management" with live count + "Add Doctor" primary button.
+    63→  - Search input (filters by name/specialization) + department `Select` (departments fetched from `/api/staff`, client-side filtered).
+    64→  - Responsive card grid `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` with `Skeleton` placeholder cards while loading, empty-state with `Stethoscope` icon when no results.
+    65→  - Each `DoctorCard` shows: gradient avatar (initials, tinted by department color), name, specialization, status badge (`statusColors`), `Star` rating + experience, department color chip, consultation fee (`formatRs`), working hours, "View Profile" button.
+    66→  - `DoctorDetail` Sheet (slide-over): header banner with teal gradient, 3-stat row (Experience/Fee/Commission), `InfoRow` grid (qualification, license, email, phone, hours, fee), and a working-days strip rendering Mon–Sun pills (filled teal for working days, struck-through for off days).
+    67→  - `AddDoctorDialog`: full form (name, phone, email, qualification, specialization, department select, license, experience, consultationFee, commissionPct) → POST `/api/doctors`. Auto-fills sensible defaults (Mon–Fri, 9–5, status active, rating 0). Calls `refresh()` (tick state appended to fetch URL) to reload the list on success.
+    68→  - Subtle `motion.div` staggered entrance on each card.
+    69→- Created **`/home/z/my-project/src/components/cms/views/appointments.tsx`** (`AppointmentsView`):
+    70→  - Header "Appointments" + "Book Appointment" primary button.
+    71→  - Date navigator: prev/next day `outline` icon buttons + center "today" button showing pretty date (e.g. `Mon, Jan 5, 2025`) with a "jump to today" hint badge when not on today. `toYMD`/`shiftDate` helpers manage YYYY-MM-DD strings; URL refetches via `?date=…&v=${tick}`.
+    72→  - 4 KPI cards at top (Total Today / In Queue [scheduled+checked-in+in-consult] / Completed / Cancelled) derived from the day's list with `useMemo`, each as a `motion.div` with gradient icon tile.
+    73→  - Status filter chips bar: All, Scheduled, Checked-in, In-consult, Completed, Cancelled, No-show — each chip shows live count; active chip turns teal.
+    74→  - Responsive `Table` with columns: Token (round badge), Patient (name + code/age/gender), Doctor (name + dept dot), Time, Type (colored Badge), Status (Badge via `statusColors`+`statusLabel`), Fee (`formatRs`), Actions. Columns progressively hidden on small screens (sm:/md:/lg:).
+    75→  - Workflow action buttons: scheduled → "Check-in" (amber), checked-in → "Start Consult" (violet), in-consult → "Complete" (emerald solid), plus a "Cancel" ghost (rose) visible until terminal state. Each PATCHes `/api/appointments/[id]` with the new status, fires `toast.success` with patient name, and calls `refresh()`.
+    76→  - `BookAppointmentDialog`: patient select (from `/api/patients`), doctor select (from `/api/doctors`, with live consultation-fee hint), date input (defaults to selected day), time input, type select (walk-in/online/video/follow-up), reason textarea. POST `/api/appointments` with `{patientId, doctorId, departmentId (auto from doctor), date, time, type, reason, fee (from doctor.consultationFee), status:"scheduled"}`.
+    77→  - Skeleton rows (6) while loading; friendly empty-state row with `ClipboardList` icon when no appointments match the active filter.
+    78→- Verified both files compile cleanly under `tsc --noEmit` (no errors specific to the new views) and pass `eslint` with no warnings.
+    79→- No other files modified. `page.tsx`, API routes, and existing views untouched.
+    80→
+    81→### Stage Summary
+    82→Two new views (`DoctorsView`, `AppointmentsView`) added to `src/components/cms/views/`. Doctors view is a card-grid directory with full profile sheet and add-doctor dialog; Appointments view is a date-scoped table with KPI strip, status chips, and inline workflow buttons plus a book-appointment dialog. Both strictly follow MedCore's established conventions (teal palette, `useFetch`, `formatRs`/`statusColors`/`statusLabel`, `Skeleton` loading, `sonner` toasts, framer-motion accents). Build now has 4 of 12 views; 8 remain (emr, pharmacy, laboratory, billing, inventory, reports, hr, settings, audit). Next agent should pick up the next view in the queue.
+    83→
+    84→---
+    85→
+    86→## Task 7 — EMR + Pharmacy Views
+    87→- **Task ID**: 7
+    88→- **Agent**: general-purpose (views builder)
+    89→- **Task description**: Create `EmrView` (Electronic Medical Records + Prescriptions) and `PharmacyView` (Pharmacy inventory + POS) following the dashboard.tsx/patients.tsx conventions, teal/emerald palette, shadcn/ui, Recharts/Framer Motion, sonner toasts.
+    90→
+    91→### Work Log
+    92→- Read `worklog.md` to pick up conventions (useFetch + format helpers, `bg-teal-600 hover:bg-teal-700 text-white` primary buttons, `<div className="space-y-4 animate-fade-in">` root, Skeleton loading, sonner toast, framer-motion accents).
+    93→- Verified API contracts against `src/app/api/staff/route.ts` (returns `{ staff, departments, prescriptions }` with `prescriptions` including `patient`, `doctor`, and `items`) and `src/app/api/medicines/route.ts` (GET returns `Medicine[]` with `supplier`, POST accepts the full medicine body).
+    94→- Cross-checked Prisma schema (`Prescription`, `PrescriptionItem`, `Medicine`, `Supplier`) so the TypeScript interfaces in the views match what the API actually returns (including nullable `diagnosis/symptoms/vitals/advice/followUp`, `genericName/manufacturer/barcode/supplier`).
+    95→- **`src/components/cms/views/emr.tsx`** — `EmrView`:
+    96→  - Fetches `/api/staff` and reads `prescriptions` (top 50, ordered desc by API).
+    97→  - Header with `FileText` icon, count, and `New Prescription` teal button.
+    98→  - Search input filtering by `code`, patient `name`, or `diagnosis`.
+    99→  - Renders prescription cards in `grid-cols-1 lg:grid-cols-2` with subtle Framer Motion stagger.
+   100→  - Each card: top row (`code` mono + `timeAgo` + status badge using `statusColors/statusLabel`), patient avatar block (`name` + `patientCode` + age/gender) and doctor block (`Stethoscope` icon + name + specialization), bold diagnosis + muted symptoms + small vitals line (`HeartPulse`), medicines list with `medicineName` + `dosage` (mono teal, e.g. `1-0-1`) + `frequency` / `duration` / `quantity` / optional `instructions`, amber "Advice" and teal "Follow-up" callout boxes, and `Print` / `PDF` action buttons that toast feedback.
+   101→  - `NewPrescriptionDialog` lazily fetches `/api/patients` and `/api/doctors` for the two `<Select>` dropdowns, has `diagnosis`/`symptoms`/`advice` inputs, validates patient+doctor selection, and toasts success (create API not wired for prescriptions yet, as spec'd).
+   102→  - Loading state = 6 skeleton cards; empty state = centered muted message with `FileText` icon.
+   103→- **`src/components/cms/views/pharmacy.tsx`** — `PharmacyView`:
+   104→  - Fetches `/api/medicines` (uses a `?_r=${refresh}` counter so the list refreshes after a successful POST).
+   105→  - Header with `Pill` icon, total count, and `Add Medicine` teal button.
+   106→  - Stat row of 4 cards (Total Medicines, Low Stock ≤ reorderLevel, Expiring Soon ≤ 60 days, Out of Stock = 0), computed client-side via `useMemo`.
+   107→  - Search input (name/generic/batch/barcode) + category `<Select>` filter (All + the 7 spec'd categories).
+   108→  - Table with responsive hidden columns on small screens: Name (+generic), Category badge, Manufacturer, Batch No (mono), Expiry (red ≤60d, amber ≤90d, with "Nd left" caption), Stock (current/reorder + `Progress` bar — teal normally, rose when at/below reorder), Unit/Sale price (`formatRs`), Supplier, Status badge, Actions (`Pencil` edit toast + `Trash2` delete toast).
+   109→  - Low-stock rows tinted `bg-rose-50/40 dark:bg-rose-950/10`; footer "Showing X of Y".
+   110→  - `AddMedicineDialog` posts `{name, genericName, category, manufacturer, batchNo, expiryDate, stockQty, reorderLevel, unitPrice, salePrice}` to `/api/medicines`, toasts success, resets form, and triggers refresh.
+   111→  - Loading state = 8 skeleton table rows; empty state = centered muted message with `Pill` icon.
+   112→- Verified exports match `page.tsx` imports (`EmrView`, `PharmacyView`). `npx tsc --noEmit` reports **no errors** for either new file (pre-existing unrelated errors elsewhere in repo are untouched). `eslint` on both files: clean.
+   113→
+   114→### Stage Summary
+   115→Both `emr.tsx` and `pharmacy.tsx` are complete, convention-compliant, type-safe, and lint-clean. They reuse the `useFetch`/`format`/`statusColors` helpers, the teal/emerald palette, sonner toasts, Skeleton loading, Framer Motion accents, and shadcn/ui primitives exactly like `dashboard.tsx`/`patients.tsx`. The EMR view presents prescriptions as rich cards with full medicine items, advice/follow-up callouts, and a simplified New Prescription dialog (POST not wired). The Pharmacy view delivers a stat strip, search + category filter, a color-coded inventory table with progress bars and rose tinting for low stock, and a working Add Medicine dialog that POSTs and refreshes. No other files were modified. Remaining views (doctors, appointments, laboratory, billing, inventory, reports, hr, settings, audit) still need to be created before page.tsx builds cleanly.
+   116→
+   117→---
+   118→
+   119→## Task ID: 8
+   120→**Agent**: views-builder (general-purpose sub agent)
+   121→**Task description**: Build `BillingView` and `LaboratoryView` for the MedCore CMS — two new view files under `src/components/cms/views/`, exported as `BillingView` and `LaboratoryView` respectively, following the conventions established in `dashboard.tsx` and `patients.tsx`.
+   122→
+   123→### Work Log
+   124→- Read `worklog.md` to learn project status, API contracts, palette conventions, and previous tasks' patterns (Tasks 6 & 7 — `DoctorsView`/`AppointmentsView`/`HrView`/`SettingsView`/`AuditView`). Noted that a previous agent flagged a `Vial` icon issue in `laboratory.tsx` — I verified `Vial` is not exported by `lucide-react` and used `Syringe` instead.
+   125→- Inspected `patients.tsx` and `dashboard.tsx` for layout patterns (Card+CardContent, motion staggered KPI tiles, Sheet detail drawer, Dialog form with `useState`+`setSaving`, `statusColors`/`statusLabel` badges, `formatRs`).
+   126→- Verified `/api/invoices` (+`[id]`) and `/api/lab-tests` (+`[id]`) route handlers: GET supports optional `?status=`, POST auto-generates `invoiceNo` (`INV-NNNNN`) / `testCode` (`LAB-NNNNN`), PATCH on invoice accepts `{paid, status, paymentMethod}` and on lab-test accepts `{status, result, referenceRange, unit}` with auto `completedAt` for `completed`/`approved`. Also confirmed `/api/patients` and `/api/doctors` GET shapes for select dropdowns.
+   127→- Reviewed `src/lib/use-fetch.ts` — discovered the hook only re-runs when `url` changes; implemented a `refreshKey` counter appended to the URL (`?_r=${refreshKey}`) so successful mutations force a refetch. The API routes ignore unknown query params, so the dummy param is harmless.
+   128→- Created **`/home/z/my-project/src/components/cms/views/billing.tsx`** (`BillingView`):
+   129→  - Header "Billing & Invoices" + count + collected-total subtitle, with "Create Invoice" primary CTA (`bg-teal-600 hover:bg-teal-700 text-white`).
+   130→  - 4 stat cards (`motion.div` staggered): Total Revenue (sum total), Collected (sum paid, emerald accent), Outstanding Due (sum due, amber accent), Overdue Invoices (count where `status==="unpaid"`, rose accent). All values formatted with `formatRs`.
+   131→  - Search input (filters by invoice number OR patient name) + status filter chip row (All/paid/partial/unpaid with live counts).
+   132→  - Responsive `Table`: Invoice No (font-mono), Date (hidden on mobile), Patient (name + code), Type (color-coded badge per type — consultation teal / pharmacy violet / lab cyan / package amber), Total, Paid (emerald, hidden on mobile), Due (rose when >0), Status badge (`statusColors`), Actions. Skeleton rows while loading; friendly empty-state row when no matches.
+   133→  - **CreateInvoiceDialog**: patient select (fetches `/api/patients`), type select, dynamic line items list (description / qty / rate inputs with auto-computed amount via inline `(qty*rate)`, "Add Item" button, per-row X remove button), discount input, tax rate input (defaults to 13%), payment method select (8 options: Cash/Card/Bank/eSewa/Khalti/FonePay/Stripe/PayPal), paid amount. Live totals panel computes subtotal/discount/tax/total/paid/due client-side. POST `/api/invoices` with full body `{patientId, type, subtotal, discount, tax, total, paid, due, status, paymentMethod, items}`. Status auto-derived from `paid` vs `total` (paid/partial/unpaid).
+   134→  - **CollectPaymentDialog** (shown for unpaid/partial via "Pay" button): pre-fills the outstanding due, shows current totals, lets the user enter amount + method. Computes new paid-total + new status (paid/partial). PATCH `/api/invoices/[id]` with `{paid, status, paymentMethod}`. `useEffect` syncs form when invoice prop changes.
+   135→  - **InvoiceDetail** Sheet (slide-over, opened by "View"): gradient teal header with invoice number, date, type badge, status badge, payment-method hint; PDF + Print buttons (fire `toast.success`); patient info card + invoice-total card; full items table; totals breakdown panel (subtotal/discount/tax/total/paid/due).
+   136→  - Subtle framer-motion entrance on the 4 KPI tiles.
+   137→- Created **`/home/z/my-project/src/components/cms/views/laboratory.tsx`** (`LaboratoryView`):
+   138→  - Header "Laboratory" + count + in-progress + completed subtitle, with "Order Test" primary CTA.
+   139→  - 4 stat cards: Total Tests, In Progress (pending/collected/processing), Completed (completed/approved), Lab Revenue (sum of `fee` for completed/approved). All money values use `formatRs`.
+   140→  - Filter bar: search input (test code / patient name / test name), category `Select` (Hematology/Biochemistry/Pathology/Radiology/Cardiology/Microbiology), status filter chip row (All/pending/collected/processing/completed/approved).
+   141→  - Responsive `Table`: Test Code (font-mono), Test Name (+ category on mobile), Category badge (color-coded per category), Patient (name + code), Ordered (date, hidden on mobile), Result (value + unit if present, "—" otherwise; hidden on small screens), Status badge, Fee (hidden on mobile), Actions. Skeleton rows while loading; friendly empty-state row.
+   142→  - **OrderTestDialog**: patient select (fetches `/api/patients`), test name input, category select (defaults Hematology), fee input, referring-doctor select (fetches `/api/doctors`, optional). POST `/api/lab-tests` with `{patientId, testName, category, fee, doctorId, status:"pending"}`.
+   143→  - **WorkflowActions** component renders the right button per current status: `pending` → "Collect" (`Syringe` icon, PATCH `status:"collected"`), `collected` → "Process" (`Microscope` icon, PATCH `status:"processing"`), `processing` → "Enter Result" (amber-tinted outline button → opens `EnterResultDialog`), `completed` → "Approve" (emerald solid `CheckCheck` icon, PATCH `status:"approved"`), `approved` → "Done" badge. Each successful PATCH fires `toast.success` with the test code/name and calls `refresh()`.
+   144→  - **EnterResultDialog**: result value input (required), reference range input, unit input, with info banner noting status will flip to "Completed". PATCH `/api/lab-tests/[id]` with `{status:"completed", result, referenceRange, unit}`. `useEffect` syncs form fields when test prop changes.
+   145→  - Subtle framer-motion entrance on the 4 KPI tiles.
+   146→- Type-checked both new files with `npx tsc --noEmit` — **zero errors** in `billing.tsx` and `laboratory.tsx`. Also ran `eslint` on both files — clean, no warnings. (Pre-existing repo errors in dashboard.tsx `down`/`money` typing, page.tsx missing `pharmacy` stub, `navItems` export, etc., remain out of scope.)
+   147→- No other files modified. `page.tsx`, API routes, and existing views untouched.
+   148→
+   149→### Stage Summary
+   150→Two production-ready views delivered (`BillingView`, `LaboratoryView`) fully matching existing MedCore conventions: teal/emerald palette, `useFetch` data loading with refresh-after-mutation via URL tick, shadcn/ui components, sonner toasts, framer-motion KPI tile animations, Skeleton loading rows, mobile-responsive table layouts, and correct API contracts against `/api/invoices` (+`[id]` POST/PATCH) and `/api/lab-tests` (+`[id]` POST/PATCH). Billing covers full invoice lifecycle (create with dynamic line items + auto totals, collect partial payments, view in slide-over with print/PDF). Laboratory covers full test workflow (order → collect sample → process → enter result → approve) with category/status filters. Both files compile cleanly under TypeScript and pass eslint. The `page.tsx` imports for these two views are now resolvable. Remaining work to make the full app build green: create the still-missing `emr` and `pharmacy` view stubs/modules, and fix pre-existing repo issues (`navItems` export in app-store, `departmentId` in appointments, `down`/`money` KPI typing in dashboard).
+   151→
+   152→---
+   153→Task ID: FINAL
+   154→Agent: Orchestrator (main)
+   155→Task: Build complete Enterprise Clinic Management System (MedCore) and verify end-to-end
+   156→
+   157→Work Log:
+   158→- Designed Prisma schema with 16 models (Department, Doctor, Patient, Appointment, Prescription, PrescriptionItem, Medicine, Supplier, Purchase, Invoice, InvoiceItem, LabTest, Staff, StaffAttendance, AuditLog, Setting) with relations, soft fields, indexing.
+   159→- Built 12 API route handlers (dashboard, patients, doctors, appointments, medicines, invoices, lab-tests, staff, audit-logs, settings, reports) with full CRUD + workflow PATCHes.
+   160→- Seeded realistic demo data: 8 departments, 21 doctors, 60 patients, ~130 appointments, 40 invoices, 30 lab tests, 12 staff with attendance, 40 medicines, 25 prescriptions, 30 audit logs, 9 settings.
+   161→- Implemented custom teal/emerald healthcare theme (light + dark) in globals.css with custom scrollbar, grid pattern, glass utility, fade-in animations.
+   162→- Built app shell: collapsible animated sidebar (grouped nav, status pill), header (global search→command palette Cmd+K, notifications popover, theme toggle, profile dropdown, mobile nav), sticky footer, split-panel login screen with brand panel.
+   163→- Zustand store for view/auth/sidebar/command state (persisted).
+   164→- Built Dashboard view: welcome banner, 4 KPI cards, revenue area chart, department pie, patient growth bar, queue status, inventory alerts, recent activity feed, quick actions grid.
+   165→- Delegated 11 module views to 5 parallel subagents (Tasks 6-10) with precise API contracts and conventions — all completed: Patients (table+register+detail drawer with vitals/tabs), Doctors (card grid+profile sheet), Appointments (table+booking+status workflow), EMR (prescription cards), Pharmacy (table+alerts+add dialog), Laboratory (table+sample/result/approve workflow), Billing (table+create invoice+collect payment), Inventory (table+category summary), Reports (charts+breakdown), HR (staff/departments/attendance tabs), Settings (clinic/branding/payments/notifications/RBAC matrix/multi-tenant tabs), Audit (filterable log table).
+   166→- Fixed compile errors: added Medicine↔Supplier relation, moved navItems to app-store, fixed dashboard KPI typing, fixed seed array typing, resolved React 19 setState-in-effect lint rule.
+   167→- Verified with agent-browser: login→dashboard renders all KPIs/charts, sidebar navigation works across all 13 modules, appointment Check-in workflow PATCHes API and updates UI, billing shows 40 invoices with currency formatting, all API routes return 200.
+   168→- Set up 15-minute recurring webDevReview cron job (job_id 260848) for continuous QA + feature enhancement.
+   169→
+   170→Stage Summary:
+   171→- ✅ Production-ready MedCore CMS fully functional on / route. Lint clean, TSC clean (src/), all 13 modules interactive with real persisted data.
+   172→- ✅ Enterprise features delivered: multi-tenant-ready schema, RBAC matrix UI, audit logging, 8 payment methods, OTP/Google login UI, dark mode, command palette, responsive design, sticky footer.
+   173→- ✅ Verified end-to-end via agent-browser (login, dashboard, navigation, appointment workflow, billing, footer).
+   174→- Tech: Next.js 16 + TypeScript + Prisma(SQLite) + shadcn/ui + Recharts + Framer Motion + Zustand + next-themes + sonner.
+   175→
+   176→Unresolved / Next-phase recommendations:
+   177→- Wire prescription create API (currently EMR "New Prescription" toasts only).
+   178→- Implement real PDF/print/export for invoices/prescriptions/reports (currently toast placeholders).
+   179→- Add NextAuth real authentication (currently mock login).
+   180→- Add WebSocket real-time queue updates (mini-service) for live appointment board.
+   181→- Implement Google Calendar sync, video consultation, AI features (voice-to-prescription, OCR, disease prediction) using z-ai-web-dev-sdk skills.
+   182→- Add pagination/virtualization for large tables (patients now capped at 50 display).
+   183→
+   184→---
+   185→
+   186→## Task ID: P2-2
+   187→**Agent**: views-builder (general-purpose sub agent)
+   188→**Task description**: Upgrade `PatientsView` and `DoctorsView` from placeholder/toast-only functionality to fully operational CRUD with real database integration — wire real CSV export, real print, real Edit/Delete flows, real pagination/sort, real radiology/clinical-notes/leave data — using the new shared utilities (`@/lib/export-utils`, `@/lib/use-pagination`, `@/components/cms/pagination`).
+   189→
+   190→### Work Log
+   191→- Read `worklog.md` to align with established conventions (teal palette, `useFetch` + `?_r=${tick}` refetch, `formatRs`/`formatDate`/`statusColors`/`statusLabel`, `space-y-4 animate-fade-in` root, `bg-teal-600 hover:bg-teal-700 text-white` primary actions, `Skeleton` loading, `sonner` toasts, framer-motion accents).
+   192→- Inspected the existing `patients.tsx` and `doctors.tsx` to identify the exact placeholder behaviours to remove: `toast.success("Exporting…")` export button, `slice(0,50)` display cap with no pagination, no sortable columns, no Edit dialog, no Delete confirm, `toast.success("Patient card printing…")` Print Card button, missing Radiology/Clinical Notes tabs in patient detail, missing doctor Edit/Delete actions, missing Leave History section and Schedule Appointment button in doctor profile.
+   193→- Verified API contracts against `src/app/api/patients/route.ts` (+`[id]`), `src/app/api/doctors/route.ts` (+`[id]`), `src/app/api/clinical-notes/route.ts` (server filters by `patientId`), `src/app/api/radiology/route.ts` (server does NOT filter by `patientId` — fetch all + client-side filter), `src/app/api/leave/route.ts` (returns all leaves with `staff` included), and `src/app/api/staff/route.ts` (returns `{ staff, departments, prescriptions }` — departments used for doctor filter since no dedicated `/api/departments` route exists).
+   194→- Cross-checked Prisma schema (`Patient`, `Doctor`, `Department`, `ClinicalNote`, `LeaveRequest`, `RadiologyTest`, `Staff`) to confirm TypeScript interfaces match the actual response shapes (e.g. `workingDays` stored as comma-separated string in DB but typed as `string[]` in existing Doctor interface — added `normalizeDays()` helper to handle both string and array forms defensively).
+   195→- Inspected the shared utilities I was asked to consume:
+   196→  - `exportToCSV(filename, headers, rows)` — builds a UTF-8 BOM CSV blob and triggers a download.
+   197→  - `printHTML(title, bodyHTML)` — opens a styled print window with auto `window.print()`.
+   198→  - `docHeader(code, codeLabel, dateStr, statusBadge?)` — returns the MedCore-branded header HTML block.
+   199→  - `usePagination<T>(items, pageSize)` — returns `{page,setPage,size,setSize,totalPages,paged,total,range}`.
+   200→  - `useSort<T>(items, initialKey)` — returns `{sorted, sortKey, sortDir, toggleSort}` where `toggleSort(key: keyof T)`.
+
+[showing lines 1-200 of 979; use offset=201 with limit to continue reading]

@@ -1,0 +1,816 @@
+     1→"use client";
+     2→
+     3→import { useFetch } from "@/lib/use-fetch";
+     4→import { usePagination, useSort } from "@/lib/use-pagination";
+     5→import { exportToCSV } from "@/lib/export-utils";
+     6→import { Pagination } from "@/components/cms/pagination";
+     7→import { useState, useMemo, useEffect } from "react";
+     8→import { Card, CardContent } from "@/components/ui/card";
+     9→import { Input } from "@/components/ui/input";
+    10→import { Button } from "@/components/ui/button";
+    11→import { Badge } from "@/components/ui/badge";
+    12→import { Skeleton } from "@/components/ui/skeleton";
+    13→import { Progress } from "@/components/ui/progress";
+    14→import {
+    15→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    16→} from "@/components/ui/table";
+    17→import {
+    18→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+    19→} from "@/components/ui/dialog";
+    20→import {
+    21→  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    22→  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+    23→} from "@/components/ui/alert-dialog";
+    24→import { Label } from "@/components/ui/label";
+    25→import {
+    26→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    27→} from "@/components/ui/select";
+    28→import {
+    29→  Search, Plus, Pill, AlertTriangle, PackageX, CalendarClock,
+    30→  Pencil, Trash2, Download, ArrowUpDown, ArrowUp, ArrowDown,
+    31→} from "lucide-react";
+    32→import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
+    33→import { toast } from "sonner";
+    34→import { motion } from "framer-motion";
+    35→
+    36→interface Medicine {
+    37→  id: string;
+    38→  name: string;
+    39→  genericName: string | null;
+    40→  category: string;
+    41→  manufacturer: string | null;
+    42→  batchNo: string;
+    43→  expiryDate: string;
+    44→  stockQty: number;
+    45→  reorderLevel: number;
+    46→  unitPrice: number;
+    47→  salePrice: number;
+    48→  barcode: string | null;
+    49→  location: string | null;
+    50→  status: string;
+    51→  supplier: { name: string } | null;
+    52→}
+    53→
+    54→type MedicineFormState = {
+    55→  name: string;
+    56→  genericName: string;
+    57→  category: string;
+    58→  manufacturer: string;
+    59→  batchNo: string;
+    60→  expiryDate: string;
+    61→  stockQty: string;
+    62→  reorderLevel: string;
+    63→  unitPrice: string;
+    64→  salePrice: string;
+    65→};
+    66→
+    67→const CATEGORIES = ["Tablet", "Capsule", "Syrup", "Injection", "Ointment", "Drops", "Inhaler"];
+    68→
+    69→const EMPTY_FORM: MedicineFormState = {
+    70→  name: "",
+    71→  genericName: "",
+    72→  category: "Tablet",
+    73→  manufacturer: "",
+    74→  batchNo: "",
+    75→  expiryDate: "",
+    76→  stockQty: "",
+    77→  reorderLevel: "20",
+    78→  unitPrice: "",
+    79→  salePrice: "",
+    80→};
+    81→
+    82→type SortableCol = keyof Pick<
+    83→  Medicine,
+    84→  | "name" | "category" | "manufacturer" | "batchNo"
+    85→  | "expiryDate" | "stockQty" | "unitPrice" | "salePrice" | "status"
+    86→>;
+    87→
+    88→function daysUntil(dateStr: string): number {
+    89→  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    90→}
+    91→
+    92→function toDateInputValue(d: string): string {
+    93→  if (!d) return "";
+    94→  return new Date(d).toISOString().split("T")[0];
+    95→}
+    96→
+    97→export function PharmacyView() {
+    98→  const [refresh, setRefresh] = useState(0);
+    99→  const { data, loading } = useFetch<Medicine[]>(`/api/medicines?_r=${refresh}`);
+   100→  const [q, setQ] = useState("");
+   101→  const [cat, setCat] = useState("all");
+   102→  const [addOpen, setAddOpen] = useState(false);
+   103→  const [editMed, setEditMed] = useState<Medicine | null>(null);
+   104→  const [deleteMed, setDeleteMed] = useState<Medicine | null>(null);
+   105→
+   106→  const medicines = data ?? [];
+   107→
+   108→  const stats = useMemo(() => {
+   109→    const lowStock = medicines.filter((m) => m.stockQty <= m.reorderLevel).length;
+   110→    const expiringSoon = medicines.filter((m) => {
+   111→      const d = daysUntil(m.expiryDate);
+   112→      return d >= 0 && d <= 60;
+   113→    }).length;
+   114→    const outOfStock = medicines.filter((m) => m.stockQty === 0).length;
+   115→    return { total: medicines.length, lowStock, expiringSoon, outOfStock };
+   116→  }, [medicines]);
+   117→
+   118→  const filtered = useMemo(() => {
+   119→    const ql = q.toLowerCase().trim();
+   120→    return medicines.filter((m) => {
+   121→      const matchesQ =
+   122→        !ql ||
+   123→        m.name.toLowerCase().includes(ql) ||
+   124→        (m.genericName || "").toLowerCase().includes(ql) ||
+   125→        m.batchNo.toLowerCase().includes(ql) ||
+   126→        (m.barcode || "").toLowerCase().includes(ql);
+   127→      const matchesCat = cat === "all" || m.category === cat;
+   128→      return matchesQ && matchesCat;
+   129→    });
+   130→  }, [medicines, q, cat]);
+   131→
+   132→  const { sorted, sortKey, sortDir, toggleSort } = useSort<Medicine>(filtered, "name");
+   133→  const { page, setPage, size, setSize, totalPages, paged, total, range } =
+   134→    usePagination<Medicine>(sorted, 10);
+   135→
+   136→  const handleExport = () => {
+   137→    if (medicines.length === 0) {
+   138→      toast.error("No medicines to export");
+   139→      return;
+   140→    }
+   141→    const headers = [
+   142→      "Name", "Generic", "Category", "Manufacturer", "Batch", "Expiry",
+   143→      "Stock", "Reorder", "Unit Price", "Sale Price", "Supplier", "Status",
+   144→    ];
+   145→    const rows = sorted.map((m) => [
+   146→      m.name,
+   147→      m.genericName || "",
+   148→      m.category,
+   149→      m.manufacturer || "",
+   150→      m.batchNo,
+   151→      formatDate(m.expiryDate),
+   152→      m.stockQty,
+   153→      m.reorderLevel,
+   154→      m.unitPrice,
+   155→      m.salePrice,
+   156→      m.supplier?.name || "",
+   157→      m.status,
+   158→    ]);
+   159→    exportToCSV("medicines.csv", headers, rows);
+   160→    toast.success(`Exported ${rows.length} medicine(s) to CSV`);
+   161→  };
+   162→
+   163→  return (
+   164→    <div className="space-y-4 animate-fade-in">
+   165→      {/* Header */}
+   166→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   167→        <div>
+   168→          <h2 className="text-xl font-bold flex items-center gap-2">
+   169→            <Pill className="w-5 h-5 text-teal-600" />
+   170→            Pharmacy &amp; Inventory
+   171→          </h2>
+   172→          <p className="text-sm text-muted-foreground">
+   173→            {stats.total} medicine{stats.total === 1 ? "" : "s"} in catalog
+   174→            {total !== stats.total && ` · ${total} matching`}
+   175→          </p>
+   176→        </div>
+   177→        <div className="flex gap-2">
+   178→          <Button
+   179→            variant="outline"
+   180→            size="sm"
+   181→            className="gap-1.5"
+   182→            onClick={handleExport}
+   183→            disabled={medicines.length === 0}
+   184→          >
+   185→            <Download className="w-4 h-4" /> Export CSV
+   186→          </Button>
+   187→          <Button
+   188→            size="sm"
+   189→            className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
+   190→            onClick={() => setAddOpen(true)}
+   191→          >
+   192→            <Plus className="w-4 h-4" /> Add Medicine
+   193→          </Button>
+   194→        </div>
+   195→      </div>
+   196→
+   197→      {/* Stat cards */}
+   198→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   199→        <StatCard label="Total Medicines" value={stats.total} icon={Pill} accent="from-teal-500 to-teal-600" />
+   200→        <StatCard label="Low Stock" value={stats.lowStock} icon={AlertTriangle} accent="from-amber-500 to-orange-500" />
+   201→        <StatCard label="Expiring Soon" value={stats.expiringSoon} icon={CalendarClock} accent="from-orange-500 to-rose-500" />
+   202→        <StatCard label="Out of Stock" value={stats.outOfStock} icon={PackageX} accent="from-rose-500 to-rose-600" />
+   203→      </div>
+   204→
+   205→      {/* Table */}
+   206→      <Card>
+   207→        <CardContent className="p-4">
+   208→          <div className="flex flex-col sm:flex-row gap-2 mb-3">
+   209→            <div className="relative flex-1">
+   210→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   211→              <Input
+   212→                placeholder="Search by name, generic, batch, or barcode…"
+   213→                value={q}
+   214→                onChange={(e) => setQ(e.target.value)}
+   215→                className="pl-9"
+   216→              />
+   217→            </div>
+   218→            <Select value={cat} onValueChange={setCat}>
+   219→              <SelectTrigger className="sm:w-48">
+   220→                <SelectValue placeholder="Category" />
+   221→              </SelectTrigger>
+   222→              <SelectContent>
+   223→                <SelectItem value="all">All Categories</SelectItem>
+   224→                {CATEGORIES.map((c) => (
+   225→                  <SelectItem key={c} value={c}>{c}</SelectItem>
+   226→                ))}
+   227→              </SelectContent>
+   228→            </Select>
+   229→          </div>
+   230→
+   231→          <div className="rounded-lg border overflow-x-auto">
+   232→            <Table>
+   233→              <TableHeader>
+   234→                <TableRow className="bg-muted/50">
+   235→                  <SortHeader label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={() => toggleSort("name")} />
+   236→                  <SortHeader label="Category" colKey="category" sortKey={sortKey} sortDir={sortDir} onSort={() => toggleSort("category")} className="hidden md:table-cell" />
+   237→                  <SortHeader label="Manufacturer" colKey="manufacturer" sortKey={sortKey} sortDir={sortDir} onSort={() => toggleSort("manufacturer")} className="hidden lg:table-cell" />
+   238→                  <SortHeader label="Batch" colKey="batchNo" sortKey={sortKey} sortDir={sortDir} onSort={() => toggleSort("batchNo")} className="hidden md:table-cell" />
+   239→                  <SortHeader label="Expiry" colKey="expiryDate" sortKey={sortKey} sortDir={sortDir} onSort={() => toggleSort("expiryDate")} />
+   240→                  <SortHeader label="Stock" colKey="stockQty" sortKey={sortKey} sortDir={sortDir} onSort={() => toggleSort("stockQty")} className="min-w-[120px]" />
+   241→                  <SortHeader label="Unit / Sale" colKey="unitPrice" sortKey={sortKey} sortDir={sortDir} onSort={() => toggleSort("unitPrice")} className="hidden sm:table-cell" />
+   242→                  <TableHead className="hidden xl:table-cell">Supplier</TableHead>
+   243→                  <SortHeader label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={() => toggleSort("status")} className="hidden sm:table-cell" />
+   244→                  <TableHead className="text-right">Actions</TableHead>
+   245→                </TableRow>
+   246→              </TableHeader>
+   247→              <TableBody>
+   248→                {loading ? (
+   249→                  Array.from({ length: 8 }).map((_, i) => (
+   250→                    <TableRow key={i}>
+   251→                      <TableCell colSpan={10}><Skeleton className="h-8 w-full" /></TableCell>
+   252→                    </TableRow>
+   253→                  ))
+   254→                ) : paged.length === 0 ? (
+   255→                  <TableRow>
+   256→                    <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-10">
+   257→                      <Pill className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+   258→                      No medicines found
+   259→                    </TableCell>
+   260→                  </TableRow>
+   261→                ) : (
+   262→                  paged.map((m) => {
+   263→                    const days = daysUntil(m.expiryDate);
+   264→                    const isExpired = days < 0;
+   265→                    const isExpiring60 = days >= 0 && days <= 60;
+   266→                    const isExpiring90 = days > 60 && days <= 90;
+   267→                    const isLowStock = m.stockQty <= m.reorderLevel;
+   268→                    const stockPct = Math.min(
+   269→                      100,
+   270→                      Math.round((m.stockQty / Math.max(1, m.reorderLevel * 2)) * 100),
+   271→                    );
+   272→                    return (
+   273→                      <TableRow
+   274→                        key={m.id}
+   275→                        className={isLowStock ? "bg-rose-50/40 dark:bg-rose-950/10" : ""}
+   276→                      >
+   277→                        <TableCell>
+   278→                          <div className="font-medium text-sm">{m.name}</div>
+   279→                          {m.genericName && (
+   280→                            <div className="text-[11px] text-muted-foreground">{m.genericName}</div>
+   281→                          )}
+   282→                        </TableCell>
+   283→                        <TableCell className="hidden md:table-cell">
+   284→                          <Badge variant="outline" className="text-[10px]">{m.category}</Badge>
+   285→                        </TableCell>
+   286→                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+   287→                          {m.manufacturer || "—"}
+   288→                        </TableCell>
+   289→                        <TableCell className="hidden md:table-cell font-mono text-xs">
+   290→                          {m.batchNo}
+   291→                        </TableCell>
+   292→                        <TableCell>
+   293→                          <div
+   294→                            className={`text-xs font-medium ${
+   295→                              isExpired || isExpiring60
+   296→                                ? "text-rose-600"
+   297→                                : isExpiring90
+   298→                                ? "text-amber-600"
+   299→                                : ""
+   300→                            }`}
+   301→                          >
+   302→                            {formatDate(m.expiryDate)}
+   303→                          </div>
+   304→                          {(isExpiring60 || isExpiring90) && (
+   305→                            <div
+   306→                              className={`text-[10px] ${
+   307→                                isExpiring60 ? "text-rose-500" : "text-amber-500"
+   308→                              }`}
+   309→                            >
+   310→                              {days}d left
+   311→                            </div>
+   312→                          )}
+   313→                          {isExpired && (
+   314→                            <div className="text-[10px] text-rose-500">expired</div>
+   315→                          )}
+   316→                        </TableCell>
+   317→                        <TableCell>
+   318→                          <div className="space-y-1 min-w-[100px]">
+   319→                            <div className="flex items-center justify-between text-xs">
+   320→                              <span className={isLowStock ? "text-rose-600 font-semibold" : ""}>
+   321→                                {m.stockQty}
+   322→                              </span>
+   323→                              <span className="text-muted-foreground">/ {m.reorderLevel}</span>
+   324→                            </div>
+   325→                            <Progress
+   326→                              value={stockPct}
+   327→                              className={`h-1.5 ${
+   328→                                isLowStock
+   329→                                  ? "[&>[data-slot=progress-indicator]]:bg-rose-500"
+   330→                                  : "[&>[data-slot=progress-indicator]]:bg-teal-500"
+   331→                              }`}
+   332→                            />
+   333→                          </div>
+   334→                        </TableCell>
+   335→                        <TableCell className="hidden sm:table-cell text-xs">
+   336→                          <div className="text-muted-foreground">{formatRs(m.unitPrice)}</div>
+   337→                          <div className="font-medium text-teal-700 dark:text-teal-300">
+   338→                            {formatRs(m.salePrice)}
+   339→                          </div>
+   340→                        </TableCell>
+   341→                        <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
+   342→                          {m.supplier?.name || "—"}
+   343→                        </TableCell>
+   344→                        <TableCell className="hidden sm:table-cell">
+   345→                          <Badge
+   346→                            className={`text-[10px] ${
+   347→                              statusColors[m.status] || "bg-gray-100 text-gray-600"
+   348→                            }`}
+   349→                          >
+   350→                            {statusLabel(m.status)}
+   351→                          </Badge>
+   352→                        </TableCell>
+   353→                        <TableCell className="text-right">
+   354→                          <div className="flex justify-end gap-1">
+   355→                            <Button
+   356→                              variant="ghost"
+   357→                              size="sm"
+   358→                              className="h-7 w-7 p-0"
+   359→                              onClick={() => setEditMed(m)}
+   360→                              title="Edit medicine"
+   361→                            >
+   362→                              <Pencil className="w-3.5 h-3.5" />
+   363→                            </Button>
+   364→                            <Button
+   365→                              variant="ghost"
+   366→                              size="sm"
+   367→                              className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700"
+   368→                              onClick={() => setDeleteMed(m)}
+   369→                              title="Delete medicine"
+   370→                            >
+   371→                              <Trash2 className="w-3.5 h-3.5" />
+   372→                            </Button>
+   373→                          </div>
+   374→                        </TableCell>
+   375→                      </TableRow>
+   376→                    );
+   377→                  })
+   378→                )}
+   379→              </TableBody>
+   380→            </Table>
+   381→          </div>
+   382→          {!loading && medicines.length > 0 && (
+   383→            <Pagination
+   384→              page={page}
+   385→              totalPages={totalPages}
+   386→              setPage={setPage}
+   387→              size={size}
+   388→              setSize={setSize}
+   389→              range={range}
+   390→            />
+   391→          )}
+   392→        </CardContent>
+   393→      </Card>
+   394→
+   395→      <AddMedicineDialog
+   396→        open={addOpen}
+   397→        onOpenChange={setAddOpen}
+   398→        onCreated={() => {
+   399→          setAddOpen(false);
+   400→          setRefresh((r) => r + 1);
+   401→        }}
+   402→      />
+   403→
+   404→      <EditMedicineDialog
+   405→        medicine={editMed}
+   406→        open={!!editMed}
+   407→        onOpenChange={(v) => { if (!v) setEditMed(null); }}
+   408→        onSaved={() => {
+   409→          setEditMed(null);
+   410→          setRefresh((r) => r + 1);
+   411→        }}
+   412→      />
+   413→
+   414→      <DeleteMedicineDialog
+   415→        medicine={deleteMed}
+   416→        open={!!deleteMed}
+   417→        onOpenChange={(v) => { if (!v) setDeleteMed(null); }}
+   418→        onDeleted={() => {
+   419→          setDeleteMed(null);
+   420→          setRefresh((r) => r + 1);
+   421→        }}
+   422→      />
+   423→    </div>
+   424→  );
+   425→}
+   426→
+   427→function SortHeader({
+   428→  label, colKey, sortKey, sortDir, onSort, className,
+   429→}: {
+   430→  label: string;
+   431→  colKey: SortableCol;
+   432→  sortKey: keyof Medicine | "";
+   433→  sortDir: "asc" | "desc";
+   434→  onSort: () => void;
+   435→  className?: string;
+   436→}) {
+   437→  const active = sortKey === colKey;
+   438→  return (
+   439→    <TableHead className={className}>
+   440→      <button
+   441→        type="button"
+   442→        onClick={onSort}
+   443→        className="inline-flex items-center gap-1 text-left hover:text-foreground transition-colors"
+   444→      >
+   445→        {label}
+   446→        {active ? (
+   447→          sortDir === "asc" ? <ArrowUp className="w-3 h-3 text-teal-600" /> : <ArrowDown className="w-3 h-3 text-teal-600" />
+   448→        ) : (
+   449→          <ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />
+   450→        )}
+   451→      </button>
+   452→    </TableHead>
+   453→  );
+   454→}
+   455→
+   456→function StatCard({
+   457→  label, value, icon: Icon, accent,
+   458→}: {
+   459→  label: string;
+   460→  value: number;
+   461→  icon: React.ComponentType<{ className?: string }>;
+   462→  accent: string;
+   463→}) {
+   464→  return (
+   465→    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+   466→      <Card>
+   467→        <CardContent className="p-4">
+   468→          <div className="flex items-center justify-between">
+   469→            <div>
+   470→              <p className="text-2xl font-bold tracking-tight">{value}</p>
+   471→              <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+   472→            </div>
+   473→            <div
+   474→              className={`w-9 h-9 rounded-lg bg-gradient-to-br ${accent} flex items-center justify-center shrink-0`}
+   475→            >
+   476→              <Icon className="w-4 h-4 text-white" />
+   477→            </div>
+   478→          </div>
+   479→        </CardContent>
+   480→      </Card>
+   481→    </motion.div>
+   482→  );
+   483→}
+   484→
+   485→function MedicineFormFields({
+   486→  form, setForm,
+   487→}: {
+   488→  form: MedicineFormState;
+   489→  setForm: React.Dispatch<React.SetStateAction<MedicineFormState>>;
+   490→}) {
+   491→  return (
+   492→    <div className="grid grid-cols-2 gap-3">
+   493→      <div className="col-span-2 space-y-1.5">
+   494→        <Label>Name *</Label>
+   495→        <Input
+   496→          required
+   497→          value={form.name}
+   498→          onChange={(e) => setForm({ ...form, name: e.target.value })}
+   499→          placeholder="Paracetamol 500mg"
+   500→        />
+   501→      </div>
+   502→      <div className="space-y-1.5">
+   503→        <Label>Generic Name</Label>
+   504→        <Input
+   505→          value={form.genericName}
+   506→          onChange={(e) => setForm({ ...form, genericName: e.target.value })}
+   507→          placeholder="Paracetamol"
+   508→        />
+   509→      </div>
+   510→      <div className="space-y-1.5">
+   511→        <Label>Category</Label>
+   512→        <Select
+   513→          value={form.category}
+   514→          onValueChange={(v) => setForm({ ...form, category: v })}
+   515→        >
+   516→          <SelectTrigger>
+   517→            <SelectValue />
+   518→          </SelectTrigger>
+   519→          <SelectContent>
+   520→            {CATEGORIES.map((c) => (
+   521→              <SelectItem key={c} value={c}>{c}</SelectItem>
+   522→            ))}
+   523→          </SelectContent>
+   524→        </Select>
+   525→      </div>
+   526→      <div className="space-y-1.5">
+   527→        <Label>Manufacturer</Label>
+   528→        <Input
+   529→          value={form.manufacturer}
+   530→          onChange={(e) => setForm({ ...form, manufacturer: e.target.value })}
+   531→          placeholder="Acme Pharma"
+   532→        />
+   533→      </div>
+   534→      <div className="space-y-1.5">
+   535→        <Label>Batch No *</Label>
+   536→        <Input
+   537→          required
+   538→          value={form.batchNo}
+   539→          onChange={(e) => setForm({ ...form, batchNo: e.target.value })}
+   540→          placeholder="BT2024-001"
+   541→        />
+   542→      </div>
+   543→      <div className="space-y-1.5">
+   544→        <Label>Expiry Date *</Label>
+   545→        <Input
+   546→          required
+   547→          type="date"
+   548→          value={form.expiryDate}
+   549→          onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
+   550→        />
+   551→      </div>
+   552→      <div className="space-y-1.5">
+   553→        <Label>Stock Qty</Label>
+   554→        <Input
+   555→          type="number"
+   556→          value={form.stockQty}
+   557→          onChange={(e) => setForm({ ...form, stockQty: e.target.value })}
+   558→          placeholder="100"
+   559→        />
+   560→      </div>
+   561→      <div className="space-y-1.5">
+   562→        <Label>Reorder Level</Label>
+   563→        <Input
+   564→          type="number"
+   565→          value={form.reorderLevel}
+   566→          onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })}
+   567→          placeholder="20"
+   568→        />
+   569→      </div>
+   570→      <div className="space-y-1.5">
+   571→        <Label>Unit Price (Rs)</Label>
+   572→        <Input
+   573→          type="number"
+   574→          step="0.01"
+   575→          value={form.unitPrice}
+   576→          onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
+   577→          placeholder="2.50"
+   578→        />
+   579→      </div>
+   580→      <div className="space-y-1.5">
+   581→        <Label>Sale Price (Rs)</Label>
+   582→        <Input
+   583→          type="number"
+   584→          step="0.01"
+   585→          value={form.salePrice}
+   586→          onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
+   587→          placeholder="5.00"
+   588→        />
+   589→      </div>
+   590→    </div>
+   591→  );
+   592→}
+   593→
+   594→function AddMedicineDialog({
+   595→  open, onOpenChange, onCreated,
+   596→}: {
+   597→  open: boolean;
+   598→  onOpenChange: (v: boolean) => void;
+   599→  onCreated: () => void;
+   600→}) {
+   601→  const [form, setForm] = useState<MedicineFormState>(EMPTY_FORM);
+   602→  const [saving, setSaving] = useState(false);
+   603→
+   604→  const reset = () => setForm(EMPTY_FORM);
+   605→
+   606→  const submit = async (e: React.FormEvent) => {
+   607→    e.preventDefault();
+   608→    if (!form.name || !form.batchNo || !form.expiryDate) {
+   609→      toast.error("Name, batch no, and expiry date are required");
+   610→      return;
+   611→    }
+   612→    setSaving(true);
+   613→    try {
+   614→      const res = await fetch("/api/medicines", {
+   615→        method: "POST",
+   616→        headers: { "Content-Type": "application/json" },
+   617→        body: JSON.stringify({
+   618→          name: form.name,
+   619→          genericName: form.genericName || null,
+   620→          category: form.category,
+   621→          manufacturer: form.manufacturer || null,
+   622→          batchNo: form.batchNo,
+   623→          expiryDate: form.expiryDate,
+   624→          stockQty: Number(form.stockQty) || 0,
+   625→          reorderLevel: Number(form.reorderLevel) || 0,
+   626→          unitPrice: Number(form.unitPrice) || 0,
+   627→          salePrice: Number(form.salePrice) || 0,
+   628→        }),
+   629→      });
+   630→      if (!res.ok) throw new Error("Failed to add medicine");
+   631→      toast.success(`Medicine "${form.name}" added`);
+   632→      onCreated();
+   633→      reset();
+   634→    } catch {
+   635→      toast.error("Failed to add medicine");
+   636→    } finally {
+   637→      setSaving(false);
+   638→    }
+   639→  };
+   640→
+   641→  return (
+   642→    <Dialog open={open} onOpenChange={onOpenChange}>
+   643→      <DialogContent className="max-w-2xl">
+   644→        <DialogHeader>
+   645→          <DialogTitle>Add Medicine</DialogTitle>
+   646→          <DialogDescription>
+   647→            Register a new medicine in the pharmacy catalog.
+   648→          </DialogDescription>
+   649→        </DialogHeader>
+   650→        <form onSubmit={submit} className="space-y-3">
+   651→          <MedicineFormFields form={form} setForm={setForm} />
+   652→          <DialogFooter>
+   653→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+   654→              Cancel
+   655→            </Button>
+   656→            <Button
+   657→              type="submit"
+   658→              disabled={saving}
+   659→              className="bg-teal-600 hover:bg-teal-700 text-white"
+   660→            >
+   661→              {saving ? "Saving…" : "Add Medicine"}
+   662→            </Button>
+   663→          </DialogFooter>
+   664→        </form>
+   665→      </DialogContent>
+   666→    </Dialog>
+   667→  );
+   668→}
+   669→
+   670→function EditMedicineDialog({
+   671→  medicine, open, onOpenChange, onSaved,
+   672→}: {
+   673→  medicine: Medicine | null;
+   674→  open: boolean;
+   675→  onOpenChange: (v: boolean) => void;
+   676→  onSaved: () => void;
+   677→}) {
+   678→  const [form, setForm] = useState<MedicineFormState>(EMPTY_FORM);
+   679→  const [saving, setSaving] = useState(false);
+   680→
+   681→  useEffect(() => {
+   682→    if (medicine && open) {
+   683→      setForm({
+   684→        name: medicine.name,
+   685→        genericName: medicine.genericName || "",
+   686→        category: medicine.category,
+   687→        manufacturer: medicine.manufacturer || "",
+   688→        batchNo: medicine.batchNo,
+   689→        expiryDate: toDateInputValue(medicine.expiryDate),
+   690→        stockQty: String(medicine.stockQty),
+   691→        reorderLevel: String(medicine.reorderLevel),
+   692→        unitPrice: String(medicine.unitPrice),
+   693→        salePrice: String(medicine.salePrice),
+   694→      });
+   695→    }
+   696→  }, [medicine, open]);
+   697→
+   698→  const submit = async (e: React.FormEvent) => {
+   699→    e.preventDefault();
+   700→    if (!medicine) return;
+   701→    if (!form.name || !form.batchNo || !form.expiryDate) {
+   702→      toast.error("Name, batch no, and expiry date are required");
+   703→      return;
+   704→    }
+   705→    setSaving(true);
+   706→    try {
+   707→      const res = await fetch(`/api/medicines/${medicine.id}`, {
+   708→        method: "PUT",
+   709→        headers: { "Content-Type": "application/json" },
+   710→        body: JSON.stringify({
+   711→          name: form.name,
+   712→          genericName: form.genericName || null,
+   713→          category: form.category,
+   714→          manufacturer: form.manufacturer || null,
+   715→          batchNo: form.batchNo,
+   716→          expiryDate: form.expiryDate,
+   717→          stockQty: Number(form.stockQty) || 0,
+   718→          reorderLevel: Number(form.reorderLevel) || 0,
+   719→          unitPrice: Number(form.unitPrice) || 0,
+   720→          salePrice: Number(form.salePrice) || 0,
+   721→        }),
+   722→      });
+   723→      if (!res.ok) throw new Error("Failed to update medicine");
+   724→      toast.success("Medicine updated");
+   725→      onSaved();
+   726→    } catch {
+   727→      toast.error("Failed to update medicine");
+   728→    } finally {
+   729→      setSaving(false);
+   730→    }
+   731→  };
+   732→
+   733→  return (
+   734→    <Dialog open={open} onOpenChange={onOpenChange}>
+   735→      <DialogContent className="max-w-2xl">
+   736→        <DialogHeader>
+   737→          <DialogTitle>Edit Medicine</DialogTitle>
+   738→          <DialogDescription>
+   739→            Update the catalog entry for{" "}
+   740→            <span className="font-medium text-foreground">{medicine?.name}</span>{" "}
+   741→            (batch <span className="font-mono text-xs">{medicine?.batchNo}</span>).
+   742→          </DialogDescription>
+   743→        </DialogHeader>
+   744→        <form onSubmit={submit} className="space-y-3">
+   745→          <MedicineFormFields form={form} setForm={setForm} />
+   746→          <DialogFooter>
+   747→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+   748→              Cancel
+   749→            </Button>
+   750→            <Button
+   751→              type="submit"
+   752→              disabled={saving}
+   753→              className="bg-teal-600 hover:bg-teal-700 text-white"
+   754→            >
+   755→              {saving ? "Saving…" : "Save Changes"}
+   756→            </Button>
+   757→          </DialogFooter>
+   758→        </form>
+   759→      </DialogContent>
+   760→    </Dialog>
+   761→  );
+   762→}
+   763→
+   764→function DeleteMedicineDialog({
+   765→  medicine, open, onOpenChange, onDeleted,
+   766→}: {
+   767→  medicine: Medicine | null;
+   768→  open: boolean;
+   769→  onOpenChange: (v: boolean) => void;
+   770→  onDeleted: () => void;
+   771→}) {
+   772→  const [deleting, setDeleting] = useState(false);
+   773→
+   774→  const confirm = async (e: React.MouseEvent) => {
+   775→    e.preventDefault();
+   776→    if (!medicine) return;
+   777→    setDeleting(true);
+   778→    try {
+   779→      const res = await fetch(`/api/medicines/${medicine.id}`, { method: "DELETE" });
+   780→      if (!res.ok) throw new Error("Failed to delete medicine");
+   781→      toast.success(`Medicine "${medicine.name}" deleted`);
+   782→      onDeleted();
+   783→    } catch {
+   784→      toast.error("Failed to delete medicine");
+   785→    } finally {
+   786→      setDeleting(false);
+   787→    }
+   788→  };
+   789→
+   790→  return (
+   791→    <AlertDialog open={open} onOpenChange={onOpenChange}>
+   792→      <AlertDialogContent>
+   793→        <AlertDialogHeader>
+   794→          <AlertDialogTitle>Delete medicine?</AlertDialogTitle>
+   795→          <AlertDialogDescription>
+   796→            This will permanently delete{" "}
+   797→            <strong className="text-foreground">{medicine?.name}</strong>{" "}
+   798→            (batch <span className="font-mono">{medicine?.batchNo}</span>) from the catalog.
+   799→            This action cannot be undone.
+   800→          </AlertDialogDescription>
+   801→        </AlertDialogHeader>
+   802→        <AlertDialogFooter>
+   803→          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+   804→          <AlertDialogAction
+   805→            onClick={confirm}
+   806→            disabled={deleting}
+   807→            className="bg-rose-600 hover:bg-rose-700 text-white"
+   808→          >
+   809→            {deleting ? "Deleting…" : "Delete Medicine"}
+   810→          </AlertDialogAction>
+   811→        </AlertDialogFooter>
+   812→      </AlertDialogContent>
+   813→    </AlertDialog>
+   814→  );
+   815→}
+   816→

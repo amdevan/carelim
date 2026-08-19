@@ -1,0 +1,22 @@
+services:
+  carelim:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: carelim-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - DATABASE_URL=file:./db/custom.db
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=medcore-secret-key-change-in-production
+    volumes:
+      - carelim-db:/app/db
+      - carelim-uploads:/app/public/uploads
+    restart: unless-stopped
+
+volumes:
+  carelim-db:
+  carelim-uploads:
