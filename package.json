@@ -1,0 +1,11 @@
+{
+  "name": "carelim-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "cd \"Carelim OS\" && next dev -p 3000 2>&1 | tee dev.log",
+    "backend": "cd \"Carelim OS\" && node backend/server.js",
+    "dev:full": "npm run dev & npm run backend"
+  },
+  "description": "Root workspace package for Carelim OS - run 'npm run dev' for frontend, 'npm run backend' for backend API"
+}
