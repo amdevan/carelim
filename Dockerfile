@@ -29,17 +29,24 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy standalone output
-COPY --from=builder /app/.next/standalone/ ./standalone/
+# Copy standalone output (flatten one level if nested)
+COPY --from=builder /app/.next/standalone/ /app/standalone-tmp/
 
-# Flatten the nested standalone path (Next.js mirrors project structure)
-RUN cp -r /app/standalone/Carelim/Carelim\ OS/* /app/ && rm -rf /app/standalone
+# Find and copy the server.js - handle both flat and nested standalone output
+RUN if [ -f /app/standalone-tmp/server.js ]; then \
+      cp -r /app/standalone-tmp/* /app/ && rm -rf /app/standalone-tmp; \
+    else \
+      cp -r /app/standalone-tmp/*/  /app/ && rm -rf /app/standalone-tmp; \
+    fi
 
 # Copy static assets
 COPY --from=builder /app/.next/static ./.next/static
 
 # Copy public directory
 COPY --from=builder /app/public ./public
+
+# Copy Prisma schema (needed at runtime for migrations)
+COPY --from=builder /app/prisma ./prisma
 
 # Create db directory for SQLite persistence (mount volume here)
 RUN mkdir -p /app/db
