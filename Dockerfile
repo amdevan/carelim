@@ -4,7 +4,7 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Prisma needs DATABASE_URL to resolve the provider during generate
-ENV DATABASE_URL="file:./db/custom.db"
+ENV DATABASE_URL="postgresql://carelim:carelim123@localhost:5432/carelim?schema=public"
 
 # Copy package files from the subdirectory
 COPY Carelim\ OS/package.json Carelim\ OS/package-lock.json ./
@@ -48,7 +48,7 @@ COPY --from=builder /app/public ./public
 # Copy Prisma schema (needed at runtime for migrations)
 COPY --from=builder /app/prisma ./prisma
 
-# Create db directory for SQLite persistence (mount volume here)
+# Create directory for database-related files
 RUN mkdir -p /app/db
 
 EXPOSE 3000

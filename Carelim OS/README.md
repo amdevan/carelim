@@ -5,7 +5,7 @@ A comprehensive healthcare management system built with Next.js, Prisma, and Tai
 ## Tech Stack
 
 - **Framework:** Next.js 15 (App Router)
-- **Database:** SQLite via Prisma ORM
+- **Database:** PostgreSQL via Prisma ORM
 - **UI:** shadcn/ui + Tailwind CSS
 - **State:** Zustand
 - **Charts:** Recharts
@@ -18,11 +18,13 @@ A comprehensive healthcare management system built with Next.js, Prisma, and Tai
 # Install dependencies
 npm install
 
-# Generate Prisma client & push schema
+# Generate Prisma client
 npx prisma generate
+
+# Push schema to PostgreSQL database
 npx prisma db push
 
-# Seed the database
+# Seed the database (optional)
 npx tsx prisma/seed.ts
 
 # Start dev server
@@ -73,7 +75,7 @@ The CRM module at `/carelim-ms` includes:
 
 ## Database
 
-The project uses Prisma with SQLite. Key model groups:
+The project uses Prisma with PostgreSQL. Key model groups:
 
 - **Core HMS** - Patient, Doctor, Appointment, Invoice, Prescription, Staff
 - **IVF** - IVFCycle, Embryo, EggRetrieval, EmbryoTransfer, Donor, Consent
@@ -124,7 +126,9 @@ Carelim OS/
 ## Environment Variables
 
 ```env
-DATABASE_URL="file:./db/custom.db"
+DATABASE_URL="postgresql://carelim:carelim123@localhost:5432/carelim?schema=public"
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-secure-secret-here
 NEXT_PUBLIC_API_URL=""
 ```
 

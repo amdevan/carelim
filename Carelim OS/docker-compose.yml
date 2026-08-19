@@ -1,22 +1,41 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: carelim-db
+    environment:
+      POSTGRES_USER: carelim
+      POSTGRES_PASSWORD: carelim123
+      POSTGRES_DB: carelim
+    volumes:
+      - carelim-db-data:/var/lib/postgresql/data
+    networks:
+      - carelim-net
+    restart: unless-stopped
+
   carelim:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: carelim-app
+    depends_on:
+      - db
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
-      - DATABASE_URL=file:./db/custom.db
+      - DATABASE_URL=postgresql://carelim:carelim123@db:5432/carelim?schema=public
       - NEXTAUTH_URL=http://localhost:3000
       - NEXTAUTH_SECRET=medcore-secret-key-change-in-production
     volumes:
-      - carelim-db:/app/db
       - carelim-uploads:/app/public/uploads
+    networks:
+      - carelim-net
     restart: unless-stopped
 
+networks:
+  carelim-net:
+
 volumes:
-  carelim-db:
+  carelim-db-data:
   carelim-uploads:
