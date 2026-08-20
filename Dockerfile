@@ -11,8 +11,8 @@ COPY . /src/
 RUN cp -r /src/"Carelim OS"/* /app/ && cp -r /src/"Carelim OS"/.[!.]* /app/ 2>/dev/null; true
 RUN rm -rf /src
 
-# Install dependencies
-RUN npm install
+# Install dependencies (--include=dev required for build tools like @tailwindcss/postcss)
+RUN npm install --include=dev
 
 # Generate Prisma client
 RUN npx prisma generate
