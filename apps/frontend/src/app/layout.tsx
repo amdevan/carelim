@@ -6,6 +6,9 @@ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { validateEnv } from "@/lib/env";
 
+// Force dynamic rendering for all pages (prevents build-time DB access)
+export const dynamic = "force-dynamic";
+
 // Validate environment variables at startup
 validateEnv();
 

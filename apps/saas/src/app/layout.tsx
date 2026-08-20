@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+// Force dynamic rendering for all pages
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Carelim SaaS Admin",
   description: "SaaS administration panel for Carelim",
