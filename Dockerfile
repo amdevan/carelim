@@ -37,13 +37,19 @@ COPY --from=builder /app/.next/static ./.next/static
 # Copy public directory (standalone doesn't include it)
 COPY --from=builder /app/public ./public
 
-# Copy Prisma schema and CLI (needed at runtime for db push)
+# Copy Prisma schema and client
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
-# Copy entrypoint (from build context)
+# Install prisma CLI + all transitive deps in a temp dir, then merge into node_modules
+RUN cd /tmp && mkdir prisma-install && cd prisma-install && \
+    npm init -y > /dev/null 2>&1 && \
+    npm install prisma@$(node -e "console.log(require('/app/node_modules/@prisma/client/package.json').version)") && \
+    cp -r node_modules/* /app/node_modules/ && \
+    rm -rf /tmp/prisma-install
+
+# Copy entrypoint
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
