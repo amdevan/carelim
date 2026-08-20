@@ -7,9 +7,6 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: true,
-  turbopack: {
-    root: ".",
-  },
   // Allow the sandbox preview domain and localhost variants to hot-reload /
   // fetch _next/* assets without triggering cross-origin warnings in dev.
   // Next.js matches on hostname (with optional leading dot for subdomain wildcard).
