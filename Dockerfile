@@ -30,10 +30,10 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Copy the standalone output
-COPY --from=builder /app/apps/frontend/.next/standalone/ ./
+COPY --from=builder /app/apps/frontend/.next/standalone/apps/frontend/ ./
 
 # Copy static assets
-COPY --from=builder /app/apps/frontend/.next/static ./.next/static
+COPY --from=builder /app/apps/frontend/.next/standalone/apps/frontend/.next/static ./.next/static
 
 # Copy Prisma schema and client
 COPY --from=builder /app/packages/database/prisma ./prisma
