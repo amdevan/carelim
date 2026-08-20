@@ -35,9 +35,6 @@ COPY --from=builder /app/apps/frontend/.next/standalone/ ./
 # Copy static assets
 COPY --from=builder /app/apps/frontend/.next/static ./.next/static
 
-# Copy public directory
-COPY --from=builder /app/apps/frontend/public ./public
-
 # Copy Prisma schema and client
 COPY --from=builder /app/packages/database/prisma ./prisma
 COPY --from=builder /app/apps/frontend/node_modules/.prisma ./node_modules/.prisma
