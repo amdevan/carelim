@@ -1,11 +1,24 @@
 {
-  "name": "carelim-workspace",
+  "name": "carelim",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "cd \"Carelim OS\" && next dev -p 3000 2>&1 | tee dev.log",
-    "backend": "cd \"Carelim OS\" && node backend/server.js",
-    "dev:full": "npm run dev & npm run backend"
-  },
-  "description": "Root workspace package for Carelim OS - run 'npm run dev' for frontend, 'npm run backend' for backend API"
+    "dev": "npm run dev --workspace=apps/frontend",
+    "dev:frontend": "npm run dev --workspace=apps/frontend",
+    "dev:saas": "npm run dev --workspace=apps/saas",
+    "dev:ms": "npm run dev --workspace=apps/carelim-ms",
+    "dev:marketplace": "npm run dev --workspace=apps/marketplace",
+    "build": "npm run build --workspace=apps/frontend",
+    "build:frontend": "npm run build --workspace=apps/frontend",
+    "build:saas": "npm run build --workspace=apps/saas",
+    "build:ms": "npm run build --workspace=apps/carelim-ms",
+    "build:marketplace": "npm run build --workspace=apps/marketplace",
+    "db:push": "npm run db:push --workspace=packages/database",
+    "db:generate": "npm run db:generate --workspace=packages/database",
+    "seed": "npm run seed --workspace=packages/database"
+  }
 }

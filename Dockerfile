@@ -6,18 +6,19 @@ WORKDIR /app
 # Prisma needs DATABASE_URL to resolve the provider during generate
 ENV DATABASE_URL="postgresql://carelim:carelim123@localhost:5432/carelim?schema=public"
 
-# Copy everything into a temp dir, then flatten (avoids space-in-path issues)
-COPY . /src/
-RUN cp -r /src/"Carelim OS"/* /app/ && cp -r /src/"Carelim OS"/.[!.]* /app/ 2>/dev/null; true
-RUN rm -rf /src
+# Copy workspace root and all apps/packages
+COPY package.json package-lock.json* ./
+COPY apps/ apps/
+COPY packages/ packages/
 
-# Install dependencies (--include=dev required for build tools like @tailwindcss/postcss)
+# Install all workspace dependencies
 RUN npm install --include=dev
 
 # Generate Prisma client
-RUN npx prisma generate
+RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 
-# Build Next.js (standalone output)
+# Build the frontend app
+WORKDIR /app/apps/frontend
 RUN npm run build
 
 # ---- Production Stage ----
@@ -28,21 +29,21 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy the standalone output (server.js + node_modules + .next with server code)
-COPY --from=builder /app/.next/standalone/ ./
+# Copy the standalone output
+COPY --from=builder /app/apps/frontend/.next/standalone/ ./
 
-# Overwrite .next/static with the full static assets (standalone doesn't include them)
-COPY --from=builder /app/.next/static ./.next/static
+# Copy static assets
+COPY --from=builder /app/apps/frontend/.next/static ./.next/static
 
-# Copy public directory (standalone doesn't include it)
-COPY --from=builder /app/public ./public
+# Copy public directory
+COPY --from=builder /app/apps/frontend/public ./public
 
 # Copy Prisma schema and client
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/packages/database/prisma ./prisma
+COPY --from=builder /app/apps/frontend/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/apps/frontend/node_modules/@prisma ./node_modules/@prisma
 
-# Install prisma CLI + all transitive deps in a temp dir, then merge into node_modules
+# Install prisma CLI for runtime migrations
 RUN cd /tmp && mkdir prisma-install && cd prisma-install && \
     npm init -y > /dev/null 2>&1 && \
     npm install prisma@$(node -e "console.log(require('/app/node_modules/@prisma/client/package.json').version)") && \

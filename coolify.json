@@ -1,6 +1,5 @@
 {
   "build": {
-    "dockerfilePath": "Carelim OS/Dockerfile",
-    "buildContext": "Carelim OS"
+    "dockerfilePath": "Dockerfile"
   }
 }

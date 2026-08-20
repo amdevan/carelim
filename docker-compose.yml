@@ -1,0 +1,97 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: carelim-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-carelim}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-carelim123}
+      POSTGRES_DB: ${POSTGRES_DB:-carelim}
+    volumes:
+      - carelim-db-data:/var/lib/postgresql/data
+    networks:
+      - carelim-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-carelim}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: carelim-frontend
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-${JWT_SECRET}}
+    networks:
+      - carelim-net
+    restart: unless-stopped
+
+  saas:
+    build:
+      context: .
+      dockerfile: apps/saas/Dockerfile
+    container_name: carelim-saas
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
+    networks:
+      - carelim-net
+    restart: unless-stopped
+
+  carelim-ms:
+    build:
+      context: .
+      dockerfile: apps/carelim-ms/Dockerfile
+    container_name: carelim-ms
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
+    networks:
+      - carelim-net
+    restart: unless-stopped
+
+  marketplace:
+    build:
+      context: .
+      dockerfile: apps/marketplace/Dockerfile
+    container_name: carelim-marketplace
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
+    networks:
+      - carelim-net
+    restart: unless-stopped
+
+networks:
+  carelim-net:
+
+volumes:
+  carelim-db-data:

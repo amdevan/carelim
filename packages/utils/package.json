@@ -1,0 +1,14 @@
+{
+  "name": "@carelim/utils",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
