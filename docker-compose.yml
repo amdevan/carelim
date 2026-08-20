@@ -25,6 +25,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      backend:
+        condition: service_started
     ports:
       - "3000:3000"
     environment:
@@ -32,6 +34,27 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-${JWT_SECRET}}
+      - NEXT_PUBLIC_API_URL=http://backend:4000
+    networks:
+      - carelim-net
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: carelim-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
+      - FRONTEND_URL=http://frontend:3000
     networks:
       - carelim-net
     restart: unless-stopped
@@ -44,12 +67,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      backend:
+        condition: service_started
     ports:
       - "3001:3001"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
+      - NEXT_PUBLIC_API_URL=http://backend:4000
     networks:
       - carelim-net
     restart: unless-stopped
@@ -62,12 +88,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      backend:
+        condition: service_started
     ports:
       - "3002:3002"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
+      - NEXT_PUBLIC_API_URL=http://backend:4000
     networks:
       - carelim-net
     restart: unless-stopped
@@ -80,12 +109,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      backend:
+        condition: service_started
     ports:
       - "3003:3003"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
+      - NEXT_PUBLIC_API_URL=http://backend:4000
     networks:
       - carelim-net
     restart: unless-stopped
