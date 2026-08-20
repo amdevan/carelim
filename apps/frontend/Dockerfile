@@ -29,16 +29,17 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy the standalone output
+# Copy the standalone output (server.js + node_modules)
 COPY --from=builder /app/apps/frontend/.next/standalone/apps/frontend/ ./
+COPY --from=builder /app/apps/frontend/.next/standalone/node_modules ./node_modules
 
 # Copy static assets
 COPY --from=builder /app/apps/frontend/.next/static ./.next/static
 
 # Copy Prisma schema and client
 COPY --from=builder /app/packages/database/prisma ./prisma
-COPY --from=builder /app/apps/frontend/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/apps/frontend/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Install prisma CLI for runtime migrations
 RUN cd /tmp && mkdir prisma-install && cd prisma-install && \

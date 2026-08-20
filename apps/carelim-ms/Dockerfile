@@ -29,8 +29,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy the standalone output
+# Copy the standalone output (server.js + node_modules)
 COPY --from=builder /app/apps/carelim-ms/.next/standalone/apps/carelim-ms/ ./
+COPY --from=builder /app/apps/carelim-ms/.next/standalone/node_modules ./node_modules
 
 # Copy static assets
 COPY --from=builder /app/apps/carelim-ms/.next/static ./.next/static

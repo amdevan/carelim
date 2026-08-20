@@ -29,8 +29,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy the standalone output
+# Copy the standalone output (server.js + node_modules)
 COPY --from=builder /app/apps/saas/.next/standalone/apps/saas/ ./
+COPY --from=builder /app/apps/saas/.next/standalone/node_modules ./node_modules
 
 # Copy static assets
 COPY --from=builder /app/apps/saas/.next/static ./.next/static
