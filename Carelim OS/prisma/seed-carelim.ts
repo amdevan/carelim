@@ -1,7 +1,9 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 const db = new PrismaClient();
 const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+const hash = async (pw: string) => bcrypt.hash(pw, 12);
 async function main() {
   console.log("Seeding Carelim...");
   await db.lead.deleteMany(); await db.saaSAuditLog.deleteMany(); await db.adminUser.deleteMany();
@@ -29,10 +31,10 @@ async function main() {
     await db.saaSInvoice.create({ data: { invoiceNo: `CARELIM-${String(i+1).padStart(3,"0")}-01`, tenantId: tenant.id, amount: plan.priceMonthly, tax: Math.round(plan.priceMonthly*0.13), total: plan.priceMonthly + Math.round(plan.priceMonthly*0.13), status: pick(["paid","paid","paid","unpaid","failed"]), paymentMethod: pick(["Card","Bank Transfer","eSewa","Khalti"]), date: createdAt, paidAt: Math.random() > 0.2 ? createdAt : null, description: `${plan.name} Plan - Monthly Subscription` } });
     await db.usageTracking.create({ data: { tenantId: tenant.id, date: today, userCount: rand(3,plan.maxUsers), doctorCount: rand(1,Math.min(plan.maxDoctors,20)), patientCount: rand(50,2000), appointmentCount: rand(10,500), storageUsedMB: rand(100,plan.maxStorage*1024), apiCalls: plan.hasApi ? rand(100,10000) : 0 } });
   }
-  await db.adminUser.create({ data: { name: "Super Admin", email: "admin@carelim.com", password: "carelim123", role: "super_admin" } });
-  await db.adminUser.create({ data: { name: "Support Manager", email: "support@carelim.com", password: "carelim123", role: "support_manager" } });
-  await db.adminUser.create({ data: { name: "Sales Manager", email: "sales@carelim.com", password: "carelim123", role: "sales_manager" } });
-  await db.adminUser.create({ data: { name: "Finance Manager", email: "finance@carelim.com", password: "carelim123", role: "finance_manager" } });
+  await db.adminUser.create({ data: { name: "Super Admin", email: "admin@carelim.com", password: await hash("carelim123"), role: "super_admin" } });
+  await db.adminUser.create({ data: { name: "Support Manager", email: "support@carelim.com", password: await hash("carelim123"), role: "support_manager" } });
+  await db.adminUser.create({ data: { name: "Sales Manager", email: "sales@carelim.com", password: await hash("carelim123"), role: "sales_manager" } });
+  await db.adminUser.create({ data: { name: "Finance Manager", email: "finance@carelim.com", password: await hash("carelim123"), role: "finance_manager" } });
   const ticketSubs = ["Printer not working","Cannot access patient records","Payment failed","Need additional doctor slot","Lab module not loading","WhatsApp integration issue"];
   for (let i = 0; i < 10; i++) { const ts = await db.tenant.findMany(); const t = pick(ts); await db.supportTicket.create({ data: { ticketNo: `TKT-${String(i+1).padStart(4,"0")}`, tenantId: t.id, subject: pick(ticketSubs), description: "Issue description", priority: pick(["low","medium","medium","high","urgent"]), status: pick(["open","open","assigned","resolved","closed"]), assignedTo: pick(["Support Team","Technical Team",""]), category: pick(["technical","billing","feature","general"]), createdAt: new Date(today.getTime() - rand(0,15)*86400000), resolvedAt: Math.random() > 0.5 ? new Date() : null } }); }
   for (let i = 0; i < 12; i++) { await db.lead.create({ data: { clinicName: `${pick(["Health","Care","Med","Life","Well"])} ${pick(["Center","Clinic","Hospital","Care","Plus"])}`, contactPerson: `Mr. ${pick(["Sharma","Thapa","Gurung"])}`, email: `lead${i+1}@clinic.com`, phone: `98${rand(10000000,99999999)}`, location: pick(cities), status: pick(["lead","lead","demo","trial","converted","lost"]), source: pick(["Website","Referral","Social Media","Cold Call","Event"]), assignedTo: "Sales Manager" } }); }

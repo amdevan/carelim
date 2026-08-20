@@ -77,10 +77,11 @@ export async function POST(req: NextRequest) {
         return tm.module.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       });
 
-    // Log the impersonation
+    // Log the impersonation using authenticated admin email
+    const adminEmail = req.headers.get("x-user-email") || "unknown";
     await db.saaSAuditLog.create({
       data: {
-        adminEmail: "admin@carelim.com",
+        adminEmail,
         tenantId,
         action: "IMPERSONATE",
         module: "Tenants",

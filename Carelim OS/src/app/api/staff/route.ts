@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
 
 export async function GET() {
   const [staff, departments, prescriptions] = await Promise.all([
@@ -15,6 +16,6 @@ export async function POST(req: NextRequest) {
   const staff = await db.staff.create({
     data: { ...body, joinDate: body.joinDate ? new Date(body.joinDate) : new Date() },
   });
-  await db.auditLog.create({ data: { user: "system@medcore.health", action: "CREATE", module: "Staff", detail: `Added employee ${staff.name}` } });
+  await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Staff", detail: `Added employee ${staff.name}` } });
   return NextResponse.json(staff, { status: 201 });
 }

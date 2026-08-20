@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -8,7 +9,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.status === "completed" || body.status === "approved") data.completedAt = new Date();
   const test = await db.labTest.update({ where: { id }, data });
   if (body.status === "approved") {
-    await db.auditLog.create({ data: { user: "system@medcore.health", action: "APPROVE", module: "LabTest", detail: `Approved lab test ${test.testCode}` } });
+    await db.auditLog.create({ data: { user: getAuthEmail(req), action: "APPROVE", module: "LabTest", detail: `Approved lab test ${test.testCode}` } });
   }
   return NextResponse.json(test);
 }

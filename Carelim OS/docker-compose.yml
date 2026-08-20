@@ -3,14 +3,19 @@ services:
     image: postgres:16-alpine
     container_name: carelim-db
     environment:
-      POSTGRES_USER: carelim
-      POSTGRES_PASSWORD: carelim123
-      POSTGRES_DB: carelim
+      POSTGRES_USER: ${POSTGRES_USER:-carelim}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-carelim123}
+      POSTGRES_DB: ${POSTGRES_DB:-carelim}
     volumes:
       - carelim-db-data:/var/lib/postgresql/data
     networks:
       - carelim-net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-carelim}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   carelim:
     build:
@@ -18,15 +23,17 @@ services:
       dockerfile: Dockerfile
     container_name: carelim-app
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
-      - DATABASE_URL=postgresql://carelim:carelim123@db:5432/carelim?schema=public
-      - NEXTAUTH_URL=http://localhost:3000
-      - NEXTAUTH_SECRET=medcore-secret-key-change-in-production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET in .env}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-${JWT_SECRET}}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
     volumes:
       - carelim-uploads:/app/public/uploads
     networks:

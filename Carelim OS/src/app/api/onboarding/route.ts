@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { hashPassword } from "@/lib/auth";
 import { nanoid } from "nanoid";
 
 // POST /api/onboarding — Complete onboarding: create organization, admin, modules, subscription
@@ -98,12 +99,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Create super admin user
+    // Create super admin user with hashed password
+    const hashedPassword = await hashPassword(basicInfo.adminPassword);
     const adminUser = await db.user.create({
       data: {
         name: basicInfo.adminFullName,
         email: basicInfo.adminEmailAddress,
-        password: basicInfo.adminPassword,
+        password: hashedPassword,
         phone: basicInfo.adminMobileNumber,
         roleId: superAdminRole.id,
         status: "active",

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
 
 export async function GET() {
   const settings = await db.setting.findMany();
@@ -13,6 +14,6 @@ export async function PUT(req: NextRequest) {
   for (const [key, value] of Object.entries(body)) {
     await db.setting.upsert({ where: { key }, update: { value: String(value) }, create: { key, value: String(value) } });
   }
-  await db.auditLog.create({ data: { user: "system@medcore.health", action: "UPDATE", module: "Settings", detail: "Updated clinic settings" } });
+  await db.auditLog.create({ data: { user: getAuthEmail(req), action: "UPDATE", module: "Settings", detail: "Updated clinic settings" } });
   return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -32,6 +33,6 @@ export async function POST(req: NextRequest) {
       notes: body.notes || null,
     },
   });
-  await db.auditLog.create({ data: { user: "system@medcore.health", action: "CREATE", module: "Doctor", detail: `Added schedule for ${body.dayName}` } });
+  await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Doctor", detail: `Added schedule for ${body.dayName}` } });
   return NextResponse.json(slot, { status: 201 });
 }

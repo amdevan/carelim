@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -54,6 +55,6 @@ export async function POST(req: NextRequest) {
     },
     include: { items: { include: { test: true } }, patient: true },
   });
-  await db.auditLog.create({ data: { user: "system@medcore.health", action: "CREATE", module: "LabOrder", detail: `Created lab order ${order.orderNo}` } });
+  await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "LabOrder", detail: `Created lab order ${order.orderNo}` } });
   return NextResponse.json(order, { status: 201 });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
 
 export async function GET() {
   const expenses = await db.expense.findMany({ orderBy: { date: "desc" } });
@@ -15,6 +16,6 @@ export async function POST(req: NextRequest) {
   const expense = await db.expense.create({
     data: { ...body, code: `EXP-${String(count + 1).padStart(5, "0")}`, date: new Date(body.date || new Date()) },
   });
-  await db.auditLog.create({ data: { user: "system@medcore.health", action: "CREATE", module: "Expense", detail: `Recorded expense ${expense.code}` } });
+  await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Expense", detail: `Recorded expense ${expense.code}` } });
   return NextResponse.json(expense, { status: 201 });
 }

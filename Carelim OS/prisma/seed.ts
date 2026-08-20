@@ -425,10 +425,12 @@ async function main() {
   await db.role.create({ data: { name: "Lab Technician", description: "Laboratory operations", isSystem: true, permissions: { create: ["Dashboard.view", "Laboratory.view", "Laboratory.create", "Laboratory.edit", "Radiology.view", "Laboratory.print"].map((k) => ({ permissionId: permMap[k] })) } } });
   await db.role.create({ data: { name: "Accountant", description: "Finance operations", isSystem: true, permissions: { create: ["Dashboard.view", "Billing.view", "Billing.create", "Billing.edit", "Reports.view", "Reports.export"].map((k) => ({ permissionId: permMap[k] })) } } });
 
-  // Users
-  await db.user.create({ data: { name: "System Admin", email: "admin@medcore.health", password: "medcore123", roleId: adminRole.id, status: "active" } });
-  await db.user.create({ data: { name: "Dr. Aarav Sharma", email: "doctor@medcore.health", password: "medcore123", roleId: doctorRole.id, status: "active" } });
-  await db.user.create({ data: { name: "Reception Desk", email: "reception@medcore.health", password: "medcore123", roleId: receptionRole.id, status: "active" } });
+  // Users (passwords hashed with bcrypt)
+  const bcrypt = await import("bcryptjs");
+  const hash = async (pw: string) => bcrypt.hash(pw, 12);
+  await db.user.create({ data: { name: "System Admin", email: "admin@medcore.health", password: await hash("medcore123"), roleId: adminRole.id, status: "active" } });
+  await db.user.create({ data: { name: "Dr. Aarav Sharma", email: "doctor@medcore.health", password: await hash("medcore123"), roleId: doctorRole.id, status: "active" } });
+  await db.user.create({ data: { name: "Reception Desk", email: "reception@medcore.health", password: await hash("medcore123"), roleId: receptionRole.id, status: "active" } });
 
   // Radiology tests
   const radioModalities = ["X-Ray", "CT Scan", "MRI", "ECG", "Ultrasound"];

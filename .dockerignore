@@ -1,14 +1,6 @@
-node_modules
-.next
 .git
-.gitignore
+.DS_Store
 *.log
 *.tar
-.env
-.env.local
-.DS_Store
-Carelim OS/node_modules
-Carelim OS/.next
-Carelim OS/.env.local
-Carelim OS/dev.log
-Carelim OS/server.log
+**/node_modules
+**/.next

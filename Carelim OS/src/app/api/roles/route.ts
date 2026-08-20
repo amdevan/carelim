@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
 
 export async function GET() {
   const roles = await db.role.findMany({
@@ -20,6 +21,6 @@ export async function POST(req: NextRequest) {
       permissions: { create: (permIds || []).map((id: string) => ({ permissionId: id })) },
     },
   });
-  await db.auditLog.create({ data: { user: "system@medcore.health", action: "CREATE", module: "Role", detail: `Created role ${name}` } });
+  await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Role", detail: `Created role ${name}` } });
   return NextResponse.json(role, { status: 201 });
 }

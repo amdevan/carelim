@@ -6,14 +6,13 @@ WORKDIR /app
 # Prisma needs DATABASE_URL to resolve the provider during generate
 ENV DATABASE_URL="postgresql://carelim:carelim123@localhost:5432/carelim?schema=public"
 
-# Copy package files from the subdirectory
-COPY Carelim\ OS/package.json Carelim\ OS/package-lock.json ./
+# Copy everything into a temp dir, then flatten (avoids space-in-path issues)
+COPY . /src/
+RUN cp -r /src/"Carelim OS"/* /app/ && cp -r /src/"Carelim OS"/.[!.]* /app/ 2>/dev/null; true
+RUN rm -rf /src
 
-# Install dependencies (using npm 10.x lock file)
-RUN npm ci
-
-# Copy the full app source
-COPY Carelim\ OS/ ./
+# Install dependencies
+RUN npm install
 
 # Generate Prisma client
 RUN npx prisma generate

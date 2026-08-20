@@ -1,9 +1,6 @@
-.next/dev
-.next/cache
-.git
-.gitignore
-Dockerfile
-docker-compose.yml
-.env.local
-*.log
 node_modules
+.next
+.git
+.DS_Store
+*.log
+*.tar

@@ -83,8 +83,9 @@ interface AppState {
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
   authed: boolean;
+  token: string | null;
   user: { name: string; email: string; role: string } | null;
-  login: (email: string) => void;
+  login: (email: string, token?: string) => void;
   loginAs: (email: string, name: string, role: string) => void;
   logout: () => void;
   commandOpen: boolean;
@@ -111,10 +112,12 @@ export const useAppStore = create<AppState>()(
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
       authed: false,
+      token: null,
       user: null,
-      login: (email) =>
+      login: (email, token) =>
         set({
           authed: true,
+          token: token || null,
           impersonation: null,
           enabledModules: [],
           user: {
@@ -129,7 +132,11 @@ export const useAppStore = create<AppState>()(
           user: { name, email, role },
           enabledModules: [],
         }),
-      logout: () => set({ authed: false, user: null, impersonation: null, enabledModules: [], view: "dashboard" }),
+      logout: () => {
+        // Clear the auth cookie
+        document.cookie = "carelim_token=; path=/; max-age=0";
+        set({ authed: false, token: null, user: null, impersonation: null, enabledModules: [], view: "dashboard" });
+      },
       commandOpen: false,
       setCommandOpen: (v) => set({ commandOpen: v }),
       recentViews: [],
@@ -145,6 +152,6 @@ export const useAppStore = create<AppState>()(
       enabledModules: [],
       setEnabledModules: (modules) => set({ enabledModules: modules }),
     }),
-    { name: "medcore-store" }
+    { name: "carelim-store", partialize: (state) => ({ view: state.view, sidebarCollapsed: state.sidebarCollapsed, recentViews: state.recentViews, favorites: state.favorites, enabledModules: state.enabledModules, impersonation: state.impersonation }) }
   )
 );

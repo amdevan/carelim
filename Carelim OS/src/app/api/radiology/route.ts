@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -20,6 +21,6 @@ export async function POST(req: NextRequest) {
   const test = await db.radiologyTest.create({
     data: { ...body, testCode: `RAD-${String(count + 1).padStart(5, "0")}`, orderedAt: new Date() },
   });
-  await db.auditLog.create({ data: { user: "system@medcore.health", action: "CREATE", module: "Radiology", detail: `Ordered ${body.modality} for patient` } });
+  await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Radiology", detail: `Ordered ${body.modality} for patient` } });
   return NextResponse.json(test, { status: 201 });
 }

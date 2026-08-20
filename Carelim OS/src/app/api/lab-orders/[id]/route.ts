@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (order) data.paymentStatus = body.paidAmount >= order.netAmount ? "paid" : "partial";
   }
   const order = await db.labOrder.update({ where: { id }, data });
-  await db.auditLog.create({ data: { user: "system@medcore.health", action: "UPDATE", module: "LabOrder", detail: `Updated lab order ${order.orderNo}` } });
+  await db.auditLog.create({ data: { user: getAuthEmail(req), action: "UPDATE", module: "LabOrder", detail: `Updated lab order ${order.orderNo}` } });
   return NextResponse.json(order);
 }
 

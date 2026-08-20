@@ -27,6 +27,7 @@ model Doctor {
   id             String   @id @default(cuid())
   name           String
   email          String   @unique
+  password       String   @default("carelim123")
   phone          String
   gender         String   @default("male")
   qualification  String
