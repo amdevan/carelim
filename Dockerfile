@@ -46,7 +46,8 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 RUN cd /tmp && mkdir prisma-install && cd prisma-install && \
     npm init -y > /dev/null 2>&1 && \
     npm install prisma@$(node -e "console.log(require('/app/node_modules/@prisma/client/package.json').version)") && \
-    cp -r node_modules/* /app/node_modules/ && \
+    cp -rn node_modules/* /app/node_modules/ && \
+    cp -r node_modules/.bin /app/node_modules/ && \
     rm -rf /tmp/prisma-install
 
 # Copy entrypoint
