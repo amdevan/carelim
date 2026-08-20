@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@carelim/ui";
-import { Button } from "@carelim/ui";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@carelim/ui";
 import { Avatar, AvatarFallback } from "@carelim/ui";
 import {
@@ -16,19 +16,17 @@ import {
 } from "@carelim/ui";
 import {
   LayoutDashboard,
-  Building2,
-  CreditCard,
-  Boxes,
-  Users,
-  BarChart3,
+  Package,
+  Puzzle,
+  Star,
+  ShoppingCart,
+  DollarSign,
   Settings,
-  ShieldCheck,
-  Headphones,
   Menu,
   X,
   LogOut,
   ChevronDown,
-  Zap,
+  Store,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -39,32 +37,24 @@ const NAV_ITEMS = [
     ],
   },
   {
-    label: "Tenant Operations",
+    label: "Marketplace",
     items: [
-      { label: "Tenants", href: "/admin/tenants", icon: Building2 },
-      { label: "Plans & Billing", href: "/admin/plans", icon: CreditCard },
-      { label: "Users", href: "/admin/users", icon: Users },
+      { label: "Modules", href: "/admin/modules", icon: Package },
+      { label: "Add-ons", href: "/admin/add-ons", icon: Puzzle },
+      { label: "Reviews", href: "/admin/reviews", icon: Star },
     ],
   },
   {
-    label: "Platform",
+    label: "Sales",
     items: [
-      { label: "Modules", href: "/admin/modules", icon: Boxes },
-      { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-    ],
-  },
-  {
-    label: "Support",
-    items: [
-      { label: "Tickets", href: "/admin/tickets", icon: Headphones },
+      { label: "Purchases", href: "/admin/purchases", icon: ShoppingCart },
+      { label: "Revenue", href: "/admin/revenue", icon: DollarSign },
     ],
   },
   {
     label: "System",
     items: [
-      { label: "Security", href: "/admin/security", icon: ShieldCheck },
       { label: "Settings", href: "/admin/settings", icon: Settings },
-      { label: "Integrations", href: "/admin/integrations", icon: Zap },
     ],
   },
 ];
@@ -86,10 +76,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Brand */}
         <div className="flex items-center gap-2.5 h-16 px-4 border-b border-sidebar-border bg-gradient-to-r from-teal-50/50 to-transparent dark:from-teal-950/20">
           {!collapsed && (
-            <span className="text-lg font-bold text-gradient-teal">Carelim</span>
+            <span className="text-lg font-bold text-gradient-teal">Marketplace</span>
           )}
           {collapsed && (
-            <span className="text-lg font-bold text-gradient-teal mx-auto">C</span>
+            <span className="text-lg font-bold text-gradient-teal mx-auto">M</span>
           )}
         </div>
 
@@ -140,11 +130,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             )}
           >
             {collapsed ? (
-              <Zap className="w-4 h-4 text-teal-600" />
+              <Store className="w-4 h-4 text-teal-600" />
             ) : (
               <>
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 dark:text-teal-300">
-                  <Zap className="w-3 h-3" /> Platform Health
+                  <Store className="w-3 h-3" /> Marketplace Status
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-0.5">All systems operational</p>
                 <div className="mt-1.5 flex items-center gap-1.5">
@@ -166,7 +156,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           />
           <aside className="md:hidden fixed left-0 top-0 bottom-0 w-72 bg-sidebar border-r border-border z-50 flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-              <span className="text-lg font-bold text-gradient-teal">Carelim</span>
+              <span className="text-lg font-bold text-gradient-teal">Marketplace</span>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(false)}>
                 <X className="w-4 h-4" />
               </Button>
@@ -221,7 +211,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           <div className="flex items-center gap-2 shrink-0">
             <div className="hidden sm:flex flex-col leading-tight">
-              <p className="text-base font-semibold text-foreground">SaaS Admin</p>
+              <p className="text-base font-semibold text-foreground">Marketplace Admin</p>
             </div>
           </div>
 
@@ -234,7 +224,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-lg p-1 hover:bg-accent transition-colors">
                   <Avatar className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600">
-                    <AvatarFallback className="bg-transparent text-white text-xs font-semibold">SA</AvatarFallback>
+                    <AvatarFallback className="bg-transparent text-white text-xs font-semibold">MP</AvatarFallback>
                   </Avatar>
                 </button>
               </DropdownMenuTrigger>

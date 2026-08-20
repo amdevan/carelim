@@ -16,14 +16,20 @@ import {
 } from "@carelim/ui";
 import {
   LayoutDashboard,
-  Building2,
-  CreditCard,
-  Boxes,
+  Megaphone,
   Users,
+  Target,
+  Share2,
+  Contact,
+  Handshake,
+  MessageSquare,
+  ListTodo,
+  Mail,
+  DollarSign,
   BarChart3,
+  HeartPulse,
+  Activity,
   Settings,
-  ShieldCheck,
-  Headphones,
   Menu,
   X,
   LogOut,
@@ -39,32 +45,42 @@ const NAV_ITEMS = [
     ],
   },
   {
-    label: "Tenant Operations",
+    label: "Marketing",
     items: [
-      { label: "Tenants", href: "/admin/tenants", icon: Building2 },
-      { label: "Plans & Billing", href: "/admin/plans", icon: CreditCard },
-      { label: "Users", href: "/admin/users", icon: Users },
+      { label: "Campaigns", href: "/admin/campaigns", icon: Megaphone },
+      { label: "Leads", href: "/admin/leads", icon: Target },
+      { label: "Patient Sources", href: "/admin/patient-sources", icon: Share2 },
+      { label: "Referrals", href: "/admin/referrals", icon: Users },
     ],
   },
   {
-    label: "Platform",
+    label: "CRM",
     items: [
-      { label: "Modules", href: "/admin/modules", icon: Boxes },
-      { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+      { label: "Contacts", href: "/admin/contacts", icon: Contact },
+      { label: "Deals", href: "/admin/deals", icon: Handshake },
+      { label: "Communications", href: "/admin/communications", icon: MessageSquare },
+      { label: "Tasks", href: "/admin/tasks", icon: ListTodo },
+      { label: "Templates", href: "/admin/templates", icon: Mail },
     ],
   },
   {
-    label: "Support",
+    label: "Finance",
     items: [
-      { label: "Tickets", href: "/admin/tickets", icon: Headphones },
+      { label: "Commission", href: "/admin/commission", icon: DollarSign },
+      { label: "Reports", href: "/admin/reports", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Care",
+    items: [
+      { label: "Coordinators", href: "/admin/coordinators", icon: HeartPulse },
+      { label: "Activity Logs", href: "/admin/activity-logs", icon: Activity },
     ],
   },
   {
     label: "System",
     items: [
-      { label: "Security", href: "/admin/security", icon: ShieldCheck },
       { label: "Settings", href: "/admin/settings", icon: Settings },
-      { label: "Integrations", href: "/admin/integrations", icon: Zap },
     ],
   },
 ];
@@ -86,10 +102,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Brand */}
         <div className="flex items-center gap-2.5 h-16 px-4 border-b border-sidebar-border bg-gradient-to-r from-teal-50/50 to-transparent dark:from-teal-950/20">
           {!collapsed && (
-            <span className="text-lg font-bold text-gradient-teal">Carelim</span>
+            <span className="text-lg font-bold text-gradient-teal">Carelim MS</span>
           )}
           {collapsed && (
-            <span className="text-lg font-bold text-gradient-teal mx-auto">C</span>
+            <span className="text-lg font-bold text-gradient-teal mx-auto">CM</span>
           )}
         </div>
 
@@ -144,7 +160,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             ) : (
               <>
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 dark:text-teal-300">
-                  <Zap className="w-3 h-3" /> Platform Health
+                  <Zap className="w-3 h-3" /> CMS Status
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-0.5">All systems operational</p>
                 <div className="mt-1.5 flex items-center gap-1.5">
@@ -166,7 +182,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           />
           <aside className="md:hidden fixed left-0 top-0 bottom-0 w-72 bg-sidebar border-r border-border z-50 flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-              <span className="text-lg font-bold text-gradient-teal">Carelim</span>
+              <span className="text-lg font-bold text-gradient-teal">Carelim MS</span>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(false)}>
                 <X className="w-4 h-4" />
               </Button>
@@ -221,7 +237,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           <div className="flex items-center gap-2 shrink-0">
             <div className="hidden sm:flex flex-col leading-tight">
-              <p className="text-base font-semibold text-foreground">SaaS Admin</p>
+              <p className="text-base font-semibold text-foreground">Carelim Marketing & CRM</p>
             </div>
           </div>
 
@@ -234,7 +250,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-lg p-1 hover:bg-accent transition-colors">
                   <Avatar className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600">
-                    <AvatarFallback className="bg-transparent text-white text-xs font-semibold">SA</AvatarFallback>
+                    <AvatarFallback className="bg-transparent text-white text-xs font-semibold">CM</AvatarFallback>
                   </Avatar>
                 </button>
               </DropdownMenuTrigger>
