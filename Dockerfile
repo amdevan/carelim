@@ -37,9 +37,16 @@ COPY --from=builder /app/.next/static ./.next/static
 # Copy public directory (standalone doesn't include it)
 COPY --from=builder /app/public ./public
 
-# Copy Prisma schema (needed at runtime for migrations)
+# Copy Prisma schema and CLI (needed at runtime for db push)
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+
+# Copy entrypoint (from build context)
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["./docker-entrypoint.sh"]
