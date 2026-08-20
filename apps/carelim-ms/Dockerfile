@@ -19,6 +19,7 @@ RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 
 # Build the carelim-ms app
 WORKDIR /app/apps/carelim-ms
+RUN npx prisma generate --schema=../../packages/database/prisma/schema.prisma
 RUN npm run build
 
 # ---- Production Stage ----

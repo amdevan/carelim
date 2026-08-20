@@ -19,6 +19,7 @@ RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 
 # Build the marketplace app
 WORKDIR /app/apps/marketplace
+RUN npx prisma generate --schema=../../packages/database/prisma/schema.prisma
 RUN npm run build
 
 # ---- Production Stage ----
