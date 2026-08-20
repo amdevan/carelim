@@ -28,27 +28,17 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy standalone output (flatten one level if nested)
-COPY --from=builder /app/.next/standalone/ /app/standalone-tmp/
+# Copy the standalone output (server.js + node_modules + .next with server code)
+COPY --from=builder /app/.next/standalone/ ./
 
-# Find and copy the server.js - handle both flat and nested standalone output
-RUN if [ -f /app/standalone-tmp/server.js ]; then \
-      cp -r /app/standalone-tmp/* /app/ && rm -rf /app/standalone-tmp; \
-    else \
-      cp -r /app/standalone-tmp/*/  /app/ && rm -rf /app/standalone-tmp; \
-    fi
-
-# Copy static assets
+# Overwrite .next/static with the full static assets (standalone doesn't include them)
 COPY --from=builder /app/.next/static ./.next/static
 
-# Copy public directory
+# Copy public directory (standalone doesn't include it)
 COPY --from=builder /app/public ./public
 
 # Copy Prisma schema (needed at runtime for migrations)
 COPY --from=builder /app/prisma ./prisma
-
-# Create directory for database-related files
-RUN mkdir -p /app/db
 
 EXPOSE 3000
 
