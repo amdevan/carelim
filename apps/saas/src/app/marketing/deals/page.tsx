@@ -1,240 +1,127 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  Handshake,
-  Search,
-  Filter,
-  Plus,
-  MoreVertical,
-  DollarSign,
-  Calendar,
-  Loader2,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@carelim/ui";
+import { Button } from "@carelim/ui";
+import { Badge } from "@carelim/ui";
+import { Skeleton } from "@carelim/ui";
+import { Handshake, Plus } from "lucide-react";
 
 interface Deal {
   id: string;
+  dealNo: string;
   title: string;
-  contactName: string;
-  value: number;
   stage: string;
-  status: string;
+  value: number;
+  currency: string;
   probability: number;
-  expectedCloseDate: string;
+  priority: string;
+  contact: { name: string } | null;
   createdAt: string;
 }
 
-const STAGE_COLORS: Record<string, string> = {
-  prospecting: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  negotiation: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
-  proposal: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",
-  closed_won: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
-  closed_lost: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+const STAGES = [
+  { key: "qualification", label: "Qualification", color: "bg-teal-500" },
+  { key: "needs_analysis", label: "Needs Analysis", color: "bg-blue-500" },
+  { key: "proposal", label: "Proposal", color: "bg-violet-500" },
+  { key: "negotiation", label: "Negotiation", color: "bg-amber-500" },
+  { key: "closed_won", label: "Closed Won", color: "bg-emerald-500" },
+  { key: "closed_lost", label: "Closed Lost", color: "bg-red-500" },
+];
+
+const stageColor: Record<string, string> = {
+  qualification: "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300",
+  needs_analysis: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+  proposal: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  negotiation: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+  closed_won: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  closed_lost: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
 };
 
 export default function DealsPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState("all");
 
   useEffect(() => {
-    async function fetchDeals() {
-      try {
-        const res = await fetch("/api/crm-deals");
-        if (res.ok) {
-          const data = await res.json();
-          setDeals(Array.isArray(data) ? data : data.deals || []);
-        }
-      } catch {
-        setDeals([]);
-      } finally {
+    fetch("/api/crm-deals")
+      .then((res) => res.json())
+      .then((d) => {
+        setDeals(d);
         setLoading(false);
-      }
-    }
-    fetchDeals();
+      })
+      .catch(() => setLoading(false));
   }, []);
 
-  const filtered = deals.filter((d) => {
-    if (stageFilter !== "all" && d.stage !== stageFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        d.title.toLowerCase().includes(q) ||
-        (d.contactName && d.contactName.toLowerCase().includes(q))
-      );
-    }
-    return true;
-  });
-
-  const totalValue = filtered.reduce((sum, d) => sum + (d.value || 0), 0);
-
-  function formatCurrency(amount: number): string {
-    return `NPR ${amount.toLocaleString("en-NP")}`;
-  }
-
   return (
-    <div className="space-y-4 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">Deals</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {filtered.length} deals &middot; {formatCurrency(totalValue)} pipeline
+          <h1 className="text-2xl font-bold text-foreground">Deals Pipeline</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Track deals through your sales pipeline
           </p>
         </div>
-        <button className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-violet-600 px-3.5 py-2 text-sm font-medium text-white shadow-md shadow-purple-500/20 hover:shadow-lg hover:shadow-purple-500/30 transition-all">
-          <Plus className="w-4 h-4" /> New Deal
-        </button>
+        <Button className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700">
+          <Plus className="w-4 h-4 mr-2" />
+          New Deal
+        </Button>
       </div>
 
-      {/* Search + Filters */}
-      <div className="rounded-xl border border-purple-100 dark:border-purple-900/40 bg-white dark:bg-gray-900 p-3">
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by deal title or contact..."
-              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 pl-9 pr-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400 transition-all"
-            />
-          </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            <Filter className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-            {["all", "prospecting", "negotiation", "proposal", "closed_won", "closed_lost"].map((f) => (
-              <button
-                key={f}
-                onClick={() => setStageFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                  stageFilter === f
-                    ? "bg-purple-600 text-white shadow-sm"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-                }`}
-              >
-                {f === "all"
-                  ? "All"
-                  : f
-                      .split("_")
-                      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                      .join(" ")}
-              </button>
-            ))}
-          </div>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full" />
+          ))}
         </div>
-      </div>
-
-      {/* Table */}
-      <div className="rounded-xl border border-purple-100 dark:border-purple-900/40 bg-white dark:bg-gray-900 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center p-12">
-            <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <Handshake className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">No deals found</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-purple-100 dark:border-purple-900/40 bg-purple-50/50 dark:bg-purple-950/20">
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                    Deal
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 hidden md:table-cell">
-                    Contact
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                    Stage
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 hidden lg:table-cell">
-                    Value
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 hidden lg:table-cell">
-                    Close Date
-                  </th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((d) => (
-                  <tr
-                    key={d.id}
-                    className="border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-purple-50/30 dark:hover:bg-purple-950/10 transition-colors cursor-pointer"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-950/50 dark:to-orange-950/50 flex items-center justify-center">
-                          <DollarSign className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                            {d.title}
-                          </p>
-                          {d.probability != null && (
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <div className="w-12 h-1 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-purple-500 to-violet-500"
-                                  style={{ width: `${d.probability}%` }}
-                                />
-                              </div>
-                              <span className="text-[10px] text-gray-400 tabular-nums">{d.probability}%</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {d.contactName || "—"}
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {deals.length === 0 ? (
+            <Card className="col-span-full">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                No deals found. Create your first deal to get started.
+              </CardContent>
+            </Card>
+          ) : (
+            deals.map((deal) => (
+              <Card key={deal.id} className="card-hover">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h3 className="font-semibold text-sm">{deal.title}</h3>
+                      <p className="text-xs text-muted-foreground font-mono">{deal.dealNo}</p>
+                    </div>
+                    <Badge className={stageColor[deal.stage] || ""}>
+                      {deal.stage.replace(/_/g, " ")}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Value</span>
+                      <span className="text-sm font-bold tabular-nums">
+                        {deal.currency} {deal.value.toLocaleString()}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                          STAGE_COLORS[d.stage] || "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {d.stage
-                          ? d.stage
-                              .split("_")
-                              .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                              .join(" ")
-                          : "Unknown"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
-                        {formatCurrency(d.value || 0)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      {d.expectedCloseDate ? (
-                        <span className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                          <Calendar className="w-3.5 h-3.5 shrink-0" />
-                          {new Date(d.expectedCloseDate).toLocaleDateString()}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                        <MoreVertical className="w-4 h-4 text-gray-400" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Contact</span>
+                      <span className="text-sm">{deal.contact?.name || "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Probability</span>
+                      <span className="text-sm tabular-nums">{deal.probability}%</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
+                      <div
+                        className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 rounded-full"
+                        style={{ width: `${deal.probability}%` }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

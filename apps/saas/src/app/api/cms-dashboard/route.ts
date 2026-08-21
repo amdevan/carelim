@@ -5,34 +5,21 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [totalLeads, activeCampaigns, totalContacts, pendingDeals, referralResult, convertedLeads, totalLeadCount] =
+    const [totalLeads, activeCampaigns, totalPatients, totalRevenue] =
       await Promise.all([
-        db.lead.count(),
-        db.campaign.count({ where: { status: "active" } }),
-        db.cRMContact.count(),
-        db.cRMDeal.count({
-          where: { stage: { notIn: ["closed_won", "closed_lost"] } },
-        }),
-        db.referral.aggregate({
-          _sum: { commissionAmount: true },
-          where: { status: { in: ["earned", "settled"] } },
-        }),
-        db.mSLead.count({ where: { status: { not: "lost" } } }),
         db.mSLead.count(),
+        db.campaign.count({ where: { status: "active" } }),
+        db.patient.count(),
+        db.invoice.aggregate({ _sum: { total: true } }),
       ]);
-
-    const conversionRate =
-      totalLeadCount > 0 ? Number(((convertedLeads / totalLeadCount) * 100).toFixed(1)) : 0;
 
     return NextResponse.json({
       totalLeads,
       activeCampaigns,
-      conversionRate,
-      referralRevenue: referralResult._sum.commissionAmount ?? 0,
-      totalContacts,
-      pendingDeals,
+      totalPatients,
+      totalRevenue: totalRevenue._sum.total || 0,
     });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch CMS dashboard stats" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch dashboard data" }, { status: 500 });
   }
 }
