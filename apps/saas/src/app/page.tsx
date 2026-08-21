@@ -12,9 +12,9 @@ export default function AdminPortal() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* SaaS Admin */}
+          {/* Admin */}
           <Link
-            href="/saas"
+            href="/admin"
             className="group block bg-white rounded-2xl border border-slate-200 p-8 hover:shadow-lg hover:border-teal-300 transition-all duration-200"
           >
             <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center mb-5">
@@ -22,7 +22,7 @@ export default function AdminPortal() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-slate-900 group-hover:text-teal-600 transition-colors">SaaS Administration</h2>
+            <h2 className="text-xl font-bold text-slate-900 group-hover:text-teal-600 transition-colors">Admin Panel</h2>
             <p className="mt-2 text-sm text-slate-500">Tenant management, subscriptions, plans, analytics, and platform settings.</p>
             <div className="mt-5 flex flex-wrap gap-2">
               {["Tenants", "Plans", "Analytics", "Support"].map((tag) => (

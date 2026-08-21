@@ -2,18 +2,18 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // Subdomain → section mapping
-// admin.carelim.health → /saas (SaaS admin panel)
+// admin.carelim.health → /admin (Admin panel)
 // ms.carelim.health → /marketing (Carelim MS marketing & CRM)
 const DOMAIN_ROUTES: Record<string, string> = {
-  "admin.carelim.health": "/saas",
-  "saas.carelim.health": "/saas",
+  "admin.carelim.health": "/admin",
+  "saas.carelim.health": "/admin",
   "ms.carelim.health": "/marketing",
   "marketing.carelim.health": "/marketing",
 };
 
 const DEV_DOMAIN_ROUTES: Record<string, string> = {
-  "admin.localhost:3001": "/saas",
-  "saas.localhost:3001": "/saas",
+  "admin.localhost:3001": "/admin",
+  "saas.localhost:3001": "/admin",
   "ms.localhost:3001": "/marketing",
   "marketing.localhost:3001": "/marketing",
 };
