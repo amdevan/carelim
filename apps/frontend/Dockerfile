@@ -38,6 +38,9 @@ COPY --from=builder /app/apps/frontend/.next/standalone/node_modules ./node_modu
 # Copy static assets
 COPY --from=builder /app/apps/frontend/.next/static ./.next/static
 
+# Copy public assets (images, favicon, etc.)
+COPY --from=builder /app/apps/frontend/public ./public
+
 # Copy Prisma schema and client
 COPY --from=builder /app/packages/database/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
