@@ -20,6 +20,7 @@ RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 # Build the frontend app
 WORKDIR /app/apps/frontend
 RUN npx prisma generate --schema=../../packages/database/prisma/schema.prisma
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # ---- Production Stage ----
