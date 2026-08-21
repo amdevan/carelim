@@ -29,7 +29,7 @@ export default function AdminDashboard() {
     fetch("/api/cms-dashboard")
       .then((res) => res.json())
       .then((d) => {
-        setData(d);
+        setData(d.error ? null : d);
         setLoading(false);
       })
       .catch(() => setLoading(false));
