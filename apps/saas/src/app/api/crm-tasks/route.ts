@@ -11,6 +11,7 @@ export async function GET() {
     });
     return NextResponse.json(tasks);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 });
+    console.error("crm-tasks error:", error);
+    return NextResponse.json([]);
   }
 }

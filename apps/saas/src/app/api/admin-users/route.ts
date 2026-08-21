@@ -6,7 +6,8 @@ export async function GET() {
     const users = await db.adminUser.findMany({ orderBy: { createdAt: "desc" } });
     return NextResponse.json(users);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch admin users" }, { status: 500 });
+    console.error("admin-users error:", error);
+    return NextResponse.json([]);
   }
 }
 

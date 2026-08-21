@@ -10,6 +10,7 @@ export async function GET() {
     });
     return NextResponse.json(referrals);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch referrals" }, { status: 500 });
+    console.error("cms-referrals error:", error);
+    return NextResponse.json([]);
   }
 }

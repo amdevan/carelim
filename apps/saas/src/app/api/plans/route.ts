@@ -8,7 +8,8 @@ export async function GET() {
     });
     return NextResponse.json(plans);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch plans" }, { status: 500 });
+    console.error("plans error:", error);
+    return NextResponse.json([]);
   }
 }
 

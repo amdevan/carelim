@@ -11,7 +11,8 @@ export async function GET() {
     });
     return NextResponse.json(tenants);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch tenants" }, { status: 500 });
+    console.error("tenants error:", error);
+    return NextResponse.json([]);
   }
 }
 

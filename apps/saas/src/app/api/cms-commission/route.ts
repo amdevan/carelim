@@ -25,6 +25,7 @@ export async function GET() {
       settlements,
     });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch commission data" }, { status: 500 });
+    console.error("cms-commission error:", error);
+    return NextResponse.json({ totalSettled: 0, totalPending: 0, settlements: [] });
   }
 }

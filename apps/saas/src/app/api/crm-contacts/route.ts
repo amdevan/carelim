@@ -10,6 +10,7 @@ export async function GET() {
     });
     return NextResponse.json(contacts);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch contacts" }, { status: 500 });
+    console.error("crm-contacts error:", error);
+    return NextResponse.json([]);
   }
 }

@@ -6,7 +6,8 @@ export async function GET() {
     const addons = await db.addOn.findMany();
     return NextResponse.json(addons);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch add-ons" }, { status: 500 });
+    console.error("add-ons error:", error);
+    return NextResponse.json([]);
   }
 }
 

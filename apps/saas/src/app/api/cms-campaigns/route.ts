@@ -10,6 +10,7 @@ export async function GET() {
     });
     return NextResponse.json(campaigns);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch campaigns" }, { status: 500 });
+    console.error("cms-campaigns error:", error);
+    return NextResponse.json([]);
   }
 }

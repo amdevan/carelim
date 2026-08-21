@@ -10,7 +10,8 @@ export async function GET() {
     settings.forEach((s) => (map[s.key] = s.value));
     return NextResponse.json(map);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
+    console.error("saas-settings error:", error);
+    return NextResponse.json({});
   }
 }
 

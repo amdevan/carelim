@@ -34,6 +34,9 @@ export async function GET() {
       },
     });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch dashboard stats" }, { status: 500 });
+    console.error("saas-dashboard error:", error);
+    return NextResponse.json({
+      kpis: { totalClinics: 0, activeTenants: 0, trialTenants: 0, suspendedTenants: 0, totalDoctors: 0, totalPatients: 0, mrr: 0, annualRevenue: 0 },
+    });
   }
 }

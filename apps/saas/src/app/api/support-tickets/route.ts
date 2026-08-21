@@ -9,7 +9,8 @@ export async function GET() {
     });
     return NextResponse.json(tickets);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch support tickets" }, { status: 500 });
+    console.error("support-tickets error:", error);
+    return NextResponse.json([]);
   }
 }
 

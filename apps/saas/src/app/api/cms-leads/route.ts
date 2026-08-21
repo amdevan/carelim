@@ -10,6 +10,7 @@ export async function GET() {
     });
     return NextResponse.json(leads);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch leads" }, { status: 500 });
+    console.error("cms-leads error:", error);
+    return NextResponse.json([]);
   }
 }

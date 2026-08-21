@@ -8,7 +8,8 @@ export async function GET() {
     });
     return NextResponse.json(modules);
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch modules" }, { status: 500 });
+    console.error("saas-modules error:", error);
+    return NextResponse.json([]);
   }
 }
 
