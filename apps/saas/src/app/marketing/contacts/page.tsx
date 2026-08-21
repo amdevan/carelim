@@ -31,7 +31,7 @@ export default function ContactsPage() {
     fetch("/api/crm-contacts")
       .then((res) => res.json())
       .then((d) => {
-        setContacts(d);
+        setContacts(Array.isArray(d) ? d : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));

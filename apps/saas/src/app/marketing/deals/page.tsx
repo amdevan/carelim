@@ -46,7 +46,7 @@ export default function DealsPage() {
     fetch("/api/crm-deals")
       .then((res) => res.json())
       .then((d) => {
-        setDeals(d);
+        setDeals(Array.isArray(d) ? d : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));

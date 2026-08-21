@@ -29,7 +29,7 @@ export default function ReferralsPage() {
     fetch("/api/cms-referrals")
       .then((res) => res.json())
       .then((d) => {
-        setReferrals(d);
+        setReferrals(Array.isArray(d) ? d : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));

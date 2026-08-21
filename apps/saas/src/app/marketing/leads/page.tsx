@@ -30,7 +30,7 @@ export default function LeadsPage() {
     fetch("/api/cms-leads")
       .then((res) => res.json())
       .then((d) => {
-        setLeads(d);
+        setLeads(Array.isArray(d) ? d : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));

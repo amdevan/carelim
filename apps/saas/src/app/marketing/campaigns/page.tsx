@@ -31,7 +31,7 @@ export default function CampaignsPage() {
     fetch("/api/cms-campaigns")
       .then((res) => res.json())
       .then((d) => {
-        setCampaigns(d);
+        setCampaigns(Array.isArray(d) ? d : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
