@@ -7,8 +7,6 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: true,
-  // Prevent Turbopack from bundling Prisma — must be resolved from node_modules at runtime
-  serverExternalPackages: ["@prisma/client", "prisma"],
   // Allow the sandbox preview domain and localhost variants to hot-reload /
   // fetch _next/* assets without triggering cross-origin warnings in dev.
   // Next.js matches on hostname (with optional leading dot for subdomain wildcard).
