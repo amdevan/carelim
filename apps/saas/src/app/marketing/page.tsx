@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@carelim/ui";
-import { Skeleton } from "@carelim/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Calendar,
   Users,

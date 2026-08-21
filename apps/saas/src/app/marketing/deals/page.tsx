@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@carelim/ui";
 import { Button } from "@carelim/ui";
 import { Badge } from "@carelim/ui";
-import { Skeleton } from "@carelim/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Handshake, Plus } from "lucide-react";
 
 interface Deal {

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@carelim/ui";
 import { Button } from "@carelim/ui";
 import { Badge } from "@carelim/ui";
 import { Input } from "@carelim/ui";
-import { Skeleton } from "@carelim/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Megaphone, Plus, Search, DollarSign, Users, TrendingUp } from "lucide-react";
 
 interface Campaign {
