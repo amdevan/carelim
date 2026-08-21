@@ -22,11 +22,16 @@ export async function GET() {
       ]);
 
     return NextResponse.json({
-      totalTenants,
-      activeSubscriptions,
-      totalDoctors,
-      totalPatients,
-      monthlyRevenue: revenueResult._sum.total ?? 0,
+      kpis: {
+        totalClinics: totalTenants,
+        activeTenants: activeSubscriptions,
+        trialTenants: await db.tenant.count({ where: { status: "trial" } }),
+        suspendedTenants: await db.tenant.count({ where: { status: "suspended" } }),
+        totalDoctors,
+        totalPatients,
+        mrr: revenueResult._sum.total ?? 0,
+        annualRevenue: (revenueResult._sum.total ?? 0) * 12,
+      },
     });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch dashboard stats" }, { status: 500 });

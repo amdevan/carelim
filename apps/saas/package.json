@@ -10,7 +10,6 @@
   "dependencies": {
     "@carelim/database": "*",
     "@carelim/ui": "*",
-    "@carelim/utils": "*",
     "@tanstack/react-query": "^5.82.0",
     "@tanstack/react-table": "^8.21.3",
     "framer-motion": "^12.23.2",

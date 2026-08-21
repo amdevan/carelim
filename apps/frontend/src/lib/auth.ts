@@ -4,10 +4,12 @@ import bcrypt from "bcryptjs";
 const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
 const JWT_EXPIRES_IN = "7d";
 
-if (!JWT_SECRET) {
-  throw new Error(
-    "JWT_SECRET or NEXTAUTH_SECRET must be set in environment variables"
-  );
+// Lazy getter — never throw at import time (breaks Docker builds)
+function getSecret(): string {
+  if (!JWT_SECRET) {
+    throw new Error("JWT_SECRET or NEXTAUTH_SECRET must be set");
+  }
+  return JWT_SECRET;
 }
 
 export interface TokenPayload {
@@ -29,12 +31,12 @@ export async function verifyPassword(
 }
 
 export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET!, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, getSecret(), { expiresIn: JWT_EXPIRES_IN });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET!) as TokenPayload;
+    return jwt.verify(token, getSecret()) as TokenPayload;
   } catch {
     return null;
   }
