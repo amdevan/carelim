@@ -7,10 +7,6 @@ import { verifyToken } from "@/lib/auth";
 const DOMAIN_ROUTES: Record<string, string> = {
   "dental.carelim.health": "/dental",
   "ivf.carelim.health": "/ivf",
-  "admin.carelim.health": "/saas",
-  "saas.carelim.health": "/saas",
-  "ms.carelim.health": "/marketing",
-  "marketing.carelim.health": "/marketing",
   "rx.carelim.health": "/prescription",
   "patient.carelim.health": "/patient",
 };
@@ -19,10 +15,6 @@ const DOMAIN_ROUTES: Record<string, string> = {
 const DEV_DOMAIN_ROUTES: Record<string, string> = {
   "dental.localhost:3000": "/dental",
   "ivf.localhost:3000": "/ivf",
-  "admin.localhost:3000": "/saas",
-  "saas.localhost:3000": "/saas",
-  "ms.localhost:3000": "/marketing",
-  "marketing.localhost:3000": "/marketing",
   "rx.localhost:3000": "/prescription",
   "patient.localhost:3000": "/patient",
 };

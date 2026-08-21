@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 4000;
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || "http://localhost:3000",
