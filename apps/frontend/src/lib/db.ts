@@ -1,4 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '../../generated/prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 import { getCurrentTenantId } from './tenant-context'
 
 const globalForPrisma = globalThis as unknown as {
@@ -77,11 +78,19 @@ function resolveTenantId(): string | null {
   return getCurrentTenantId()
 }
 
+// ─── Create PrismaClient with driver adapter ────────────────────
+function createClient(): PrismaClient {
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL!,
+  })
+  return new PrismaClient({ adapter })
+}
+
 // ─── Raw PrismaClient (NO middleware, NO filtering) ──────────────
 let _rawClient: PrismaClient | undefined
 function getRawClient(): PrismaClient {
   if (!_rawClient) {
-    _rawClient = new PrismaClient()
+    _rawClient = createClient()
     if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = _rawClient
   }
   return _rawClient
@@ -91,7 +100,7 @@ function getRawClient(): PrismaClient {
 let _filteredClient: PrismaClient | undefined
 function getFilteredClient(): PrismaClient {
   if (!_filteredClient) {
-    _filteredClient = new PrismaClient().$extends({
+    _filteredClient = createClient().$extends({
       query: {
         $allModels: {
           async $allOperations({ model, operation, args, query }) {

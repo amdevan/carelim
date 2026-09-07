@@ -3,9 +3,6 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Prisma needs DATABASE_URL to resolve the provider during generate
-ENV DATABASE_URL="postgresql://carelim:carelim123@localhost:5432/carelim?schema=public"
-
 # Copy workspace root and all apps/packages
 COPY package.json package-lock.json* ./
 COPY apps/ apps/
@@ -14,9 +11,9 @@ COPY packages/ packages/
 # Install all workspace dependencies
 RUN npm install --include=dev
 
-# Generate Prisma client from the frontend's own schema (matches what the app imports)
+# Generate Prisma client from the frontend's own schema
 WORKDIR /app/apps/frontend
-RUN npx prisma generate --schema=prisma/schema.prisma
+RUN npx prisma generate
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
@@ -38,10 +35,16 @@ COPY --from=builder /app/apps/frontend/.next/static ./.next/static
 # Copy public assets (images, favicon, etc.)
 COPY --from=builder /app/apps/frontend/public ./public
 
-# Copy Prisma schema (from frontend's own schema) and generated client
+# Copy generated Prisma client (output dir from schema)
+COPY --from=builder /app/apps/frontend/generated ./generated
+
+# Copy Prisma config and schema for CLI
+COPY --from=builder /app/apps/frontend/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/apps/frontend/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Copy @prisma packages (adapter-pg, etc.)
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Install prisma CLI for runtime migrations
 RUN cd /tmp && mkdir prisma-install && cd prisma-install && \

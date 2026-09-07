@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../generated/prisma/client";
 const db = new PrismaClient();
 
 const TOOTH_CONDITIONS = ["sound", "missing", "decayed", "filled", "crown", "bridge", "implant", "root_canal", "extraction", "fracture", "mobility", "sealant", "impacted"] as const;

@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../generated/prisma/client";
 const db = new PrismaClient();
 const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
