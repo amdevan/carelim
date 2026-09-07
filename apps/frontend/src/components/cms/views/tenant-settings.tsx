@@ -31,7 +31,7 @@ import {
   Building2, Palette, Puzzle, Users, Network, CreditCard, Eye,
   Save, Plus, Check, Pencil, Trash2, Search, Download, RotateCcw,
   Globe, Clock, FileText, Shield, UserPlus, CheckCircle2,
-  AlertTriangle, Settings as SettingsIcon, Upload,
+  AlertTriangle, Settings as SettingsIcon, Upload, Loader2,
   TrendingUp, Zap, Star, Crown,
 } from "lucide-react";
 import { exportToCSV } from "@/lib/export-utils";
@@ -382,6 +382,89 @@ function GeneralTab({
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   LOGO UPLOAD COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+function LogoUpload({ logoUrl, onUploaded }: { logoUrl: string; onUploaded: (url: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleFile = async (file: File) => {
+    if (!file) return;
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml", "image/gif"];
+    if (!allowed.includes(file.type)) { toast.error("Invalid file type. Use PNG, JPG, WebP, SVG, or GIF"); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error("File too large. Max 2MB"); return; }
+
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload/logo", { method: "POST", body: fd });
+      if (!res.ok) { const err = await res.json(); toast.error(err.error || "Upload failed"); return; }
+      const data = await res.json();
+      onUploaded(data.url);
+      toast.success("Logo uploaded");
+    } catch { toast.error("Upload failed"); } finally { setUploading(false); }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+    e.target.value = "";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="flex items-center gap-1.5"><Upload className="w-3.5 h-3.5" /> Clinic Logo</Label>
+      {logoUrl ? (
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
+          <img src={logoUrl} alt="Logo preview" className="h-12 w-auto object-contain rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground truncate">{logoUrl}</p>
+          </div>
+          <div className="flex gap-2">
+            <label className="cursor-pointer">
+              <input type="file" accept="image/*" className="hidden" onChange={handleInputChange} />
+              <Button variant="outline" size="sm" type="button" disabled={uploading} className="gap-1.5">
+                <Upload className="w-3.5 h-3.5" /> {uploading ? "Uploading…" : "Replace"}
+              </Button>
+            </label>
+            <Button variant="ghost" size="sm" type="button" className="text-red-500 hover:text-red-600 gap-1.5" onClick={() => onUploaded("")}>
+              <Trash2 className="w-3.5 h-3.5" /> Remove
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <label
+          className={`flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed transition-colors cursor-pointer ${dragOver ? "border-teal-400 bg-teal-50/40 dark:bg-teal-950/20" : "border-border hover:border-teal-400 hover:bg-teal-50/40 dark:hover:bg-teal-950/20"}`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+        >
+          <input type="file" accept="image/*" className="hidden" onChange={handleInputChange} disabled={uploading} />
+          {uploading ? (
+            <Loader2 className="w-6 h-6 animate-spin text-teal-600" />
+          ) : (
+            <>
+              <Upload className="w-6 h-6 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Click or drag to upload logo</span>
+              <span className="text-[11px] text-muted-foreground">PNG, JPG, WebP, SVG, GIF — max 2 MB</span>
+            </>
+          )}
+        </label>
+      )}
+      <p className="text-[11px] text-muted-foreground">Or paste a URL: <Input value={logoUrl} onChange={(e) => onUploaded(e.target.value)} placeholder="https://example.com/logo.png" className="mt-1 h-8 text-xs" /></p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    2. BRANDING TAB
    ═══════════════════════════════════════════════════════════════ */
 function BrandingTab({
@@ -408,19 +491,8 @@ function BrandingTab({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Logo */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Upload className="w-3.5 h-3.5" /> Logo URL
-            </Label>
-            <Input value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} placeholder="https://example.com/logo.png" />
-            {form.logoUrl && (
-              <div className="mt-2 p-2 rounded-lg border border-border bg-muted/30 inline-flex items-center gap-3">
-                <img src={form.logoUrl} alt="Logo preview" className="h-10 w-auto object-contain rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                <span className="text-[11px] text-muted-foreground">Logo preview</span>
-              </div>
-            )}
-          </div>
+          {/* Logo Upload */}
+          <LogoUpload logoUrl={form.logoUrl} onUploaded={(url) => update("logoUrl", url)} />
 
           <Separator />
 

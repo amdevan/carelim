@@ -481,6 +481,7 @@ model Branch {
   logo            String?
   status          String   @default("active")
   createdAt       DateTime @default(now())
+  prescriptions   Prescription[]
 }
 
 model ClinicSettings {

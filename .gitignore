@@ -1,2 +1,40 @@
+# Dependencies
 node_modules/
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+packages/database/.env
+
+# Build output
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+dev.log
+npm-debug.log*
+
+# Runtime
+.vercel/
+*.pem
+
+# Test
+test-*.mjs
+coverage/
+
+# Misc
 *.md

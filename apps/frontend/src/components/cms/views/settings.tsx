@@ -33,7 +33,7 @@ import {
   Globe, Clock, FileText, KeyRound, Shield, Smartphone, Users, Eye,
   EyeOff, AlertTriangle, Fingerprint, Search, Download, Copy, Mail, MessageSquare,
   Link2, Code, LayoutGrid, Smile, Stethoscope, FlaskConical, Receipt, BarChart3, Settings as SettingsIcon,
-  ClipboardList, Heart, Boxes, Pill, Printer, Brain, ReceiptText, FileSignature, Hash,
+  ClipboardList, Heart, Boxes, Pill, Printer, Brain, ReceiptText, FileSignature, Hash, Loader2,
 } from "lucide-react";
 import { statusColors, statusLabel } from "@/lib/format";
 import { toast } from "sonner";
@@ -397,6 +397,54 @@ function ClinicTab({ form, updateForm, saving, onSave }: { form: SettingsMap; up
   );
 }
 
+// ============== Logo Upload Component ==============
+function LogoUploadSetting({ logoUrl, onUploaded }: { logoUrl: string; onUploaded: (url: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleFile = async (file: File) => {
+    if (!file) return;
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml", "image/gif"];
+    if (!allowed.includes(file.type)) { toast.error("Invalid file type. Use PNG, JPG, WebP, SVG, or GIF"); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error("File too large. Max 2MB"); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload/logo", { method: "POST", body: fd });
+      if (!res.ok) { const err = await res.json(); toast.error(err.error || "Upload failed"); return; }
+      const data = await res.json();
+      onUploaded(data.url);
+      toast.success("Logo uploaded");
+    } catch { toast.error("Upload failed"); } finally { setUploading(false); }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="flex items-center gap-1.5"><Upload className="w-3.5 h-3.5" /> Clinic Logo</Label>
+      {logoUrl ? (
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
+          <img src={logoUrl} alt="Logo preview" className="h-12 w-auto object-contain rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          <div className="flex-1 min-w-0"><p className="text-xs text-muted-foreground truncate">{logoUrl}</p></div>
+          <div className="flex gap-2">
+            <label className="cursor-pointer"><input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
+              <Button variant="outline" size="sm" type="button" disabled={uploading} className="gap-1.5"><Upload className="w-3.5 h-3.5" /> {uploading ? "Uploading…" : "Replace"}</Button>
+            </label>
+            <Button variant="ghost" size="sm" type="button" className="text-red-500 hover:text-red-600 gap-1.5" onClick={() => onUploaded("")}><Trash2 className="w-3.5 h-3.5" /> Remove</Button>
+          </div>
+        </div>
+      ) : (
+        <label className={`flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed transition-colors cursor-pointer ${dragOver ? "border-teal-400 bg-teal-50/40" : "border-border hover:border-teal-400 hover:bg-teal-50/40"}`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f); }}>
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} disabled={uploading} />
+          {uploading ? <Loader2 className="w-6 h-6 animate-spin text-teal-600" /> : (<><Upload className="w-6 h-6 text-muted-foreground" /><span className="text-sm text-muted-foreground">Click or drag to upload logo</span><span className="text-[11px] text-muted-foreground">PNG, JPG, WebP, SVG, GIF — max 2 MB</span></>)}
+        </label>
+      )}
+    </div>
+  );
+}
+
 // ============== Branding Tab ==============
 function BrandingTab({ form, updateForm, saving, onSave }: { form: SettingsMap; updateForm: (k: string, v: string) => void; saving: boolean; onSave: (p: SettingsMap) => void }) {
   const [primary, setPrimary] = useState(form.primary_color ?? "#0d9488");
@@ -407,11 +455,7 @@ function BrandingTab({ form, updateForm, saving, onSave }: { form: SettingsMap; 
       <Card>
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><Palette className="w-4 h-4 text-teal-600" /> Appearance</CardTitle><CardDescription className="text-xs">Logo, theme & accent color</CardDescription></CardHeader>
         <CardContent className="space-y-5">
-          <div className="space-y-2"><Label>Clinic Logo</Label>
-            <button onClick={() => toast.info("Logo upload — configure S3/R2 storage")} className="w-full sm:w-72 h-32 rounded-xl border-2 border-dashed border-border hover:border-teal-400 hover:bg-teal-50/40 dark:hover:bg-teal-950/20 transition-colors flex flex-col items-center justify-center gap-2 text-muted-foreground">
-              <Upload className="w-6 h-6" /><span className="text-sm">Click to upload logo</span><span className="text-[11px]">PNG or SVG, max 1 MB</span>
-            </button>
-          </div>
+          <LogoUploadSetting logoUrl={form.logo ?? ""} onUploaded={(url) => updateForm("logo", url)} />
           <Separator />
           <div className="space-y-2"><Label>Theme</Label>
             <Select value={form.theme ?? "light"} onValueChange={(v) => updateForm("theme", v)}><SelectTrigger className="w-full sm:w-56"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="light">Light</SelectItem><SelectItem value="dark">Dark</SelectItem><SelectItem value="system">System</SelectItem></SelectContent></Select>
