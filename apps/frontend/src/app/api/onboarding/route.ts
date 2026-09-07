@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { rawDb } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { nanoid } from "nanoid";
+import { MODULES } from "@/components/onboarding/module-data";
 
 function makeId(len = 8) {
   return Math.random().toString(36).substring(2, 2 + len);
@@ -155,9 +156,7 @@ export async function POST(req: NextRequest) {
     if (selectedModules && selectedModules.length > 0) {
       await rawDb.organizationModule.createMany({
         data: selectedModules.map((modKey: string) => {
-          const mod = require("@/components/onboarding/module-data").MODULES.find(
-            (m: any) => m.key === modKey
-          );
+          const mod = MODULES.find((m) => m.key === modKey);
           return {
             organizationId: organization.id,
             moduleKey: modKey,

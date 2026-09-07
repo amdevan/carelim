@@ -121,10 +121,12 @@ export default function OnboardingPage() {
         }),
       });
 
-      const result = await response.json();
+      const text = await response.text();
+      let result: any = {};
+      try { result = text ? JSON.parse(text) : {}; } catch { throw new Error("Server returned an invalid response. Please try again."); }
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to create organization");
+        throw new Error(result.error || `Server error (${response.status}). Please try again.`);
       }
 
       // Store the result for the success screen
