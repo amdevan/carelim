@@ -1,4 +1,4 @@
-import { PrismaClient } from "../generated/prisma/client";
+import { PrismaClient } from "@prisma/client";
 const db = new PrismaClient();
 async function main() {
   console.log("Adding IVF module to platform...");

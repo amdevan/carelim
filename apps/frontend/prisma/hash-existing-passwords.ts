@@ -8,7 +8,7 @@
  * 3. Hashes any plaintext passwords
  * 4. Updates the database
  */
-import { PrismaClient } from "../generated/prisma/client";
+import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();

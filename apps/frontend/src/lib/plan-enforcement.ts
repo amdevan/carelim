@@ -5,7 +5,7 @@
  * Used by API routes to enforce subscription constraints.
  */
 import { db } from "@/lib/db";
-import { Prisma } from "../../generated/prisma/client";
+import { Prisma } from "@prisma/client";
 
 /** Resource types that are counted against plan limits */
 type Resource = "doctors" | "users" | "branches" | "patients";

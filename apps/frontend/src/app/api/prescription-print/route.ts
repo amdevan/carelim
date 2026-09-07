@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import type { Prescription, Patient, Doctor, Department, PrescriptionItem, Invoice, InvoiceItem } from "../../../../generated/prisma/client";
+import type { Prescription, Patient, Doctor, Department, PrescriptionItem, Invoice, InvoiceItem } from "@prisma/client";
 import { withTenant } from "@/lib/with-tenant";
 
 type RichPrescription = Prescription & {
