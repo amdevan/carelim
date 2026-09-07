@@ -1,20 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, ClipboardList, TestTube, FileCheck2, FlaskConical,
   ShieldCheck, Cpu, Package, Microscope,
 } from "lucide-react";
-import { LimsDashboard } from "@/components/cms/views/lims/dashboard";
-import { LimsOrders } from "@/components/cms/views/lims/orders";
-import { LimsSamples } from "@/components/cms/views/lims/samples";
-import { LimsResults } from "@/components/cms/views/lims/results";
-import { LimsTestMaster } from "@/components/cms/views/lims/test-master";
-import { LimsQC } from "@/components/cms/views/lims/qc";
-import { LimsEquipment } from "@/components/cms/views/lims/equipment";
-import { LimsInventory } from "@/components/cms/views/lims/inventory";
+
+const LimsDashboard = lazy(() => import("@/components/cms/views/lims/dashboard").then((m) => ({ default: m.LimsDashboard })));
+const LimsOrders = lazy(() => import("@/components/cms/views/lims/orders").then((m) => ({ default: m.LimsOrders })));
+const LimsSamples = lazy(() => import("@/components/cms/views/lims/samples").then((m) => ({ default: m.LimsSamples })));
+const LimsResults = lazy(() => import("@/components/cms/views/lims/results").then((m) => ({ default: m.LimsResults })));
+const LimsTestMaster = lazy(() => import("@/components/cms/views/lims/test-master").then((m) => ({ default: m.LimsTestMaster })));
+const LimsQC = lazy(() => import("@/components/cms/views/lims/qc").then((m) => ({ default: m.LimsQC })));
+const LimsEquipment = lazy(() => import("@/components/cms/views/lims/equipment").then((m) => ({ default: m.LimsEquipment })));
+const LimsInventory = lazy(() => import("@/components/cms/views/lims/inventory").then((m) => ({ default: m.LimsInventory })));
 
 type LimsTab =
   | "dashboard"
@@ -56,48 +57,44 @@ export function LaboratoryView() {
   return (
     <div className="space-y-4 animate-fade-in">
       {/* LIMS sub-navigation header */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-sm">
-              <Microscope className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold leading-tight">Laboratory Information System</h2>
-              <p className="text-xs text-muted-foreground">Complete LIMS · Order → Sample → Result → Approval → Report</p>
-            </div>
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-sm shrink-0">
+          <Microscope className="w-4.5 h-4.5" />
         </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-bold leading-tight">Laboratory (LIMS)</h2>
+          <p className="text-[11px] text-muted-foreground">Order → Sample → Result → Approval → Report</p>
+        </div>
+      </div>
 
-        {/* Tab bar */}
-        <div className="flex flex-wrap gap-1 p-1 rounded-xl border border-border bg-card overflow-x-auto scrollbar-thin">
-          {tabGroups.map((group) => (
-            <div key={group} className="flex items-center gap-1">
-              {tabs.filter((t) => t.group === group).map((t) => {
-                const active = tab === t.key;
-                const Icon = t.icon;
-                return (
-                  <button
-                    key={t.key}
-                    onClick={() => setTab(t.key)}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all whitespace-nowrap",
-                      active
-                        ? "bg-teal-600 text-white shadow-sm"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    )}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="hidden sm:inline">{t.label}</span>
-                  </button>
-                );
-              })}
-              {group !== tabGroups[tabGroups.length - 1] && (
-                <div className="w-px h-6 bg-border mx-0.5 hidden sm:block" />
-              )}
-            </div>
-          ))}
-        </div>
+      {/* Tab bar */}
+      <div className="flex flex-wrap gap-1 p-1 rounded-xl border border-border bg-card overflow-x-auto scrollbar-thin">
+        {tabGroups.map((group) => (
+          <div key={group} className="flex items-center gap-1">
+            {tabs.filter((t) => t.group === group).map((t) => {
+              const active = tab === t.key;
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all whitespace-nowrap",
+                    active
+                      ? "bg-teal-600 text-white shadow-sm"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t.label}</span>
+                </button>
+              );
+            })}
+            {group !== tabGroups[tabGroups.length - 1] && (
+              <div className="w-px h-6 bg-border mx-0.5 hidden sm:block" />
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Active view */}
@@ -109,7 +106,9 @@ export function LaboratoryView() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
         >
-          {views[tab]}
+          <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground text-sm">Loading...</div>}>
+            {views[tab]}
+          </Suspense>
         </motion.div>
       </AnimatePresence>
     </div>

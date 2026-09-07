@@ -21,10 +21,11 @@ import {
 } from "@/components/ui/dialog";
 import {
   Smile, Plus, Search, Download, Trash2, Edit, Eye,
-  Stethoscope, Activity, ClipboardList, FileImage,
+  Stethoscope, Activity, ClipboardList, FileImage, AlertTriangle,
 } from "lucide-react";
 import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
 import { toast } from "sonner";
+import { useAppStore } from "@/store/app-store";
 
 /* ---------- Types ---------- */
 
@@ -94,6 +95,7 @@ function StatusBadge({ status }: { status: string }) {
 /* ========== Main View ========== */
 
 export function DentalView() {
+  const branchId = useAppStore((s) => s.branchId);
   const [tick, setTick] = useState(0);
   const [q, setQ] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -197,11 +199,22 @@ export function DentalView() {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={refresh}>
             <Activity className="w-4 h-4" /> Refresh
           </Button>
-          <Button size="sm" className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white" disabled={!branchId} title={!branchId ? "Select a branch first" : ""} onClick={() => branchId && setCreateOpen(true)}>
             <Plus className="w-4 h-4" /> New Patient
           </Button>
         </div>
       </div>
+
+      {/* No branch warning */}
+      {!branchId && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No Branch Selected</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">Select a branch from the header to create dental records. All Branches view is read-only.</p>
+          </div>
+        </div>
+      )}
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

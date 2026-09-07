@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET() {
+export const GET = withTenant(async () => {
   const transfers = await db.stockTransfer.findMany({
     include: { fromLocation: true, toLocation: true, items: { include: { item: true } } },
     orderBy: { transferDate: "desc" },
   });
   return NextResponse.json(transfers);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const { items, fromLocationId, toLocationId, notes, requestedBy } = body;
   const count = await db.stockTransfer.count();
   const transfer = await db.stockTransfer.create({
     data: {
-      transferNo: `STR-${String(count + 1).padStart(5, "0")}`,
+      transferNo: `STR-${nanoid(8).toUpperCase()}`,
       fromLocationId,
       toLocationId,
       status: "pending",
@@ -32,4 +34,4 @@ export async function POST(req: NextRequest) {
   });
   await db.auditLog.create({ data: { user: requestedBy || "system", action: "CREATE", module: "StockTransfer", detail: `Created transfer ${transfer.transferNo}` } });
   return NextResponse.json(transfer, { status: 201 });
-}
+});

@@ -21,19 +21,9 @@ import { markAsSaved } from "./onboarding-store";
 
 // Clinic type options
 const CLINIC_TYPES = [
-  "Clinic",
-  "Hospital",
-  "IVF & Fertility Center",
-  "Dental Clinic",
-  "Eye Hospital",
-  "Laboratory",
-  "Diagnostic Center",
-  "Physiotherapy",
-  "Mental Health Clinic",
-  "Pharmacy",
-  "Veterinary",
-  "Home Healthcare",
-  "Other",
+  "General",
+  "Dental",
+  "IVF",
 ];
 
 // Country options (common healthcare markets)

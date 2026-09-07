@@ -759,6 +759,7 @@ export function CMSReports() {
 // 10. Settings
 // ============================================================
 export function CMSSettings() {
+  const { data: roles } = useFetch<{ id: string; name: string }[]>("/api/roles");
   const [settings, setSettings] = useState({
     defaultCommissionRate: "10", autoGenerateFollowup: true, multiTenantIsolation: true,
     carelimBrandColor: "#10b981", clinicBrandColor: "#06b6d4", smsNotifications: true,
@@ -799,7 +800,7 @@ export function CMSSettings() {
       <div className="rounded-lg bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30 border border-teal-100 dark:border-teal-900/50 p-3">
         <div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-4 h-4 text-teal-600" /><p className="text-xs font-semibold text-teal-800 dark:text-teal-200">Role-Based Permissions</p></div>
         <div className="grid grid-cols-3 gap-1.5 text-[10px]">
-          {["Super Admin", "Carelim Admin", "Care Coordinator", "Call Center", "Marketing Team", "Finance", "Clinic Admin", "Doctor", "Reception"].map(r => <div key={r} className="flex items-center gap-1 text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="w-3 h-3" /> {r}</div>)}
+          {(roles || []).map(r => <div key={r.id} className="flex items-center gap-1 text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="w-3 h-3" /> {r.name}</div>)}
         </div>
       </div>
       <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => toast.info("Reset to defaults")}>Reset</Button><Button className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5" disabled={saving} onClick={save}><Save className="w-4 h-4" /> {saving ? "Saving…" : "Save Settings"}</Button></div>

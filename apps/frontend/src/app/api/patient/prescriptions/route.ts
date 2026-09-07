@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
 // GET - Get patient's prescriptions
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId");
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
@@ -16,4 +17,4 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json(prescriptions);
-}
+});

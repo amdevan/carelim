@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const medicineId = searchParams.get("medicineId");
   const type = searchParams.get("type");
@@ -12,21 +14,21 @@ export async function GET(req: NextRequest) {
     where,
     include: { medicine: true },
     orderBy: { createdAt: "desc" },
-    take: 100,
   });
   return NextResponse.json(movements);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
-  const { medicineId, type, quantity, reference, notes, performedBy } = body;
+  const { medicineId, type, quantity, reference, notes } = body;
+  const userEmail = getAuthEmail(req);
   const med = await db.medicine.findUnique({ where: { id: medicineId } });
   if (!med) return NextResponse.json({ error: "Medicine not found" }, { status: 404 });
   const newBalance = Math.max(0, med.stockQty + quantity);
   const movement = await db.stockMovement.create({
-    data: { medicineId, type, quantity, balanceAfter: newBalance, reference, notes, performedBy },
+    data: { medicineId, type, quantity, balanceAfter: newBalance, reference, notes, performedBy: userEmail },
   });
   await db.medicine.update({ where: { id: medicineId }, data: { stockQty: newBalance } });
-  await db.auditLog.create({ data: { user: performedBy || "system", action: "CREATE", module: "StockMovement", detail: `${type} ${quantity} of ${med.name}` } });
+  await db.auditLog.create({ data: { user: userEmail, action: "CREATE", module: "StockMovement", detail: `${type} ${quantity} of ${med.name}` } });
   return NextResponse.json(movement, { status: 201 });
-}
+});

@@ -14,7 +14,9 @@ import { Search } from "lucide-react";
 import { useEffect } from "react";
 
 export function CommandPalette() {
-  const { commandOpen, setCommandOpen, setView } = useAppStore();
+  const commandOpen = useAppStore((s) => s.commandOpen);
+  const setCommandOpen = useAppStore((s) => s.setCommandOpen);
+  const setView = useAppStore((s) => s.setView);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

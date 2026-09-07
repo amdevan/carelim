@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const doctorId = searchParams.get("doctorId");
   const where: Record<string, unknown> = {};
@@ -16,9 +17,9 @@ export async function GET(req: NextRequest) {
   const dayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   slots.sort((a, b) => dayOrder.indexOf(a.dayName) - dayOrder.indexOf(b.dayName));
   return NextResponse.json(slots);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const slot = await db.doctorScheduleSlot.create({
     data: {
@@ -35,4 +36,4 @@ export async function POST(req: NextRequest) {
   });
   await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Doctor", detail: `Added schedule for ${body.dayName}` } });
   return NextResponse.json(slot, { status: 201 });
-}
+});

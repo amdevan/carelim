@@ -2,6 +2,7 @@
 import { fetchAPI } from "@/lib/api";
 
 import { useFetch } from "@/lib/use-fetch";
+import { useAppStore } from "@/store/app-store";
 import { useState, useMemo, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PatientSearch } from "@/components/ui/patient-search";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -603,6 +605,7 @@ function SalesReturnsTab() {
 function CreatePurchaseReturnDialog({
   open, onOpenChange, onCreated,
 }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+  const branchId = useAppStore((s) => s.branchId);
   const { data: suppliers } = useFetch<Supplier[]>("/api/suppliers");
   const { data: medicines } = useFetch<MedicineLite[]>("/api/medicines");
 
@@ -656,6 +659,7 @@ function CreatePurchaseReturnDialog({
       const body = {
         supplierId,
         notes,
+        branchId,
         items: valid.map((i) => {
           const med = medById.get(i.medicineId);
           return {
@@ -897,12 +901,7 @@ function CreateSalesReturnDialog({
           {/* Patient / Invoice reference */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Patient / Customer</Label>
-              <Input
-                value={patientRef}
-                onChange={(e) => setPatientRef(e.target.value)}
-                placeholder="Patient or customer name"
-              />
+              <PatientSearch value={patientRef} onValueChange={setPatientRef} label="Patient / Customer" required />
             </div>
             <div className="space-y-1.5">
               <Label>Invoice Reference *</Label>

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async () => {
   const [referrals, settlements] = await Promise.all([
     db.referral.findMany({ orderBy: { createdAt: "desc" } }),
     db.commissionSettlement.findMany({ orderBy: { createdAt: "desc" } }),
@@ -43,4 +44,4 @@ export async function GET() {
     referrals: referrals.map(r => ({ ...r, settlement: settlements.find(s => s.referralId === r.id) })),
     settlements,
   });
-}
+});

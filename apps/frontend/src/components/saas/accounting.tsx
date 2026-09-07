@@ -22,6 +22,7 @@ import {
   Package, BarChart3, FileText, Calendar,
 } from "lucide-react";
 import { EmptyState } from "@/components/cms/empty-state";
+import { useAppStore } from "@/store/app-store";
 
 // ============================================================================
 // Accounting Dashboard
@@ -426,6 +427,7 @@ interface Expense {
 }
 
 export function AccountingExpenses(_props: { filter?: string }) {
+  const branchId = useAppStore((s) => s.branchId);
   const [refresh, setRefresh] = useState(0);
   const refreshFn = useCallback(() => setRefresh((r) => r + 1), []);
   const { data: expenses, loading } = useFetch<Expense[]>(
@@ -449,7 +451,7 @@ export function AccountingExpenses(_props: { filter?: string }) {
       toast.error("Description and amount are required");
       return;
     }
-    const payload = { ...form, date: new Date().toISOString() };
+    const payload = { ...form, date: new Date().toISOString(), branchId };
     const url = editingExpense ? `/api/expenses/${editingExpense.id}` : "/api/expenses";
     const method = editingExpense ? "PATCH" : "POST";
     const res = await fetchAPI(url, {

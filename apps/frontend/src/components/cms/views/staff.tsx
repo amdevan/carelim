@@ -23,7 +23,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  UserRound, Plus, Search, Download, Mail, Phone, Edit, Trash2, Briefcase,
+  UserRound, Plus, Search, Download, Mail, Phone, Edit, Trash2, Briefcase, AlertTriangle,
 } from "lucide-react";
 import { formatDate, statusColors, statusLabel } from "@/lib/format";
 import { exportToCSV } from "@/lib/export-utils";
@@ -32,6 +32,7 @@ import { Pagination } from "@/components/cms/pagination";
 import { EmptyState } from "@/components/cms/empty-state";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { useAppStore } from "@/store/app-store";
 
 interface StaffResponse {
   staff: StaffMember[];
@@ -66,6 +67,7 @@ const roleColors: Record<string, string> = {
 };
 
 export function StaffView() {
+  const branchId = useAppStore((s) => s.branchId);
   const [tick, setTick] = useState(0);
   const { data, loading } = useFetch<StaffResponse>(tick ? `/api/staff?_r=${tick}` : "/api/staff");
   const refresh = useCallback(() => setTick((t) => t + 1), []);
@@ -140,11 +142,22 @@ export function StaffView() {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
             <Download className="w-4 h-4" /> Export
           </Button>
-          <Button size="sm" className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white" onClick={() => setAddOpen(true)}>
+          <Button size="sm" className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white" disabled={!branchId} title={!branchId ? "Select a branch first" : ""} onClick={() => branchId && setAddOpen(true)}>
             <Plus className="w-4 h-4" /> Add Staff
           </Button>
         </div>
       </motion.div>
+
+      {/* Branch guard warning */}
+      {!branchId && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No Branch Selected</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">Select a branch from the header to add staff. All Branches view is read-only.</p>
+          </div>
+        </div>
+      )}
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -314,6 +327,8 @@ function StaffFormDialog({
   staff?: StaffMember | null;
   onSaved: () => void;
 }) {
+  const defaultBranchId = useAppStore((s) => s.branchId);
+  const { data: branches } = useFetch<{ id: string; name: string }[]>("/api/branches");
   const isEdit = !!staff;
   const [form, setForm] = useState({
     name: staff?.name ?? "",
@@ -322,6 +337,7 @@ function StaffFormDialog({
     role: staff?.role ?? "receptionist",
     department: staff?.department ?? "",
     designation: staff?.designation ?? "",
+    branchId: (staff as any)?.branchId ?? defaultBranchId ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -335,10 +351,11 @@ function StaffFormDialog({
       role: staff?.role ?? "receptionist",
       department: staff?.department ?? "",
       designation: staff?.designation ?? "",
+      branchId: (staff as any)?.branchId ?? defaultBranchId ?? "",
     });
   }
 
-  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const submit = async () => {
     if (!form.name || !form.email) {
@@ -351,6 +368,7 @@ function StaffFormDialog({
         ...form,
         department: form.department || null,
         designation: form.designation || null,
+        branchId: form.branchId || defaultBranchId || null,
       };
       const res = isEdit
         ? await fetchAPI(`/api/staff/${staff!.id}`, {
@@ -382,7 +400,7 @@ function StaffFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Email *</Label>
-            <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="jane@carelim.health" />
+            <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="jane@your-clinic.com" />
           </div>
           <div className="space-y-1.5">
             <Label>Phone</Label>
@@ -407,9 +425,19 @@ function StaffFormDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5">
             <Label>Designation</Label>
             <Input value={form.designation} onChange={(e) => set("designation", e.target.value)} placeholder="Senior Nurse" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Branch</Label>
+            <Select value={form.branchId || "__none__"} onValueChange={(v) => set("branchId", v === "__none__" ? "" : v)}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select branch" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— None —</SelectItem>
+                {(branches || []).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>

@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { StatCard, toDateInputValue } from "./utils";
 
 interface InventoryItem {
   id: string;
@@ -103,11 +103,6 @@ const EMPTY_FORM: InvFormState = {
 function daysUntil(dateStr: string | null): number | null {
   if (!dateStr) return null;
   return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-}
-
-function toDateInputValue(d: string | null): string {
-  if (!d) return "";
-  return new Date(d).toISOString().split("T")[0];
 }
 
 export function LimsInventory() {
@@ -218,7 +213,7 @@ export function LimsInventory() {
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total Items" value={stats.total} icon={Beaker} accent="from-teal-500 to-teal-600" />
-        <StatCard label="Stock Value" value={stats.stockValue} icon={Wallet} accent="from-emerald-500 to-emerald-600" isCurrency />
+        <StatCard label="Stock Value" value={stats.stockValue} icon={Wallet} accent="from-emerald-500 to-emerald-600" />
         <StatCard label="Low Stock" value={stats.lowStock} icon={AlertTriangle} accent="from-amber-500 to-orange-500" />
         <StatCard label="Expiring Soon" value={stats.expiringSoon} icon={CalendarClock} accent="from-rose-500 to-rose-600" />
       </div>
@@ -455,38 +450,6 @@ export function LimsInventory() {
         }}
       />
     </div>
-  );
-}
-
-function StatCard({
-  label, value, icon: Icon, accent, isCurrency,
-}: {
-  label: string;
-  value: number;
-  icon: React.ComponentType<{ className?: string }>;
-  accent: string;
-  isCurrency?: boolean;
-}) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-2xl font-bold tracking-tight">
-                {isCurrency ? formatRs(value) : value}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-            </div>
-            <div
-              className={`w-9 h-9 rounded-lg bg-gradient-to-br ${accent} flex items-center justify-center shrink-0`}
-            >
-              <Icon className="w-4 h-4 text-white" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
   );
 }
 

@@ -1,8 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useAppStore, navItems, navGroups } from "@/store/app-store";
+import { useMemo } from "react";
+import { useAppStore, navItems, navGroups, CLINIC_TYPE_MODULES } from "@/store/app-store";
 import { cn } from "@/lib/utils";
+import { useFetch } from "@/lib/use-fetch";
+import { canViewNavKey } from "@/lib/permissions";
 import {
   ChevronLeft,
   Star,
@@ -10,13 +13,47 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 export function Sidebar() {
-  const { view, setView, sidebarCollapsed, toggleSidebar, favorites, toggleFavorite, enabledModules } = useAppStore();
+  const view = useAppStore((s) => s.view);
+  const setView = useAppStore((s) => s.setView);
+  const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const favorites = useAppStore((s) => s.favorites);
+  const toggleFavorite = useAppStore((s) => s.toggleFavorite);
+  const enabledModules = useAppStore((s) => s.enabledModules);
+  const branchClinicType = useAppStore((s) => s.branchClinicType);
+  const tenantBranding = useAppStore((s) => s.tenantBranding);
+  const user = useAppStore((s) => s.user);
+  const permissions = useMemo(() => user?.permissions ?? [], [user?.permissions]);
+  const { data: branches } = useFetch<{ id: string; clinicType: string }[]>("/api/branches");
 
   // Filter nav items based on enabled modules (empty = show all, always include core)
   const CORE_KEYS = ["dashboard", "settings", "audit"];
-  const filteredNavItems = enabledModules.length > 0
+  let filteredNavItems = enabledModules.length > 0
     ? navItems.filter((i) => CORE_KEYS.includes(i.key) || enabledModules.includes(i.key))
     : navItems;
+
+  // Further filter by branch clinic type
+  if (branchClinicType) {
+    // Specific branch selected — show only that branch's modules
+    const allowed = CLINIC_TYPE_MODULES[branchClinicType];
+    if (allowed) {
+      filteredNavItems = filteredNavItems.filter((i) => CORE_KEYS.includes(i.key) || allowed.includes(i.key));
+    }
+  } else if (branches && branches.length > 0) {
+    // All Branches selected — show union of modules across all branch clinic types
+    const unionModules = new Set<string>(CORE_KEYS);
+    branches.forEach((b) => {
+      const allowed = CLINIC_TYPE_MODULES[b.clinicType];
+      if (allowed) allowed.forEach((m) => unionModules.add(m));
+    });
+    filteredNavItems = filteredNavItems.filter((i) => unionModules.has(i.key));
+  }
+
+  // Filter by user permissions (if user has permissions set)
+  if (permissions.length > 0) {
+    filteredNavItems = filteredNavItems.filter((i) => CORE_KEYS.includes(i.key) || canViewNavKey(permissions, i.key));
+  }
+
   const filteredGroups = navGroups.filter((g) => filteredNavItems.some((i) => i.group === g));
   const favItems = filteredNavItems.filter((i) => favorites.includes(i.key));
 
@@ -28,7 +65,13 @@ export function Sidebar() {
     >
       {/* Brand */}
       <div className="flex items-center justify-center h-16 px-4 border-b border-sidebar-border bg-gradient-to-r from-teal-50/50 to-transparent dark:from-teal-950/20">
-        <Image src="/images/carelim-os.png" alt="Carelim OS" width={160} height={40} className="h-9 w-auto object-contain" />
+        {tenantBranding?.logoUrl ? (
+          <img src={tenantBranding.logoUrl} alt={tenantBranding.clinicName || "Clinic"} className="h-9 w-auto object-contain" />
+        ) : tenantBranding?.clinicName ? (
+          <span className="text-lg font-bold text-foreground truncate">{tenantBranding.clinicName}</span>
+        ) : (
+          <Image src="/images/carelim-os.png" alt="Carelim OS" width={160} height={40} className="h-9 w-auto object-contain" />
+        )}
       </div>
 
       {/* Nav */}

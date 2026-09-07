@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const branchId = searchParams.get("branchId");
+  const branchFilter = branchId ? { branchId } : {};
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -131,4 +135,4 @@ export async function GET() {
       createdAt: a.createdAt,
     }))),
   });
-}
+});

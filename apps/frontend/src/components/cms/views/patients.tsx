@@ -33,10 +33,11 @@ import { exportToCSV, printHTML, docHeader } from "@/lib/export-utils";
 import {
   Search, UserPlus, Phone, Mail, MapPin, Droplet, Heart, Activity,
   Calendar, FileText, Receipt, FlaskConical, Download, Printer, GitBranch,
-  Eye, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Scan, StickyNote,
+  Eye, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Scan, StickyNote, AlertTriangle,
 } from "lucide-react";
 import { formatRs, formatDate, statusColors, statusLabel, timeAgo } from "@/lib/format";
 import { toast } from "sonner";
+import { useAppStore } from "@/store/app-store";
 
 interface Patient {
   id: string; patientCode: string; name: string; email: string | null; phone: string;
@@ -74,10 +75,11 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 function sourceLabel(sourceName: string): string {
-  return SOURCE_LABELS[sourceName] || "Carelim";
+  return SOURCE_LABELS[sourceName] || "Direct";
 }
 
 export function PatientsView() {
+  const branchId = useAppStore((s) => s.branchId);
   const [tick, setTick] = useState(0);
   const { data: patients, loading } = useFetch<Patient[]>(`/api/patients?_r=${tick}`);
   const [q, setQ] = useState("");
@@ -155,6 +157,16 @@ export function PatientsView() {
           </Button>
         </div>
       </div>
+
+      {!branchId && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No Branch Selected</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">Select a branch from the header to register patients. All Branches view is read-only.</p>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-4">
@@ -248,7 +260,7 @@ export function PatientsView() {
                             <div className="flex items-center gap-1.5">
                               <p className="font-medium text-sm">{p.name}</p>
                               {p.source?.sourceType === "carelim" && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 text-[9px] font-semibold text-white shadow-sm" title={`Via Carelim ${sourceLabel(p.source.sourceName)}`}>
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 text-[9px] font-semibold text-white shadow-sm" title={`Via ${sourceLabel(p.source.sourceName)}`}>
                                   <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
                                   {sourceLabel(p.source.sourceName)}
                                 </span>
@@ -396,6 +408,7 @@ function SortHeader({
 }
 
 function PatientDetail({ patient }: { patient: Patient }) {
+  const tenantBranding = useAppStore((s) => s.tenantBranding);
   // Fetch full patient detail with relations (appointments, prescriptions, invoices, labTests)
   const { data: fullPatient } = useFetch<Patient>(`/api/patients/${patient.id}`);
   const patientWithRelations = fullPatient || patient;
@@ -454,7 +467,7 @@ function PatientDetail({ patient }: { patient: Patient }) {
         <div class="sig-block">
           <div class="line"></div>
           <div class="name">Receptionist</div>
-          <div class="role">Carelim OS Health Center</div>
+          <div class="role">${tenantBranding?.clinicName || "Health Center"}</div>
         </div>
       </div>
     `;
@@ -661,6 +674,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ cla
 }
 
 function RegisterDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+  const branchId = useAppStore((s) => s.branchId);
   const [form, setForm] = useState({
     name: "", email: "", phone: "", gender: "male", age: "", ageMonths: "",
     bloodGroup: "O+", address: "", emergencyContact: "", emergencyName: "",
@@ -699,6 +713,7 @@ function RegisterDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
           allergies: form.allergies || null,
           chronicConditions: form.chronicConditions || null,
           notes: form.notes || null,
+          branchId,
         }),
       });
       if (!res.ok) throw new Error("Failed");
@@ -890,6 +905,7 @@ function EditPatientDialog({
   onOpenChange: (v: boolean) => void;
   onSaved: () => void;
 }) {
+  const branchId = useAppStore((s) => s.branchId);
   const empty = { name: "", email: "", phone: "", gender: "male", age: "", bloodGroup: "O+", address: "", emergencyContact: "", emergencyName: "", allergies: "", chronicConditions: "" };
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -930,6 +946,7 @@ function EditPatientDialog({
         allergies: form.allergies || null,
         chronicConditions: form.chronicConditions || null,
         dob: Number(form.age) ? new Date(new Date().getFullYear() - Number(form.age), 0, 1) : null,
+        branchId,
       };
       const res = await fetchAPI(`/api/patients/${patient.id}`, {
         method: "PUT",

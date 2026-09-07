@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   Building2, Plus, Search, Download, MapPin, Phone, Users,
-  Clock, Edit, Trash2, LayoutGrid, List, Eye,
+  Clock, Edit, Trash2, LayoutGrid, List, Eye, Copy, Upload, FileText,
 } from "lucide-react";
 import { statusColors, statusLabel } from "@/lib/format";
 import { exportToCSV } from "@/lib/export-utils";
@@ -55,9 +55,7 @@ interface Branch {
 }
 
 const CLINIC_TYPES = [
-  "General", "Dental", "IVF & Fertility", "Telemedicine", "Pediatrics",
-  "Orthopedics", "Cardiology", "Neurology", "Ophthalmology", "Dermatology",
-  "ENT", "Oncology", "Psychiatry", "Rehabilitation", "Diagnostic Center",
+  "General", "Dental", "IVF",
 ];
 
 const TIMEZONES = [
@@ -69,12 +67,7 @@ const TIMEZONES = [
 const TYPE_COLORS: Record<string, string> = {
   General: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
   Dental: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
-  "IVF & Fertility": "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
-  Telemedicine: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300",
-  Pediatrics: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
-  Orthopedics: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",
-  Cardiology: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
-  Neurology: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300",
+  IVF: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
 };
 
 const defaultForm = {
@@ -97,6 +90,15 @@ export function BranchesView() {
   const [detailBranch, setDetailBranch] = useState<Branch | null>(null);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [backupSource, setBackupSource] = useState("");
+  const [backupTarget, setBackupTarget] = useState("");
+  const [backingUp, setBackingUp] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importType, setImportType] = useState("patients");
+  const [importBranch, setImportBranch] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const allBranches = Array.isArray(branches) ? branches : [];
 
@@ -160,7 +162,7 @@ export function BranchesView() {
         operatingHours: form.operatingHours || null, logo: form.logo || null,
       };
       const url = editBranch ? `/api/branches/${editBranch.id}` : "/api/branches";
-      const method = editBranch ? "PUT" : "POST";
+      const method = editBranch ? "PATCH" : "POST";
       const res = await fetchAPI(url, { method, body: JSON.stringify(payload) });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -195,6 +197,73 @@ export function BranchesView() {
     toast.success("Branches exported to CSV");
   };
 
+  const handleBackup = async () => {
+    if (!backupSource || !backupTarget) {
+      toast.error("Please select source and target branches");
+      return;
+    }
+    if (backupSource === backupTarget) {
+      toast.error("Source and target must be different");
+      return;
+    }
+    setBackingUp(true);
+    try {
+      const res = await fetchAPI("/api/admin/backup-branch", {
+        method: "POST",
+        body: JSON.stringify({ sourceBranchId: backupSource, targetBranchId: backupTarget }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed");
+      }
+      const data = await res.json();
+      const total = Object.values(data.backedUp).reduce((a: number, b: unknown) => a + (typeof b === "number" ? b : 0), 0);
+      toast.success(`Backed up ${total} records from ${data.source.name} to ${data.target.name}`);
+      setBackupOpen(false);
+      setBackupSource("");
+      setBackupTarget("");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Backup failed");
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!importBranch) {
+      toast.error("Please select a target branch");
+      return;
+    }
+    if (!importFile) {
+      toast.error("Please select a CSV file");
+      return;
+    }
+    setImporting(true);
+    try {
+      const csvData = await importFile.text();
+      const res = await fetchAPI("/api/admin/import-csv", {
+        method: "POST",
+        body: JSON.stringify({ type: importType, branchId: importBranch, csvData }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed");
+      }
+      const data = await res.json();
+      toast.success(`Imported ${data.imported} ${importType} to ${data.branch.name}${data.skipped > 0 ? ` (${data.skipped} skipped)` : ""}`);
+      if (data.errors?.length > 0) {
+        toast.warning(`Some errors: ${data.errors.slice(0, 3).join("; ")}`);
+      }
+      setImportOpen(false);
+      setImportFile(null);
+      setImportBranch("");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const fullAddress = (b: Branch) => [b.address, b.city, b.state, b.country].filter(Boolean).join(", ") || "—";
 
   if (loading) {
@@ -219,9 +288,15 @@ export function BranchesView() {
             {allBranches.length} total branches · {activeCount} active
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
             <Download className="w-4 h-4" /> Export
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
+            <Upload className="w-4 h-4" /> Import from other software
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setBackupOpen(true)}>
+            <Copy className="w-4 h-4" /> Backup from other
           </Button>
           <Button size="sm" className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white" onClick={openAdd}>
             <Plus className="w-4 h-4" /> Add Branch
@@ -481,7 +556,7 @@ export function BranchesView() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Branch Name *</Label>
-                <Input placeholder="e.g. Carelim Downtown" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <Input placeholder="e.g. Downtown Branch" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Branch Code *</Label>
@@ -541,7 +616,7 @@ export function BranchesView() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Email</Label>
-                <Input placeholder="branch@carelim.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <Input placeholder="branch@your-clinic.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Website</Label>
@@ -600,6 +675,138 @@ export function BranchesView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Backup Dialog */}
+      <Dialog open={backupOpen} onOpenChange={setBackupOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Copy className="w-5 h-5 text-teal-600" />
+              Backup from Other Branch
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Copy patients, doctors, staff, departments, and medicines from one branch to another.
+            </p>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Source Branch (Copy from) *</Label>
+                <Select value={backupSource} onValueChange={setBackupSource}>
+                  <SelectTrigger><SelectValue placeholder="Select source branch" /></SelectTrigger>
+                  <SelectContent>
+                    {allBranches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name} ({b.clinicType})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Target Branch (Copy to) *</Label>
+                <Select value={backupTarget} onValueChange={setBackupTarget}>
+                  <SelectTrigger><SelectValue placeholder="Select target branch" /></SelectTrigger>
+                  <SelectContent>
+                    {allBranches.filter((b) => b.id !== backupSource).map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name} ({b.clinicType})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBackupOpen(false)}>Cancel</Button>
+            <Button className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5" onClick={handleBackup} disabled={backingUp || !backupSource || !backupTarget}>
+              <Copy className="w-4 h-4" /> {backingUp ? "Backing up..." : "Start Backup"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="w-5 h-5 text-teal-600" />
+              Import from Other Software
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Import data from CSV files exported from other software (Excel, Google Sheets, etc.).
+            </p>
+            
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Data Type *</Label>
+                <Select value={importType} onValueChange={setImportType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="patients">Patients</SelectItem>
+                    <SelectItem value="doctors">Doctors</SelectItem>
+                    <SelectItem value="staff">Staff</SelectItem>
+                    <SelectItem value="medicines">Medicines</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Target Branch *</Label>
+                <Select value={importBranch} onValueChange={setImportBranch}>
+                  <SelectTrigger><SelectValue placeholder="Select branch to import into" /></SelectTrigger>
+                  <SelectContent>
+                    {allBranches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name} ({b.clinicType})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">CSV File *</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept=".csv"
+                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                    className="flex-1"
+                  />
+                </div>
+                {importFile && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                    <FileText className="w-3 h-3" /> {importFile.name} ({(importFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <Card className="bg-muted/30 border-dashed">
+              <CardContent className="p-3">
+                <p className="text-xs font-medium mb-2">Supported CSV columns (case-insensitive):</p>
+                <div className="text-[11px] text-muted-foreground space-y-1">
+                  <p><strong>Patients:</strong> name, phone, email, gender, bloodgroup, address</p>
+                  <p><strong>Doctors:</strong> name, specialization, phone, email, qualification</p>
+                  <p><strong>Staff:</strong> name, role, department, phone, email</p>
+                  <p><strong>Medicines:</strong> name, genericname, category, strength, manufacturer, saleprice, stock</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setImportOpen(false); setImportFile(null); }}>Cancel</Button>
+            <Button className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5" onClick={handleImport} disabled={importing || !importBranch || !importFile}>
+              <Upload className="w-4 h-4" /> {importing ? "Importing..." : "Import Data"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

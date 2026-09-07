@@ -5,6 +5,24 @@ import {
   FlaskConical, Scan, Receipt, Boxes, BarChart3, UserCog, Settings, ShieldCheck, Wallet,
   ClipboardList, UserRound, CalendarOff, Globe, Bell, Shield,
   Building2,
+  Handshake,
+  Landmark,
+  Smile,
+  Heart,
+  Activity,
+  FileImage,
+  GitBranch,
+  Zap,
+  Wrench,
+  BellRing,
+  FlaskConical as FlaskConicalIcon,
+  Microscope,
+  Egg,
+  TestTubes,
+  TestTube2,
+  Snowflake,
+  Syringe,
+  Baby,
 } from "lucide-react";
 
 export type ViewKey =
@@ -32,7 +50,34 @@ export type ViewKey =
   | "public-booking"
   | "notifications"
   | "insurance"
-  | "branches";
+  | "branches"
+  | "crm"
+  | "tenant-settings"
+  | "dental-odontogram"
+  | "dental-examination"
+  | "dental-treatment"
+  | "dental-procedures"
+  | "dental-imaging"
+  | "dental-lab"
+  | "dental-ortho"
+  | "dental-implant"
+  | "dental-followup"
+  | "dental-reports"
+  | "ivf-couples"
+  | "ivf-cycles"
+  | "ivf-protocols"
+  | "ivf-stimulation"
+  | "ivf-follicular"
+  | "ivf-opu"
+  | "ivf-andrology"
+  | "ivf-embryology"
+  | "ivf-cryobank"
+  | "ivf-transfer"
+  | "ivf-pregnancy"
+  | "ivf-donors"
+  | "ivf-consents"
+  | "ivf-packages"
+  | "ivf-reports";
 
 export interface NavItem {
   key: ViewKey;
@@ -49,6 +94,33 @@ export const navItems: NavItem[] = [
   { key: "doctors", label: "Doctors", icon: Stethoscope, group: "Clinical" },
   { key: "emr", label: "EMR & Prescription", icon: FileText, group: "Clinical" },
   { key: "clinical-notes", label: "Clinical Notes", icon: ClipboardList, group: "Clinical" },
+  // Dental-specific items
+  { key: "dental-odontogram", label: "Odontogram", icon: Smile, group: "Dental Clinical" },
+  { key: "dental-examination", label: "Clinical Examination", icon: Stethoscope, group: "Dental Clinical" },
+  { key: "dental-treatment", label: "Treatment Plan", icon: ClipboardList, group: "Dental Clinical" },
+  { key: "dental-procedures", label: "Procedures", icon: Activity, group: "Dental Clinical" },
+  { key: "dental-imaging", label: "Dental Imaging", icon: FileImage, group: "Dental Imaging & Lab" },
+  { key: "dental-lab", label: "Dental Laboratory", icon: GitBranch, group: "Dental Imaging & Lab" },
+  { key: "dental-ortho", label: "Orthodontics", icon: Zap, group: "Dental Specialty" },
+  { key: "dental-implant", label: "Implant Module", icon: Wrench, group: "Dental Specialty" },
+  { key: "dental-followup", label: "Follow-up", icon: BellRing, group: "Dental Administration" },
+  { key: "dental-reports", label: "Dental Reports", icon: BarChart3, group: "Dental Administration" },
+  // IVF-specific items
+  { key: "ivf-couples", label: "Couple Management", icon: Users, group: "IVF Treatment" },
+  { key: "ivf-cycles", label: "IVF Cycles", icon: FlaskConicalIcon, group: "IVF Treatment" },
+  { key: "ivf-protocols", label: "Treatment Protocols", icon: Stethoscope, group: "IVF Treatment" },
+  { key: "ivf-stimulation", label: "Stimulation", icon: Activity, group: "IVF Treatment" },
+  { key: "ivf-follicular", label: "Follicular Monitoring", icon: Microscope, group: "IVF Treatment" },
+  { key: "ivf-opu", label: "Egg Retrieval (OPU)", icon: Egg, group: "IVF Treatment" },
+  { key: "ivf-andrology", label: "Andrology", icon: TestTubes, group: "IVF Laboratory" },
+  { key: "ivf-embryology", label: "Embryology Lab", icon: TestTube2, group: "IVF Laboratory" },
+  { key: "ivf-cryobank", label: "Cryobank", icon: Snowflake, group: "IVF Laboratory" },
+  { key: "ivf-transfer", label: "Embryo Transfer", icon: Syringe, group: "IVF Outcomes" },
+  { key: "ivf-pregnancy", label: "Pregnancy Tracking", icon: Baby, group: "IVF Outcomes" },
+  { key: "ivf-donors", label: "Donor Management", icon: Heart, group: "IVF Administration" },
+  { key: "ivf-consents", label: "Consent Forms", icon: FileText, group: "IVF Administration" },
+  { key: "ivf-packages", label: "IVF Packages", icon: Boxes, group: "IVF Administration" },
+  { key: "ivf-reports", label: "IVF Reports", icon: BarChart3, group: "IVF Administration" },
   { key: "laboratory", label: "Laboratory (LIMS)", icon: FlaskConical, group: "Diagnostics" },
   { key: "radiology", label: "Radiology (RIS)", icon: Scan, group: "Diagnostics" },
   { key: "pharmacy", label: "Pharmacy", icon: Pill, group: "Operations" },
@@ -65,9 +137,18 @@ export const navItems: NavItem[] = [
   { key: "public-booking", label: "Public Booking", icon: Globe, group: "Platform" },
   { key: "notifications", label: "Notifications", icon: Bell, group: "Platform" },
   { key: "branches", label: "Branches", icon: Building2, group: "Administration" },
+  { key: "crm", label: "CRM & Sales", icon: Handshake, group: "Platform" },
+  { key: "tenant-settings", label: "Tenant Settings", icon: Landmark, group: "Administration" },
 ];
 
-export const navGroups = ["Overview", "Clinical", "Diagnostics", "Operations", "Finance", "Administration", "Platform"];
+export const navGroups = ["Overview", "Clinical", "Dental Clinical", "Dental Imaging & Lab", "Dental Specialty", "Dental Administration", "IVF Treatment", "IVF Laboratory", "IVF Outcomes", "IVF Administration", "Specialty", "Diagnostics", "Operations", "Finance", "Administration", "Platform"];
+
+/** Modules shown per clinic business type. General is the base — Dental/IVF include all General modules + their specialty. */
+export const CLINIC_TYPE_MODULES: Record<string, ViewKey[]> = {
+  General: ["dashboard", "appointments", "patients", "doctors", "emr", "clinical-notes", "laboratory", "radiology", "pharmacy", "inventory", "billing", "accounting", "reports", "insurance", "hr", "staff", "leave", "audit", "settings", "public-booking", "notifications", "branches", "crm", "tenant-settings"],
+  Dental: ["dashboard", "appointments", "patients", "doctors", "emr", "clinical-notes", "dental-odontogram", "dental-examination", "dental-treatment", "dental-procedures", "dental-imaging", "dental-lab", "dental-ortho", "dental-implant", "dental-followup", "dental-reports", "laboratory", "radiology", "pharmacy", "inventory", "billing", "accounting", "reports", "insurance", "hr", "staff", "leave", "audit", "settings", "public-booking", "notifications", "branches", "crm", "tenant-settings"],
+  IVF: ["dashboard", "appointments", "patients", "doctors", "emr", "clinical-notes", "ivf-couples", "ivf-cycles", "ivf-protocols", "ivf-stimulation", "ivf-follicular", "ivf-opu", "ivf-andrology", "ivf-embryology", "ivf-cryobank", "ivf-transfer", "ivf-pregnancy", "ivf-donors", "ivf-consents", "ivf-packages", "ivf-reports", "laboratory", "radiology", "pharmacy", "inventory", "billing", "accounting", "reports", "insurance", "hr", "staff", "leave", "audit", "settings", "public-booking", "notifications", "branches", "crm", "tenant-settings"],
+};
 
 interface ImpersonationContext {
   tenantId: string;
@@ -84,9 +165,9 @@ interface AppState {
   setSidebarCollapsed: (v: boolean) => void;
   authed: boolean;
   token: string | null;
-  user: { name: string; email: string; role: string } | null;
-  login: (email: string, token?: string) => void;
-  loginAs: (email: string, name: string, role: string) => void;
+  user: { name: string; email: string; role: string; tenantId?: string | null; permissions?: string[] } | null;
+  login: (email: string, token?: string, tenantId?: string | null, permissions?: string[], name?: string, role?: string) => void;
+  loginAs: (email: string, name: string, role: string, tenantId?: string | null, permissions?: string[]) => void;
   logout: () => void;
   commandOpen: boolean;
   setCommandOpen: (v: boolean) => void;
@@ -98,6 +179,12 @@ interface AppState {
   exitImpersonation: () => void;
   enabledModules: string[];
   setEnabledModules: (modules: string[]) => void;
+  branchId: string | null;
+  setBranchId: (id: string | null) => void;
+  branchClinicType: string | null;
+  setBranchClinicType: (ct: string | null) => void;
+  tenantBranding: { clinicName: string | null; logoUrl: string | null; primaryColor: string | null } | null;
+  setTenantBranding: (b: { clinicName: string | null; logoUrl: string | null; primaryColor: string | null } | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -114,22 +201,24 @@ export const useAppStore = create<AppState>()(
       authed: false,
       token: null,
       user: null,
-      login: (email, token) =>
+      login: (email, token, tenantId, permissions, name, role) =>
         set({
           authed: true,
           token: token || null,
           impersonation: null,
           enabledModules: [],
           user: {
-            name: email.split("@")[0].replace(/^\w/, (c) => c.toUpperCase()),
+            name: name || email.split("@")[0].replace(/^\w/, (c) => c.toUpperCase()),
             email,
-            role: email.includes("admin") ? "Super Admin" : "Administrator",
+            role: role || "User",
+            tenantId: tenantId || null,
+            permissions: permissions || [],
           },
         }),
-      loginAs: (email, name, role) =>
+      loginAs: (email, name, role, tenantId, permissions) =>
         set({
           authed: true,
-          user: { name, email, role },
+          user: { name, email, role, tenantId: tenantId || null, permissions: permissions || [] },
           enabledModules: [],
         }),
       logout: () => {
@@ -151,7 +240,13 @@ export const useAppStore = create<AppState>()(
       exitImpersonation: () => set({ impersonation: null, enabledModules: [], view: "dashboard" }),
       enabledModules: [],
       setEnabledModules: (modules) => set({ enabledModules: modules }),
+      branchId: null,
+      setBranchId: (id) => set({ branchId: id }),
+      branchClinicType: null,
+      setBranchClinicType: (ct) => set({ branchClinicType: ct }),
+      tenantBranding: null,
+      setTenantBranding: (b) => set({ tenantBranding: b }),
     }),
-    { name: "carelim-store", partialize: (state) => ({ view: state.view, sidebarCollapsed: state.sidebarCollapsed, recentViews: state.recentViews, favorites: state.favorites, enabledModules: state.enabledModules, impersonation: state.impersonation }) }
+    { name: "carelim-store", partialize: (state) => ({ view: state.view, sidebarCollapsed: state.sidebarCollapsed, recentViews: state.recentViews, favorites: state.favorites, enabledModules: state.enabledModules, impersonation: state.impersonation, branchId: state.branchId, branchClinicType: state.branchClinicType, authed: state.authed, user: state.user, tenantBranding: state.tenantBranding }) }
   )
 );

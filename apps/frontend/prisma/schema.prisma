@@ -125,6 +125,8 @@ model Appointment {
 
 model Prescription {
   id          String   @id @default(cuid())
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   code        String   @unique
   patientId   String
   patient     Patient @relation(fields: [patientId], references: [id])

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import type { Prescription, Patient, Doctor, Department, PrescriptionItem, Invoice, InvoiceItem } from "@prisma/client";
+import { withTenant } from "@/lib/with-tenant";
 
 type RichPrescription = Prescription & {
   patient: Patient;
@@ -10,7 +11,7 @@ type RichPrescription = Prescription & {
 
 // Returns a rich, print-ready prescription payload for a given prescription ID
 // (or the latest prescription if no id is provided — useful for demo/preview)
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
 
@@ -297,4 +298,4 @@ export async function GET(req: NextRequest) {
     generatedBy: "Carelim OS v2.0",
     printedAt: new Date().toISOString(),
   });
-}
+});

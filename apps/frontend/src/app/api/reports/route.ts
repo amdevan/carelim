@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const branchId = searchParams.get("branchId");
+  const branchFilter = branchId ? { branchId } : {};
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  const invoices = await db.invoice.findMany({ where: { date: { gte: startOfMonth } }, include: { patient: true } });
-  const appointments = await db.appointment.findMany({ where: { date: { gte: startOfMonth } }, include: { doctor: true } });
-  const doctors = await db.doctor.findMany({ include: { appointments: { where: { date: { gte: startOfMonth } } } } });
-  const patients = await db.patient.findMany();
+  const invoices = await db.invoice.findMany({ where: { ...branchFilter, date: { gte: startOfMonth } }, include: { patient: true } });
+  const appointments = await db.appointment.findMany({ where: { ...branchFilter, date: { gte: startOfMonth } }, include: { doctor: true } });
+  const doctors = await db.doctor.findMany({ where: branchFilter, include: { appointments: { where: { date: { gte: startOfMonth } } } } });
+  const patients = await db.patient.findMany({ where: branchFilter });
 
   // Revenue by type
   const revenueByType: Record<string, number> = {};
@@ -26,7 +30,7 @@ export async function GET() {
   for (let i = 5; i >= 0; i--) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
     const dn = new Date(today.getFullYear(), today.getMonth() - i + 1, 1);
-    const invs = await db.invoice.findMany({ where: { date: { gte: d, lt: dn } } });
+    const invs = await db.invoice.findMany({ where: { ...branchFilter, date: { gte: d, lt: dn } } });
     const rev = invs.reduce((s, i) => s + i.total, 0);
     const col = invs.reduce((s, i) => s + i.paid, 0);
     monthlyRevenue.push({
@@ -44,7 +48,7 @@ export async function GET() {
     d.setDate(d.getDate() - i);
     const ds = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const de = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
-    const invs = await db.invoice.findMany({ where: { date: { gte: ds, lt: de } } });
+    const invs = await db.invoice.findMany({ where: { ...branchFilter, date: { gte: ds, lt: de } } });
     dailyRevenue.push({
       date: d.toLocaleDateString("en-US", { day: "numeric", month: "short" }),
       revenue: invs.reduce((s, i) => s + i.total, 0),
@@ -71,4 +75,4 @@ export async function GET() {
     patientCount: patients.length,
     appointmentCount: appointments.length,
   });
-}
+});

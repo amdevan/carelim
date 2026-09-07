@@ -24,6 +24,9 @@ import {
 } from "@/components/ui/sheet";
 import { KpiCard } from "@/components/cms/kpi-card";
 import { EmptyState } from "@/components/cms/empty-state";
+import { PatientSearch } from "@/components/ui/patient-search";
+import { CycleSearch } from "@/components/ui/cycle-search";
+import { StaffSearch } from "@/components/ui/staff-search";
 import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
 import { Download, Plus, Search, Activity, FlaskConical, Snowflake, Baby, HeartPulse, FileText, Users, Package, Microscope, Syringe } from "lucide-react";
@@ -95,7 +98,7 @@ export function IvfAssessments() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>New Fertility Assessment</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5"><Label>Patient ID</Label><Input value={form.patientId} onChange={e=>setForm({...form,patientId:e.target.value})} placeholder="Patient ID" /></div>
+            <div className="space-y-1.5"><Label>Patient ID</Label><PatientSearch value={form.patientId} onValueChange={v=>setForm({...form,patientId:v})} label="Patient ID" required /></div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5"><Label>AMH</Label><Input type="number" step="0.01" value={form.amh} onChange={e=>setForm({...form,amh:e.target.value})} /></div>
               <div className="space-y-1.5"><Label>FSH</Label><Input type="number" step="0.01" value={form.fsh} onChange={e=>setForm({...form,fsh:e.target.value})} /></div>
@@ -198,7 +201,7 @@ export function IvfFollicular() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Follicular Monitoring Record</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5"><Label>Cycle ID</Label><Input value={form.cycleId} onChange={e=>setForm({...form,cycleId:e.target.value})} /></div>
+            <div className="space-y-1.5"><CycleSearch value={form.cycleId} onValueChange={v => setForm({...form, cycleId: v})} label="Cycle ID" required /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Day</Label><Input type="number" value={form.day} onChange={e=>setForm({...form,day:e.target.value})} /></div>
               <div className="space-y-1.5"><Label>Endometrium (mm)</Label><Input type="number" step="0.1" value={form.endometrium} onChange={e=>setForm({...form,endometrium:e.target.value})} /></div>
@@ -270,7 +273,7 @@ export function IvfOPU() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Egg Retrieval (OPU)</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5"><Label>Cycle ID</Label><Input value={form.cycleId} onChange={e=>setForm({...form,cycleId:e.target.value})} /></div>
+            <div className="space-y-1.5"><CycleSearch value={form.cycleId} onValueChange={v => setForm({...form, cycleId: v})} label="Cycle ID" required /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Follicles Punctured</Label><Input type="number" value={form.folliclesPunctured} onChange={e=>setForm({...form,folliclesPunctured:e.target.value})} /></div>
               <div className="space-y-1.5"><Label>Oocytes Retrieved</Label><Input type="number" value={form.oocytesRetrieved} onChange={e=>setForm({...form,oocytesRetrieved:e.target.value})} /></div>
@@ -280,7 +283,7 @@ export function IvfOPU() {
               <div className="space-y-1.5"><Label>Immature</Label><Input type="number" value={form.immatureOocytes} onChange={e=>setForm({...form,immatureOocytes:e.target.value})} /></div>
               <div className="space-y-1.5"><Label>Atretic</Label><Input type="number" value={form.atreticOocytes} onChange={e=>setForm({...form,atreticOocytes:e.target.value})} /></div>
             </div>
-            <div className="space-y-1.5"><Label>Embryologist</Label><Input value={form.embryologist} onChange={e=>setForm({...form,embryologist:e.target.value})} /></div>
+            <div className="space-y-1.5"><StaffSearch value={form.embryologist} onValueChange={v => setForm({...form, embryologist: v})} label="Embryologist" /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={()=>setAddOpen(false)}>Cancel</Button><Button disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white" onClick={handleCreate}>{saving?"Saving…":"Create"}</Button></DialogFooter>
         </DialogContent>
@@ -336,7 +339,7 @@ export function IvfAndrology() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Semen Analysis</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5"><Label>Cycle ID (optional)</Label><Input value={form.cycleId} onChange={e=>setForm({...form,cycleId:e.target.value})} /></div>
+            <div className="space-y-1.5"><CycleSearch value={form.cycleId} onValueChange={v => setForm({...form, cycleId: v})} label="Cycle ID (optional)" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Volume (ml)</Label><Input type="number" step="0.1" value={form.volume} onChange={e=>setForm({...form,volume:e.target.value})} /></div>
               <div className="space-y-1.5"><Label>Concentration (M/ml)</Label><Input type="number" value={form.concentration} onChange={e=>setForm({...form,concentration:e.target.value})} /></div>
@@ -412,7 +415,7 @@ export function IvfEmbryology() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Embryo Record</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5"><Label>Cycle ID</Label><Input value={form.cycleId} onChange={e=>setForm({...form,cycleId:e.target.value})} /></div>
+            <div className="space-y-1.5"><CycleSearch value={form.cycleId} onValueChange={v => setForm({...form, cycleId: v})} label="Cycle ID" required /></div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5"><Label>Embryo #</Label><Input type="number" value={form.embryoNo} onChange={e=>setForm({...form,embryoNo:e.target.value})} /></div>
               <div className="space-y-1.5"><Label>Day</Label><Select value={form.day} onValueChange={v=>setForm({...form,day:v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="1">Day 1</SelectItem><SelectItem value="3">Day 3</SelectItem><SelectItem value="5">Day 5</SelectItem><SelectItem value="6">Day 6</SelectItem></SelectContent></Select></div>
@@ -544,7 +547,7 @@ export function IvfTransfer() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Embryo Transfer</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5"><Label>Cycle ID</Label><Input value={form.cycleId} onChange={e=>setForm({...form,cycleId:e.target.value})} /></div>
+            <div className="space-y-1.5"><CycleSearch value={form.cycleId} onValueChange={v => setForm({...form, cycleId: v})} label="Cycle ID" required /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Type</Label><Select value={form.transferType} onValueChange={v=>setForm({...form,transferType:v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="fresh">Fresh</SelectItem><SelectItem value="frozen">Frozen</SelectItem><SelectItem value="donor">Donor</SelectItem></SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Embryos</Label><Input type="number" value={form.embryosTransferred} onChange={e=>setForm({...form,embryosTransferred:e.target.value})} /></div>
@@ -614,7 +617,7 @@ export function IvfPregnancy() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Pregnancy Tracking</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5"><Label>Cycle ID</Label><Input value={form.cycleId} onChange={e=>setForm({...form,cycleId:e.target.value})} /></div>
+            <div className="space-y-1.5"><CycleSearch value={form.cycleId} onValueChange={v => setForm({...form, cycleId: v})} label="Cycle ID" required /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>βhCG</Label><Input type="number" value={form.betaHcg} onChange={e=>setForm({...form,betaHcg:e.target.value})} /></div>
               <div className="space-y-1.5"><Label>Result</Label><Select value={form.result} onValueChange={v=>setForm({...form,result:v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="positive">Positive</SelectItem><SelectItem value="negative">Negative</SelectItem><SelectItem value="pending">Pending</SelectItem></SelectContent></Select></div>
@@ -757,7 +760,7 @@ export function IvfConsents() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>New Consent Form</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5"><Label>Patient ID</Label><Input value={form.patientId} onChange={e=>setForm({...form,patientId:e.target.value})} /></div>
+            <div className="space-y-1.5"><Label>Patient ID</Label><PatientSearch value={form.patientId} onValueChange={v=>setForm({...form,patientId:v})} label="Patient ID" required /></div>
             <div className="space-y-1.5"><Label>Type</Label><Select value={form.type} onValueChange={v=>setForm({...form,type:v,title:`${v.replace(/_/g," ")} Consent`})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ivf_treatment">IVF Treatment</SelectItem><SelectItem value="icsi">ICSI</SelectItem><SelectItem value="embryo_freezing">Embryo Freezing</SelectItem><SelectItem value="donor">Donor</SelectItem><SelectItem value="surrogacy">Surrogacy</SelectItem><SelectItem value="pgd">PGD</SelectItem></SelectContent></Select></div>
             <div className="space-y-1.5"><Label>Title</Label><Input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} /></div>
           </div>

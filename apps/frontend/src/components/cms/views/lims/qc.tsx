@@ -8,6 +8,7 @@ import { Pagination } from "@/components/cms/pagination";
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { StaffSearch } from "@/components/ui/staff-search";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,7 +32,7 @@ import {
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { StatCard } from "./utils";
 
 interface QCRecord {
   id: string;
@@ -362,35 +363,6 @@ export function LimsQC() {
   );
 }
 
-function StatCard({
-  label, value, icon: Icon, accent,
-}: {
-  label: string;
-  value: number;
-  icon: React.ComponentType<{ className?: string }>;
-  accent: string;
-}) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-2xl font-bold tracking-tight">{value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-            </div>
-            <div
-              className={`w-9 h-9 rounded-lg bg-gradient-to-br ${accent} flex items-center justify-center shrink-0`}
-            >
-              <Icon className="w-4 h-4 text-white" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-}
-
 function AddQCDialog({
   open, onOpenChange, onCreated,
 }: {
@@ -522,11 +494,7 @@ function AddQCDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Performed By</Label>
-              <Input
-                value={form.performedBy}
-                onChange={(e) => setForm({ ...form, performedBy: e.target.value })}
-                placeholder="Dr. Lab Tech"
-              />
+              <StaffSearch value={form.performedBy} onValueChange={v => setForm({...form, performedBy: v})} label="Performed By" />
             </div>
             <div className="col-span-2 space-y-1.5">
               <Label>Comments</Label>

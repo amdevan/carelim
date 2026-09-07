@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const orderId = searchParams.get("orderId");
@@ -14,17 +16,17 @@ export async function GET(req: NextRequest) {
     orderBy: { collectionTime: "desc" },
   });
   return NextResponse.json(samples);
-}
+});
 
 // Collect sample
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const { orderId, testId, sampleType, containerType, collectorName, location } = body;
   const count = await db.labSample.count();
   const now = new Date();
   const sample = await db.labSample.create({
     data: {
-      sampleCode: `S-${String(count + 1).padStart(5, "0")}`,
+      sampleCode: `S-${nanoid(8).toUpperCase()}`,
       orderId,
       testId: testId || null,
       sampleType: sampleType || "Blood",
@@ -50,4 +52,4 @@ export async function POST(req: NextRequest) {
   await db.labOrderItem.updateMany({ where: { orderId, testId: testId || undefined }, data: { status: "collected" } });
   await db.auditLog.create({ data: { user: collectorName || "system", action: "CREATE", module: "LabSample", detail: `Collected sample ${sample.sampleCode}` } });
   return NextResponse.json(sample, { status: 201 });
-}
+});

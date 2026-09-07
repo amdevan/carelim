@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
 // GET - Search doctors
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") || "";
   const deptId = searchParams.get("departmentId");
@@ -33,4 +34,4 @@ export async function GET(req: NextRequest) {
   );
 
   return NextResponse.json(doctorsWithSlots);
-}
+});

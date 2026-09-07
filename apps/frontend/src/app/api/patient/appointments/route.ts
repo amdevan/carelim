@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
 // GET - Get patient's appointments
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId");
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
@@ -16,10 +17,10 @@ export async function GET(req: NextRequest) {
     orderBy: [{ date: "desc" }, { time: "desc" }],
   });
   return NextResponse.json(appointments);
-}
+});
 
 // POST - Book a new appointment
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const { userId, doctorId, date, time, type, reason, fee } = body;
   if (!userId || !doctorId || !date || !time) {
@@ -59,4 +60,4 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json(appointment, { status: 201 });
-}
+});

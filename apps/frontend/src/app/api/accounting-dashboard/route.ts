@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const branchId = searchParams.get("branchId");
+  const branchFilter = branchId ? { branchId } : {};
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
@@ -10,12 +14,12 @@ export async function GET() {
   const endOfPrevMonth = startOfMonth;
 
   const [invoices, monthInvoices, prevMonthInvoices, expenses, monthExpenses, prevMonthExpenses, patientPayments, todayPayments, supplierPayments, commissions, claims, cashTxns, bankTxns, journalEntries, pharmacySales, labOrders, radiologyTests] = await Promise.all([
-    db.invoice.findMany(),
-    db.invoice.findMany({ where: { date: { gte: startOfMonth } } }),
-    db.invoice.findMany({ where: { date: { gte: startOfPrevMonth, lt: endOfPrevMonth } } }),
-    db.expense.findMany(),
-    db.expense.findMany({ where: { date: { gte: startOfMonth } } }),
-    db.expense.findMany({ where: { date: { gte: startOfPrevMonth, lt: endOfPrevMonth } } }),
+    db.invoice.findMany({ where: branchFilter }),
+    db.invoice.findMany({ where: { ...branchFilter, date: { gte: startOfMonth } } }),
+    db.invoice.findMany({ where: { ...branchFilter, date: { gte: startOfPrevMonth, lt: endOfPrevMonth } } }),
+    db.expense.findMany({ where: branchFilter }),
+    db.expense.findMany({ where: { ...branchFilter, date: { gte: startOfMonth } } }),
+    db.expense.findMany({ where: { ...branchFilter, date: { gte: startOfPrevMonth, lt: endOfPrevMonth } } }),
     db.patientPayment.findMany(),
     db.patientPayment.findMany({ where: { date: { gte: startOfDay, lt: endOfDay } } }),
     db.supplierPayment.findMany(),
@@ -24,9 +28,9 @@ export async function GET() {
     db.cashTransaction.findMany({ orderBy: { date: "desc" }, take: 50 }),
     db.bankTransaction.findMany({ orderBy: { date: "desc" }, take: 50 }),
     db.journalEntry.findMany({ include: { items: { include: { account: true } } }, orderBy: { date: "desc" }, take: 10 }),
-    db.pharmacySale.findMany({ where: { saleDate: { gte: startOfMonth } } }),
+    db.pharmacySale.findMany({ where: { ...branchFilter, saleDate: { gte: startOfMonth } } }),
     db.labOrder.findMany({ where: { orderedAt: { gte: startOfMonth } } }),
-    db.radiologyStudy.findMany({ where: { createdAt: { gte: startOfMonth } }, include: { modality: true } }),
+    db.radiologyStudy.findMany({ where: { ...branchFilter, createdAt: { gte: startOfMonth } }, include: { modality: true } }),
   ]);
 
   // Financial position
@@ -154,4 +158,4 @@ export async function GET() {
       items: je.items.map(it => ({ accountName: it.account.name, debit: it.debit, credit: it.credit })),
     })),
   });
-}
+});

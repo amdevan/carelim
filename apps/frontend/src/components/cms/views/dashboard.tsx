@@ -2,6 +2,7 @@
 
 import { useFetch } from "@/lib/use-fetch";
 import { useState, useMemo } from "react";
+import { useAppStore } from "@/store/app-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useAppStore } from "@/store/app-store";
 import { formatRs, formatCurrency, timeAgo, statusColors, statusLabel } from "@/lib/format";
 import { exportToCSV } from "@/lib/export-utils";
 import { KpiCard } from "@/components/cms/kpi-card";
@@ -52,7 +52,7 @@ interface DashboardData {
 }
 
 interface Branch {
-  id: string; name: string; code: string; status: string;
+  id: string; name: string; code: string; status: string; clinicType?: string;
 }
 
 interface Invoice {
@@ -92,12 +92,15 @@ interface KpiCard {
 }
 
 export function DashboardView() {
+  const storeBranchId = useAppStore((s) => s.branchId);
+  const setStoreBranchId = useAppStore((s) => s.setBranchId);
+  const setStoreBranchClinicType = useAppStore((s) => s.setBranchClinicType);
+  const tenantBranding = useAppStore((s) => s.tenantBranding);
   const { data, loading } = useFetch<DashboardData>("/api/dashboard");
   const { data: branches } = useFetch<Branch[]>("/api/branches");
   const { data: invoices } = useFetch<Invoice[]>("/api/invoices");
   const { data: doctors } = useFetch<Doctor[]>("/api/doctors");
   const { setView } = useAppStore();
-  const [branchId, setBranchId] = useState<string>("all");
 
   const revenueByService = useMemo(() => {
     if (!invoices) return [];
@@ -167,16 +170,19 @@ export function DashboardView() {
       ["Low Stock Items", lowStock.length],
       ["Expiring Soon Items", expiringSoon.length],
     ];
-    exportToCSV("medcore-dashboard-summary", ["Metric", "Value"], rows);
+    exportToCSV(`${tenantBranding?.clinicName || "clinic"}-dashboard-summary`, ["Metric", "Value"], rows);
     toast.success("Dashboard summary exported");
   };
 
   const handleBranchChange = (v: string) => {
-    setBranchId(v);
     if (v === "all") {
+      setStoreBranchId(null);
+      setStoreBranchClinicType(null);
       toast.info("Switched to All Branches");
     } else {
+      setStoreBranchId(v);
       const b = branches?.find((x) => x.id === v);
+      setStoreBranchClinicType(b?.clinicType || "General");
       toast.info(`Switched to ${b?.name ?? "branch"}`);
     }
   };
@@ -194,7 +200,7 @@ export function DashboardView() {
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <p className="text-teal-100/90 text-sm">Good {greeting()}, Admin 👋</p>
-            <h2 className="text-xl sm:text-2xl font-bold mt-0.5">Here's what's happening at Carelim OS today</h2>
+            <h2 className="text-xl sm:text-2xl font-bold mt-0.5">Here&apos;s what&apos;s happening at {tenantBranding?.clinicName || "your clinic"} today</h2>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-2 text-sm text-teal-50/90">
               <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> {kpis.totalPatients} total patients</span>
               <span className="flex items-center gap-1.5"><Stethoscope className="w-3.5 h-3.5" /> {kpis.totalDoctors} doctors on staff</span>
@@ -210,10 +216,11 @@ export function DashboardView() {
                 <UserPlus className="w-4 h-4" /> New Patient
               </Button>
             </div>
-            {/* Branch selector */}
-            <div className="flex items-center gap-2">
-              <Building2 className="w-3.5 h-3.5 text-teal-100/80" />
-              <Select value={branchId} onValueChange={handleBranchChange}>
+            {/* Branch selector — only show when tenant has 2+ branches */}
+            {branches && branches.length >= 2 && (
+              <div className="flex items-center gap-2">
+                <Building2 className="w-3.5 h-3.5 text-teal-100/80" />
+                <Select value={storeBranchId ?? "all"} onValueChange={handleBranchChange}>
                 <SelectTrigger className="h-8 w-[180px] bg-white/15 border-white/20 text-white hover:bg-white/25 text-xs">
                   <SelectValue placeholder="All Branches" />
                 </SelectTrigger>
@@ -227,6 +234,7 @@ export function DashboardView() {
                 </SelectContent>
               </Select>
             </div>
+            )}
           </div>
         </div>
       </motion.div>

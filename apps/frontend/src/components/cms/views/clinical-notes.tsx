@@ -2,7 +2,7 @@
 
 import { fetchAPI } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,11 +21,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ClipboardList, Plus, Search, Download, FileText, Edit, Trash2,
-  Eye, Tag,
+  Eye, Tag, AlertTriangle,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { toast } from "sonner";
+import { useAppStore } from "@/store/app-store";
 import { motion } from "framer-motion";
+import { PatientSearch } from "@/components/ui/patient-search";
+import { DoctorSearch } from "@/components/ui/doctor-search";
 
 /* ─────────── Types ─────────── */
 
@@ -46,18 +49,6 @@ interface NoteTemplate {
   name: string;
   category: "SOAP" | "Progress" | "Discharge" | "Referral";
   content: string;
-}
-
-interface PatientOption {
-  id: string;
-  patientCode: string;
-  name: string;
-}
-
-interface DoctorOption {
-  id: string;
-  name: string;
-  specialization: string;
 }
 
 /* ─────────── Constants ─────────── */
@@ -124,6 +115,7 @@ type TabValue = "notes" | "templates";
    ═══════════════════════════════════════════════════════════ */
 
 export function ClinicalNotesView() {
+  const branchId = useAppStore((s) => s.branchId);
   const [refresh, setRefresh] = useState(0);
   const { data: notes, loading } = useFetch<ClinicalNote[]>(
     refresh ? `/api/clinical-notes?_r=${refresh}` : "/api/clinical-notes",
@@ -217,7 +209,10 @@ export function ClinicalNotesView() {
           <Button
             size="sm"
             className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
+            disabled={!branchId}
+            title={!branchId ? "Select a branch first" : ""}
             onClick={() => {
+              if (!branchId) return;
               setPreselectedCategory("");
               setPreselectedContent("");
               setCreateOpen(true);
@@ -227,6 +222,17 @@ export function ClinicalNotesView() {
           </Button>
         </div>
       </div>
+
+      {/* No branch warning */}
+      {!branchId && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No Branch Selected</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">Select a branch from the header to create clinical notes. All Branches view is read-only.</p>
+          </div>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -559,8 +565,6 @@ function CreateNoteDialog({
   preselectedCategory?: string;
   preselectedContent?: string;
 }) {
-  const { data: patients } = useFetch<PatientOption[]>("/api/patients");
-  const { data: doctors } = useFetch<DoctorOption[]>("/api/doctors");
   const [form, setForm] = useState({
     patientId: "",
     doctorId: "",
@@ -615,38 +619,8 @@ function CreateNoteDialog({
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Patient *</Label>
-              <Select
-                value={form.patientId}
-                onValueChange={(v) => setForm({ ...form, patientId: v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent>
-                  {(patients || []).slice(0, 200).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} <span className="text-xs text-muted-foreground">({p.patientCode})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Doctor *</Label>
-              <Select
-                value={form.doctorId}
-                onValueChange={(v) => setForm({ ...form, doctorId: v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                <SelectContent>
-                  {(doctors || []).map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name} <span className="text-xs text-muted-foreground">· {d.specialization}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
+            <DoctorSearch value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })} label="" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -725,9 +699,9 @@ function EditNoteDialog({
   }, []);
 
   // Sync form when note changes
-  useState(() => {
+  useEffect(() => {
     if (note) resetFromNote(note);
-  });
+  }, [note]);
 
   if (!note) return null;
 

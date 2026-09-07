@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { StatCard, toDateInputValue } from "./utils";
 
 interface LabDepartment {
   id: string;
@@ -109,11 +109,6 @@ const EMPTY_FORM: EqFormState = {
   maintenanceSchedule: "",
   status: "operational",
 };
-
-function toDateInputValue(d: string | null): string {
-  if (!d) return "";
-  return new Date(d).toISOString().split("T")[0];
-}
 
 function isPast(dateStr: string | null): boolean {
   if (!dateStr) return false;
@@ -435,35 +430,6 @@ export function LimsEquipment() {
         }}
       />
     </div>
-  );
-}
-
-function StatCard({
-  label, value, icon: Icon, accent,
-}: {
-  label: string;
-  value: number;
-  icon: React.ComponentType<{ className?: string }>;
-  accent: string;
-}) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-2xl font-bold tracking-tight">{value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-            </div>
-            <div
-              className={`w-9 h-9 rounded-lg bg-gradient-to-br ${accent} flex items-center justify-center shrink-0`}
-            >
-              <Icon className="w-4 h-4 text-white" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
   );
 }
 

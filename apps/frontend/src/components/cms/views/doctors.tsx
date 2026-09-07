@@ -96,6 +96,7 @@ const TIMELINE_COLORS: Record<string, string> = {
 
 export function DoctorsView() {
   const [tick, setTick] = useState(0);
+  const branchId = useAppStore((s) => s.branchId);
   const { data: doctors, loading } = useFetch<Doctor[]>(tick ? `/api/doctors?_r=${tick}` : "/api/doctors");
   const { data: dashData } = useFetch<DashboardData>("/api/doctor-dashboard");
   const { setView } = useAppStore();
@@ -702,6 +703,7 @@ function DoctorFormDialog({ open, onOpenChange, doctor, departments, onSaved }: 
   departments: { id: string; name: string }[];
   onSaved: () => void;
 }) {
+  const branchId = useAppStore((s) => s.branchId);
   const [form, setForm] = useState({
     name: "", email: "", phone: "", gender: "male", qualification: "MBBS",
     specialization: "", departmentId: "", licenseNumber: "",
@@ -746,6 +748,7 @@ function DoctorFormDialog({ open, onOpenChange, doctor, departments, onSaved }: 
         commissionPct: Number(form.commissionPct) || 0,
         rating: doctor?.rating ?? 4.5,
         workingDays: doctor?.workingDays ?? "Mon,Tue,Wed,Thu,Fri",
+        branchId,
       };
       const res = await fetch(
         doctor ? `/api/doctors/${doctor.id}` : "/api/doctors",
@@ -780,7 +783,7 @@ function DoctorFormDialog({ open, onOpenChange, doctor, departments, onSaved }: 
             </div>
             <div className="space-y-1.5">
               <Label>Email *</Label>
-              <Input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="doctor@carelim.health" />
+              <Input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="doctor@your-clinic.com" />
             </div>
             <div className="space-y-1.5">
               <Label>Phone *</Label>
@@ -872,6 +875,7 @@ function AddDepartmentDialog({
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEPT_COLORS[0]);
   const [saving, setSaving] = useState(false);
+  const branchId = useAppStore((s) => s.branchId);
 
   useEffect(() => {
     if (open) {
@@ -896,7 +900,7 @@ function AddDepartmentDialog({
       const res = await fetchAPI(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), color }),
+        body: JSON.stringify({ name: name.trim(), color, branchId }),
       });
       if (!res.ok) throw new Error("Failed");
       toast.success(isEdit ? `Department "${name.trim()}" updated` : `Department "${name.trim()}" created`);

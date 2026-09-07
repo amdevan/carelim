@@ -249,16 +249,19 @@ export function SaasTenants({ filter: initialFilter, onViewProfile }: SaasTenant
       if (res.ok) {
         const data = await res.json();
         // Store impersonation context in the CMS store via localStorage
-        const storeKey = "medcore-store";
+        const storeKey = "carelim-store";
         const existing = JSON.parse(localStorage.getItem(storeKey) || "{}");
         const state = existing.state || {};
         state.authed = true;
-        state.user = { name: data.tenant.name, email: data.tenant.email, role: "Clinic Admin" };
+        state.token = data.token;
+        state.user = { name: data.tenant.name, email: data.tenant.email, role: "Clinic Admin", tenantId: data.tenant.id };
         state.impersonation = { tenantId: data.tenant.id, tenantName: data.tenant.name, tenantEmail: data.tenant.email, enabledModules: data.tenant.enabledModules || [] };
         state.enabledModules = data.tenant.enabledModules || [];
         state.view = "dashboard";
         existing.state = state;
         localStorage.setItem(storeKey, JSON.stringify(existing));
+        // Set impersonation token as cookie for API auth
+        document.cookie = `carelim_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
         toast.success(`Logging in as ${t.name}…`, { description: "Redirecting to tenant workspace" });
         window.location.href = "/";
       } else {
@@ -1177,10 +1180,13 @@ export function SaasTenantProfile({ tenantId, onBack }: { tenantId: string | nul
       if (res.ok) {
         const data = await res.json();
         const enabledModules = data.tenant.enabledModules || [];
+        // Set impersonation token as cookie for API auth
+        document.cookie = `carelim_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
         // Use Zustand's setState — persist middleware will auto-save to localStorage
         useAppStore.setState({
           authed: true,
-          user: { name: data.tenant.name, email: data.tenant.email, role: "Clinic Admin" },
+          token: data.token,
+          user: { name: data.tenant.name, email: data.tenant.email, role: "Clinic Admin", tenantId: data.tenant.id },
           impersonation: { tenantId: data.tenant.id, tenantName: data.tenant.name, tenantEmail: data.tenant.email, enabledModules },
           enabledModules,
           view: "dashboard" as ViewKey,
@@ -1606,7 +1612,7 @@ interface TenantBranch {
   status: string; createdAt: string;
 }
 
-const CLINIC_TYPES = ["General", "Dental", "IVF & Fertility", "Telemedicine", "Pediatrics", "Orthopedics", "Cardiology", "Neurology", "Ophthalmology", "Dermatology", "ENT", "Oncology", "Psychiatry", "Rehabilitation", "Diagnostic Center"];
+const CLINIC_TYPES = ["General", "Dental", "IVF"];
 
 function TenantBranches({ tenantId, onRefresh }: { tenantId: string; onRefresh: () => void }) {
   const [tick, setTick] = useState(0);

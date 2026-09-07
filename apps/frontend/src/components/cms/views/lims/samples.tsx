@@ -1,10 +1,12 @@
 "use client";
 import { fetchAPI } from "@/lib/api";
+import { useAppStore } from "@/store/app-store";
 
 import { useFetch } from "@/lib/use-fetch";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { StaffSearch } from "@/components/ui/staff-search";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,8 +26,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Search, Plus, Download, TestTube, ClipboardList, CheckCircle2, Microscope,
-  Barcode, MapPin, Printer, Send, Ban, ArrowUpDown, ArrowUp, ArrowDown,
-  Route, Syringe, QrCode, User, Clock, Package,
+  Barcode, MapPin, Printer, Send, Ban, Route, Syringe, QrCode, User, Clock, Package,
 } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { exportToCSV, printHTML } from "@/lib/export-utils";
@@ -33,6 +34,7 @@ import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { escapeHTML, SAMPLE_STATUS_COLORS, SAMPLE_TYPE_COLORS, SAMPLE_TYPES, CONTAINER_TYPES, SortHeader, InfoTile } from "./utils";
 
 /* ---------- Types ---------- */
 
@@ -100,37 +102,9 @@ interface LabOrder {
 
 const STATUS_FILTERS = ["all", "pending", "collected", "received", "rejected", "recollected", "processing", "completed"] as const;
 
-const SAMPLE_STATUS_COLORS: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-  collected: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300",
-  received: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
-  rejected: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
-  recollected: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
-  processing: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
-  completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
-};
-
-const SAMPLE_TYPE_COLORS: Record<string, string> = {
-  Blood: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
-  Urine: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
-  Stool: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
-  Sputum: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300",
-  Tissue: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
-  CSF: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
-  Swab: "bg-pink-100 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300",
-};
-
-const CONTAINER_TYPES = ["EDTA Tube", "Citrate Tube", "Heparin Tube", "Plain Tube", "Fluoride Tube", "Sterile Container", "Urine Container"] as const;
-const SAMPLE_TYPES = ["Blood", "Urine", "Stool", "Sputum", "Tissue", "CSF", "Swab"] as const;
-
 type SortKey = "sampleCode" | "collectedAt" | "status" | "";
 
 /* ---------- Helpers ---------- */
-
-function escapeHTML(s: string): string {
-  return String(s ?? "").replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
-}
 
 // Build a simple monospace barcode representation from a string.
 // Each character deterministically produces a sequence of narrow/wide bars.
@@ -149,7 +123,7 @@ function buildBarcodeBars(code: string): string {
   }).join("");
 }
 
-function printSampleLabel(sample: LabSample) {
+function printSampleLabel(sample: LabSample, clinicName?: string) {
   const barcode = sample.barcode || sample.sampleCode;
   const body = `
   <style>
@@ -165,7 +139,7 @@ function printSampleLabel(sample: LabSample) {
     .label-wrap .val { font-weight: bold; color: #1a2e35; }
   </style>
   <div class="label-wrap">
-    <div class="brand">Carelim OS Lab</div>
+    <div class="brand">${clinicName || "Lab"}</div>
     <div class="code">${escapeHTML(sample.sampleCode)}</div>
     <div class="bars">${buildBarcodeBars(barcode)}</div>
     <div class="barcode-text">${escapeHTML(barcode)}</div>
@@ -204,37 +178,11 @@ async function patchSample(
   }
 }
 
-/* ---------- Sort Header ---------- */
-
-function SortHeader({
-  label, colKey, sortKey, sortDir, onSort, className,
-}: {
-  label: string;
-  colKey: string;
-  sortKey: string;
-  sortDir: "asc" | "desc";
-  onSort: () => void;
-  className?: string;
-}) {
-  const active = sortKey === colKey;
-  return (
-    <TableHead className={className}>
-      <button type="button" onClick={onSort} className="inline-flex items-center gap-1 text-left hover:text-foreground transition-colors">
-        {label}
-        {active ? (
-          sortDir === "asc" ? <ArrowUp className="w-3 h-3 text-teal-600" /> : <ArrowDown className="w-3 h-3 text-teal-600" />
-        ) : (
-          <ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />
-        )}
-      </button>
-    </TableHead>
-  );
-}
-
 /* ---------- Main View ---------- */
 
 export function LimsSamples() {
   const [refresh, setRefresh] = useState(0);
+  const tenantBranding = useAppStore((s) => s.tenantBranding);
   const refreshFn = useCallback(() => setRefresh((k) => k + 1), []);
   const { data: samples, loading, error } = useFetch<LabSample[]>(
     refresh ? `/api/lab-samples?_r=${refresh}` : "/api/lab-samples",
@@ -451,7 +399,7 @@ export function LimsSamples() {
                       <SampleActions
                         sample={s}
                         onTrack={() => setTrackSample(s)}
-                        onPrint={() => printSampleLabel(s)}
+                        onPrint={() => printSampleLabel(s, tenantBranding?.clinicName ?? undefined)}
                         onReceive={() => patchSample(
                           s.id,
                           { status: "received", location: "Sample Reception", handler: "Lab Reception" },
@@ -661,8 +609,7 @@ function CollectSampleDialog({
 
           <div className="space-y-1.5">
             <Label>Collector Name *</Label>
-            <Input placeholder="e.g. Sita Sharma" value={collectorName}
-              onChange={(e) => setCollectorName(e.target.value)} />
+            <StaffSearch value={collectorName} onValueChange={setCollectorName} label="Collector Name" required />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -886,20 +833,4 @@ function TrackingSheet({
   );
 }
 
-/* ---------- Info Tile (Sheet) ---------- */
 
-function InfoTile({ label, value, icon, mono }: {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-  mono?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-        {icon}{label}
-      </p>
-      <p className={`text-sm font-medium mt-0.5 ${mono ? "font-mono" : ""}`}>{value}</p>
-    </div>
-  );
-}

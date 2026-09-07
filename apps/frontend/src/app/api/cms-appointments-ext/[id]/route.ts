@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const e = await db.appointmentExtension.findUnique({ where: { id } });
   if (!e) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(e);
-}
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+});
+export const PATCH = withTenant(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const body = await req.json();
   const e = await db.appointmentExtension.update({ where: { id }, data: body });
@@ -25,9 +26,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
   return NextResponse.json(e);
-}
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+});
+export const DELETE = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   await db.appointmentExtension.delete({ where: { id } });
   return NextResponse.json({ ok: true });
-}
+});

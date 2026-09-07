@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
 // GET - Get family members (patients linked by emergency contact or similar)
 export async function GET(req: NextRequest) {
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST - Add a family member
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const { userId, name, phone, gender, dob, bloodGroup, relationship } = body;
   if (!userId || !name) return NextResponse.json({ error: "userId and name required" }, { status: 400 });
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest) {
   const count = await db.patient.count();
   const patient = await db.patient.create({
     data: {
-      patientCode: `PT-${String(count + 1).padStart(5, "0")}`,
+      patientCode: `PT-${nanoid(8).toUpperCase()}`,
       name,
       phone: phone || "",
       gender: gender || "male",
@@ -49,4 +51,4 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json(patient, { status: 201 });
-}
+});

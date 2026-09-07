@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const proc = await db.dentalProcedure.findUnique({ where: { id } });
   if (!proc) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(proc);
-}
+});
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withTenant(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const body = await req.json();
   const data: Record<string, unknown> = { ...body };
@@ -18,9 +19,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.images && typeof body.images !== "string") data.images = JSON.stringify(body.images);
   const proc = await db.dentalProcedure.update({ where: { id }, data });
   return NextResponse.json(proc);
-}
+});
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const proc = await db.dentalProcedure.findUnique({ where: { id } });
   // Optionally null out the linked invoice instead of deleting it (keep financial trail)
@@ -29,4 +30,4 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   }
   await db.dentalProcedure.delete({ where: { id } });
   return NextResponse.json({ ok: true });
-}
+});

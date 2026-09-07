@@ -1,5 +1,6 @@
 "use client";
 import { fetchAPI } from "@/lib/api";
+import { useAppStore } from "@/store/app-store";
 
 import { useFetch } from "@/lib/use-fetch";
 import { useState, useMemo, useCallback } from "react";
@@ -138,7 +139,7 @@ function poBalance(po: PurchaseOrder): number {
   return Math.max(0, (po.totalAmount || 0) - (po.paidAmount || 0));
 }
 
-function buildPOPrintHTML(po: PurchaseOrder): string {
+function buildPOPrintHTML(po: PurchaseOrder, clinicName?: string): string {
   const statusBadge = `<span class="badge ${po.status === "received" ? "emerald" : po.status === "cancelled" ? "rose" : "teal"}">${statusLabel(po.status)}</span>`;
   const supplierGrid = `
     <div class="info-grid">
@@ -184,18 +185,19 @@ function buildPOPrintHTML(po: PurchaseOrder): string {
     ${totals}
     ${po.notes ? `<h2>Notes</h2><p style="font-size:13px;color:#475569">${escapeHTML(po.notes)}</p>` : ""}
     <div class="signature">
-      <div class="sig-block"><div class="line"></div><div class="name">Store Manager</div><div class="role">Carelim OS Pharmacy</div></div>
+      <div class="sig-block"><div class="line"></div><div class="name">Store Manager</div><div class="role">${clinicName || "Pharmacy"}</div></div>
       <div class="sig-block"><div class="line"></div><div class="name">Supplier Authorized Signatory</div><div class="role">${escapeHTML(po.supplier.name)}</div></div>
     </div>`;
 }
 
-function printPO(po: PurchaseOrder) {
-  printHTML(`Purchase Order ${po.poNumber}`, buildPOPrintHTML(po));
+function printPO(po: PurchaseOrder, clinicName?: string) {
+  printHTML(`Purchase Order ${po.poNumber}`, buildPOPrintHTML(po, clinicName), clinicName);
 }
 
 /* ---------------- Main View ---------------- */
 export function PmsPurchases() {
   const [refresh, setRefresh] = useState(0);
+  const tenantBranding = useAppStore((s) => s.tenantBranding);
   const refreshFn = useCallback(() => setRefresh((r) => r + 1), []);
   const { data: orders, loading, error } = useFetch<PurchaseOrder[]>(
     refresh ? `/api/purchase-orders?_r=${refresh}` : "/api/purchase-orders",
@@ -464,7 +466,7 @@ export function PmsPurchases() {
                             size="sm"
                             className="h-7 w-7 p-0 text-muted-foreground hover:text-teal-600"
                             title="Print PO"
-                            onClick={() => printPO(po)}
+                            onClick={() => printPO(po, tenantBranding?.clinicName ?? undefined)}
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </Button>
@@ -525,7 +527,7 @@ export function PmsPurchases() {
       {/* View sheet */}
       <Sheet open={!!viewId} onOpenChange={(o) => !o && setViewId(null)}>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto scrollbar-thin p-0">
-          {selected && <PODetail po={selected} onPrint={() => printPO(selected)} onReceive={(p) => { setViewId(null); setReceivePO(p); }} />}
+          {selected && <PODetail po={selected} onPrint={() => printPO(selected, tenantBranding?.clinicName ?? undefined)} onReceive={(p) => { setViewId(null); setReceivePO(p); }} />}
         </SheetContent>
       </Sheet>
     </div>
@@ -536,6 +538,7 @@ export function PmsPurchases() {
 function CreatePODialog({
   open, onOpenChange, onCreated,
 }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+  const branchId = useAppStore((s) => s.branchId);
   const { data: suppliers } = useFetch<Supplier[]>("/api/suppliers");
   const { data: medicines } = useFetch<MedicineLite[]>("/api/medicines");
 
@@ -607,6 +610,7 @@ function CreatePODialog({
         supplierId,
         expectedDate: expectedDate || null,
         notes,
+        branchId,
         items: valid.map((i) => ({
           medicineId: i.medicineId,
           quantity: Number(i.quantity),

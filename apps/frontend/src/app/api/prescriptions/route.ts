@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
+import { requirePermission } from "@/lib/api-guard";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const patientId = searchParams.get("patientId");
+    const branchId = searchParams.get("branchId");
     const where: Record<string, unknown> = {};
     if (patientId) where.patientId = patientId;
+    if (branchId) where.branchId = branchId;
     const prescriptions = await db.prescription.findMany({
       where,
       include: { patient: true, doctor: { include: { department: true } }, items: true },
@@ -18,19 +23,22 @@ export async function GET(req: NextRequest) {
     console.error("Error fetching prescriptions:", error);
     return NextResponse.json({ error: "Failed to fetch prescriptions" }, { status: 500 });
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
+  const denied = await requirePermission(req, "EMR", "create");
+  if (denied) return denied;
   try {
     const body = await req.json();
     const {
       items, patientId, doctorId, diagnosis, symptoms, vitals, advice, followUp,
-      clinicalData,
+      clinicalData, branchId,
     } = body;
     const count = await db.prescription.count();
     const prescription = await db.prescription.create({
       data: {
-        code: `RX-${String(count + 1).padStart(5, "0")}`,
+        code: `RX-${nanoid(8).toUpperCase()}`,
+        branchId: branchId || null,
         patientId,
         doctorId,
         diagnosis: diagnosis || null,
@@ -63,4 +71,4 @@ export async function POST(req: NextRequest) {
     console.error("Error creating prescription:", error);
     return NextResponse.json({ error: "Failed to create prescription" }, { status: 500 });
   }
-}
+});

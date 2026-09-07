@@ -30,7 +30,10 @@ const NEW_MAP: Record<string, { view: ViewKey; label: string }> = {
 };
 
 export function KeyboardNav() {
-  const { setView, setCommandOpen, toggleSidebar, authed } = useAppStore();
+  const setView = useAppStore((s) => s.setView);
+  const setCommandOpen = useAppStore((s) => s.setCommandOpen);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const authed = useAppStore((s) => s.authed);
   const pendingKey = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

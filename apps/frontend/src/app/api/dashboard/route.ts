@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { withErrorHandling } from "@/lib/api-error";
+import { withTenant } from "@/lib/with-tenant";
 
-export const GET = withErrorHandling(async () => {
+export const GET = withTenant(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const branchId = searchParams.get("branchId");
+  const branchFilter = branchId ? { branchId } : {};
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
@@ -33,19 +36,20 @@ export const GET = withErrorHandling(async () => {
   // Batch query: all invoices and appointments for last 7 days in one query each
   const [patients, doctors, todayAppts, todayInvoices, allInvoices, labTests, medicines, prescriptions, recentActivities, weekInvoices, weekAppointments, monthlyPatients, depts] =
     await Promise.all([
-      db.patient.count(),
-      db.doctor.count(),
-      db.appointment.findMany({ where: { date: { gte: startOfDay, lt: endOfDay } } }),
-      db.invoice.findMany({ where: { date: { gte: startOfDay, lt: endOfDay } } }),
-      db.invoice.findMany({ where: { date: { gte: startOfMonth } } }),
-      db.labTest.count(),
-      db.medicine.findMany(),
-      db.prescription.count(),
+      db.patient.count({ where: branchFilter }),
+      db.doctor.count({ where: branchFilter }),
+      db.appointment.findMany({ where: { date: { gte: startOfDay, lt: endOfDay }, ...branchFilter } }),
+      db.invoice.findMany({ where: { date: { gte: startOfDay, lt: endOfDay }, ...branchFilter } }),
+      db.invoice.findMany({ where: { date: { gte: startOfMonth }, ...branchFilter } }),
+      db.labTest.count({ where: branchFilter }),
+      db.medicine.findMany({ where: branchFilter }),
+      db.prescription.count({ where: branchFilter }),
       db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 8 }),
       // Batch: get all invoices for last 7 days in one query
       db.invoice.findMany({
         where: {
           date: { gte: last7Days[0].gte, lt: last7Days[6].lt },
+          ...branchFilter,
         },
         select: { date: true, paid: true },
       }),
@@ -53,6 +57,7 @@ export const GET = withErrorHandling(async () => {
       db.appointment.findMany({
         where: {
           date: { gte: last7Days[0].gte, lt: last7Days[6].lt },
+          ...branchFilter,
         },
         select: { date: true },
       }),
@@ -60,6 +65,7 @@ export const GET = withErrorHandling(async () => {
       db.patient.findMany({
         where: {
           registeredAt: { gte: last6Months[0].gte, lt: last6Months[5].lt },
+          ...branchFilter,
         },
         select: { registeredAt: true },
       }),

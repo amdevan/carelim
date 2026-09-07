@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") || "";
   const deptId = searchParams.get("departmentId");
@@ -15,11 +16,15 @@ export async function GET(req: NextRequest) {
     orderBy: { name: "asc" },
   });
   return NextResponse.json(tests);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const { parameters, ...data } = body;
+  if (!data.code) {
+    const count = await db.labTestMaster.count();
+    data.code = `LTM-${String(count + 1).padStart(3, "0")}`;
+  }
   const test = await db.labTestMaster.create({
     data: {
       ...data,
@@ -38,4 +43,4 @@ export async function POST(req: NextRequest) {
   });
   await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "LabTest", detail: `Created lab test ${test.name}` } });
   return NextResponse.json(test, { status: 201 });
-}
+});

@@ -1,55 +1,26 @@
-// Carelim OS — Step 4: Success Screen
-// Beautiful success animation, summary, onboarding checklist, action buttons
-
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  CheckCircle, Copy, ExternalLink, Users, Calendar,
-  FileText, Camera, BarChart3, Settings, Share2,
-  PlayCircle, Download, Check, Sparkles, Send,
+  CheckCircle, Copy, ExternalLink, Download, Check, Sparkles,
+  ArrowRight, ShieldCheck, CreditCard, Building2, Clock,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { useOnboardingStore } from "./onboarding-store";
-import { MODULES } from "./module-data";
 import { PRICING_PLANS } from "./pricing-data";
 
-interface OnboardingChecklistItem {
-  id: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  completed: boolean;
-}
-
 export function Step4Success() {
-  const { basicInfo, moduleSelection, packageSelection } = useOnboardingStore();
+  const { basicInfo, packageSelection, resetOnboarding } = useOnboardingStore();
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
-  const [checklist, setChecklist] = useState<OnboardingChecklistItem[]>([
-    { id: "logo", label: "Upload Clinic Logo", icon: Camera, completed: !!basicInfo.clinicLogoPreview },
-    { id: "doctors", label: "Add Doctors", icon: Users, completed: false },
-    { id: "departments", label: "Add Departments", icon: Settings, completed: false },
-    { id: "billing", label: "Configure Billing", icon: BarChart3, completed: false },
-    { id: "staff", label: "Add Staff", icon: Users, completed: false },
-    { id: "patient", label: "Add First Patient", icon: Users, completed: false },
-    { id: "appointment", label: "Book First Appointment", icon: Calendar, completed: false },
-    { id: "whatsapp", label: "Configure WhatsApp", icon: Share2, completed: false },
-    { id: "sms", label: "Enable SMS", icon: Send, completed: false },
-    { id: "profile", label: "Complete Profile", icon: Settings, completed: false },
-  ]);
-
-  const selectedModules = MODULES.filter((m) =>
-    moduleSelection.selectedModuleKeys.includes(m.key)
-  );
 
   const selectedPlan =
     PRICING_PLANS.find((p) => p.id === packageSelection.selectedPlanId) ||
     PRICING_PLANS[0];
 
-  // Calculate trial expiry date
   const trialExpiry = new Date();
   trialExpiry.setDate(trialExpiry.getDate() + 14);
 
@@ -61,317 +32,198 @@ export function Step4Success() {
     });
   };
 
-  const handleCopyUrl = () => {
-    const url = `${basicInfo.clinicName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.carelim.com`;
-    navigator.clipboard.writeText(url);
+  const handleCopyEmail = () => {
+    navigator.clipboard.writeText(basicInfo.adminEmailAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleChecklistToggle = (id: string) => {
-    setChecklist(
-      checklist.map((item) =>
-        item.id === id ? { ...item, completed: !item.completed } : item
-      )
-    );
+  const handleGoToDashboard = () => {
+    resetOnboarding();
+    router.push("/");
   };
 
-  const completedCount = checklist.filter((item) => item.completed).length;
-  const progressPercent = Math.round((completedCount / checklist.length) * 100);
+  const handleDownloadApp = () => {
+    resetOnboarding();
+    window.open("https://play.google.com/store/apps/details?id=com.carelim", "_blank");
+  };
 
   return (
-    <div className="space-y-8">
-      {/* Success Animation */}
+    <div className="space-y-6">
+      {/* Big Success Header */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.5 }}
+        initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ type: "spring", stiffness: 200, damping: 15 }}
-        className="text-center"
+        className="text-center py-4"
       >
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          transition={{ delay: 0.3, type: "spring", stiffness: 300, damping: 15 }}
-          className="inline-flex items-center justify-center w-24 h-24 bg-green-100 dark:bg-green-900/30 rounded-full mb-4"
+          transition={{ delay: 0.2, type: "spring", stiffness: 300, damping: 12 }}
+          className="inline-flex items-center justify-center w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full mb-4"
         >
-          <CheckCircle className="w-12 h-12 text-green-500" />
+          <CheckCircle className="w-10 h-10 text-green-500" />
         </motion.div>
 
         <motion.h1
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="text-4xl font-bold text-foreground mb-2"
+          transition={{ delay: 0.3 }}
+          className="text-3xl font-bold text-foreground mb-1"
         >
-          Welcome to Carelim OS 🎉
+          Organization Created Successfully!
         </motion.h1>
 
         <motion.p
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="text-muted-foreground text-lg max-w-2xl mx-auto"
+          transition={{ delay: 0.4 }}
+          className="text-muted-foreground text-base"
         >
-          Your organization has been created successfully.
+          Your clinic workspace is ready. Login with your email to get started.
         </motion.p>
-
-        {/* Confetti effect */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="absolute inset-0 pointer-events-none overflow-hidden"
-        >
-          {Array.from({ length: 20 }).map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-2 h-2 bg-blue-400 rounded-full"
-              initial={{
-                x: "50%",
-                y: "50%",
-                scale: 0,
-                opacity: 1,
-              }}
-              animate={{
-                x: `${50 + (Math.random() - 0.5) * 100}%`,
-                y: `${50 + (Math.random() - 0.5) * 100}%`,
-                scale: [0, 1, 0],
-                opacity: [1, 1, 0],
-              }}
-              transition={{
-                duration: 2,
-                delay: 0.5 + i * 0.05,
-                ease: "easeOut",
-              }}
-            />
-          ))}
-        </motion.div>
       </motion.div>
 
-      {/* Organization Summary */}
+      {/* Login Credentials - Prominent */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6 }}
+        transition={{ delay: 0.45 }}
       >
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              Organization Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Organization Name</p>
-                  <p className="font-semibold text-foreground">{basicInfo.clinicName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Clinic Type</p>
-                  <p className="font-semibold text-foreground">{basicInfo.clinicType}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Administrator</p>
-                  <p className="font-semibold text-foreground">{basicInfo.adminFullName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Email</p>
-                  <p className="font-semibold text-foreground">{basicInfo.adminEmailAddress}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Phone</p>
-                  <p className="font-semibold text-foreground">{basicInfo.adminMobileNumber}</p>
-                </div>
+        <Card className="border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
+          <CardContent className="py-4">
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-green-700 dark:text-green-400 uppercase tracking-wide">Your Login Email</p>
+              <div className="flex items-center justify-between">
+                <p className="text-lg font-bold text-foreground">{basicInfo.adminEmailAddress}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyEmail}
+                  className="gap-1.5 shrink-0"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4 text-green-500" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
               </div>
-
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Selected Modules</p>
-                  <p className="font-semibold text-foreground">
-                    {selectedModules.length} modules
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {selectedModules.slice(0, 5).map((mod) => (
-                      <Badge key={mod.key} variant="secondary" className="text-xs">
-                        {mod.name}
-                      </Badge>
-                    ))}
-                    {selectedModules.length > 5 && (
-                      <Badge variant="secondary" className="text-xs">
-                        +{selectedModules.length - 5} more
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Selected Package</p>
-                  <p className="font-semibold text-foreground">{selectedPlan.label}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Trial Expiry Date</p>
-                  <p className="font-semibold text-foreground">{formatDate(trialExpiry)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Clinic URL</p>
-                  <div className="flex items-center gap-2">
-                    <code className="text-sm font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                      {basicInfo.clinicName
-                        .toLowerCase()
-                        .replace(/[^a-z0-9]+/g, "-")
-                        .replace(/^-+|-+$/g, "") || "clinic"}.carelim.com
-                    </code>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCopyUrl}
-                      className="h-6 px-2"
-                    >
-                      {copied ? (
-                        <Check className="w-3 h-3 text-green-500" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">Use the password you set during registration</p>
             </div>
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* Summary Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+            <Building2 className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Organization</p>
+              <p className="text-sm font-semibold">{basicInfo.clinicName}</p>
+              <p className="text-xs text-muted-foreground">{basicInfo.clinicType}</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+            <ShieldCheck className="w-5 h-5 text-purple-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Administrator</p>
+              <p className="text-sm font-semibold">{basicInfo.adminFullName}</p>
+              <p className="text-xs text-muted-foreground">Super Admin</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+            <CreditCard className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Plan</p>
+              <p className="text-sm font-semibold">{selectedPlan.label}</p>
+              <p className="text-xs text-muted-foreground">
+                {selectedPlan.id === "free_trial" ? "Free trial" : `NPR ${selectedPlan.price.toLocaleString()}/mo`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+            <Clock className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">Trial Expires</p>
+              <p className="text-sm font-semibold">{formatDate(trialExpiry)}</p>
+              <p className="text-xs text-muted-foreground">14 days from today</p>
+            </div>
+          </div>
+        </div>
       </motion.div>
 
       {/* Action Buttons */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.7 }}
+        transition={{ delay: 0.6 }}
+        className="space-y-3"
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-            <ExternalLink className="w-4 h-4 mr-2" />
-            Go to Dashboard
+        <Button
+          size="lg"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2 h-12"
+          onClick={handleGoToDashboard}
+        >
+          Go to Login
+          <ArrowRight className="w-4 h-4" />
+        </Button>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            size="default"
+            variant="outline"
+            className="gap-2"
+            onClick={handleDownloadApp}
+          >
+            <Download className="w-4 h-4" />
+            Download App
           </Button>
-          <Button size="lg" variant="outline">
-            <Settings className="w-4 h-4 mr-2" />
-            Complete Clinic Profile
-          </Button>
-          <Button size="lg" variant="outline">
-            <Users className="w-4 h-4 mr-2" />
-            Invite Staff
-          </Button>
-          <Button size="lg" variant="outline">
-            <PlayCircle className="w-4 h-4 mr-2" />
-            Watch Tutorial
-          </Button>
-          <Button size="lg" variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Download Mobile App
-          </Button>
-          <Button size="lg" variant="outline">
-            <Calendar className="w-4 h-4 mr-2" />
-            Book Free Demo
+          <Button
+            size="default"
+            variant="outline"
+            className="gap-2"
+            onClick={handleGoToDashboard}
+          >
+            <ExternalLink className="w-4 h-4" />
+            Open Dashboard
           </Button>
         </div>
       </motion.div>
 
-      {/* Onboarding Checklist */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8 }}
+      {/* Footer note */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.7 }}
+        className="text-center text-xs text-muted-foreground"
       >
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-blue-600" />
-                Onboarding Checklist
-              </span>
-              <Badge
-                className={cn(
-                  "text-sm",
-                  progressPercent === 100
-                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                    : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                )}
-              >
-                {progressPercent}% Complete
-              </Badge>
-            </CardTitle>
-            <CardDescription>
-              Complete these steps to get the most out of Carelim OS
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {checklist.map((item, index) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.8 + index * 0.05 }}
-                  className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border transition-all duration-200",
-                    item.completed
-                      ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                      : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleChecklistToggle(item.id)}
-                    className={cn(
-                      "flex items-center justify-center w-5 h-5 rounded-full border-2 transition-all",
-                      item.completed
-                        ? "bg-green-500 border-green-500 text-white"
-                        : "border-gray-400 dark:border-gray-500"
-                    )}
-                  >
-                    {item.completed && <Check className="w-3 h-3" />}
-                  </button>
-                  <item.icon
-                    className={cn(
-                      "w-4 h-4",
-                      item.completed
-                        ? "text-green-500"
-                        : "text-muted-foreground"
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "text-sm flex-1",
-                      item.completed
-                        ? "text-green-700 dark:text-green-400 line-through"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {item.label}
-                  </span>
-                  {item.completed && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-300"
-                    >
-                      Done
-                    </Badge>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+        A confirmation email has been sent to{" "}
+        <span className="font-medium text-foreground">{basicInfo.adminEmailAddress}</span>.
+        Login with your email and password to access your workspace.
+      </motion.p>
 
-      {/* Sparkle animation at the end */}
+      {/* Sparkle */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1.2 }}
+        transition={{ delay: 1 }}
         className="flex justify-center"
       >
-        <Sparkles className="w-6 h-6 text-yellow-400 animate-pulse" />
+        <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
       </motion.div>
     </div>
   );

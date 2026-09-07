@@ -5,6 +5,7 @@ import { useFetch } from "@/lib/use-fetch";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { StaffSearch } from "@/components/ui/staff-search";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,9 +26,10 @@ import {
 import {
   Search, Download, FileText, ClipboardList, PenLine, CheckCircle2,
   ShieldCheck, Send, Printer, Eye, User, Clock,
-  ArrowUpDown, ArrowUp, ArrowDown, Beaker,
+  Beaker,
   UserCheck, Activity, Stethoscope,
 } from "lucide-react";
+import { escapeHTML, SortHeader, InfoTile as SheetInfoTile } from "./utils";
 import { formatDate, formatDateTime, timeAgo } from "@/lib/format";
 import { exportToCSV, printHTML, docHeader } from "@/lib/export-utils";
 import { usePagination } from "@/lib/use-pagination";
@@ -127,11 +129,6 @@ const FLAG_ORDER = ["panic", "critical", "abnormal", "high", "low"] as const;
 type SortKey = "orderNo" | "enteredAt" | "status" | "";
 
 /* ---------- Helpers ---------- */
-
-function escapeHTML(s: string): string {
-  return String(s ?? "").replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
-}
 
 function formatRefRange(p: LabResultParameter): string {
   const ref = p.parameter.referenceRanges?.[0];
@@ -237,10 +234,7 @@ function printLabReport(result: LabResult, testName: string) {
       <thead><tr><th>Parameter</th><th>Result</th><th>Unit</th><th>Reference Range</th><th>Flag</th></tr></thead>
       <tbody>
         ${result.parameters.map((p) => {
-          const ref = p.parameter.referenceRanges?.[0];
-          const refText = ref ? (ref.textNormal || (ref.lowNormal && ref.highNormal
-            ? `${ref.lowNormal} - ${ref.highNormal}`
-            : ref.lowNormal ? `≥ ${ref.lowNormal}` : ref.highNormal ? `≤ ${ref.highNormal}` : "—")) : "—";
+          const refText = formatRefRange(p);
           return `<tr>
             <td>${escapeHTML(p.parameter.name)}</td>
             <td><strong>${escapeHTML(p.value || "—")}</strong></td>
@@ -269,33 +263,6 @@ function printLabReport(result: LabResult, testName: string) {
     </div>`;
 
   printHTML(`Lab Report ${result.order.orderNo}`, body);
-}
-
-/* ---------- Sort Header ---------- */
-
-function SortHeader({
-  label, colKey, sortKey, sortDir, onSort, className,
-}: {
-  label: string;
-  colKey: string;
-  sortKey: string;
-  sortDir: "asc" | "desc";
-  onSort: () => void;
-  className?: string;
-}) {
-  const active = sortKey === colKey;
-  return (
-    <TableHead className={className}>
-      <button type="button" onClick={onSort} className="inline-flex items-center gap-1 text-left hover:text-foreground transition-colors">
-        {label}
-        {active ? (
-          sortDir === "asc" ? <ArrowUp className="w-3 h-3 text-teal-600" /> : <ArrowDown className="w-3 h-3 text-teal-600" />
-        ) : (
-          <ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />
-        )}
-      </button>
-    </TableHead>
-  );
 }
 
 /* ---------- Main View ---------- */
@@ -776,8 +743,7 @@ function EnterResultDialog({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t">
             <div className="space-y-1.5">
               <Label>Technician Name *</Label>
-              <Input placeholder="e.g. Sita Sharma" value={technicianName}
-                onChange={(e) => setTechnicianName(e.target.value)} />
+              <StaffSearch value={technicianName} onValueChange={setTechnicianName} label="Technician Name" required />
             </div>
           </div>
 
@@ -809,12 +775,7 @@ function ParameterInputRow({
   onCommentChange: (v: string) => void;
 }) {
   const flag = computeFlag(param, value);
-  const ref = param.parameter.referenceRanges?.[0];
-  const refText = ref
-    ? (ref.textNormal || (ref.lowNormal && ref.highNormal
-      ? `${ref.lowNormal} - ${ref.highNormal}`
-      : ref.lowNormal ? `≥ ${ref.lowNormal}` : ref.highNormal ? `≤ ${ref.highNormal}` : "—"))
-    : "—";
+  const refText = formatRefRange(param);
 
   const options = param.parameter.options
     ? param.parameter.options.split(",").map((s) => s.trim()).filter(Boolean)
@@ -1142,23 +1103,5 @@ function ResultViewSheet({
         </div>
       </SheetContent>
     </Sheet>
-  );
-}
-
-/* ---------- Sheet Info Tile ---------- */
-
-function SheetInfoTile({ label, value, icon, mono }: {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-  mono?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-        {icon}{label}
-      </p>
-      <p className={`text-sm font-medium mt-0.5 ${mono ? "font-mono" : ""}`}>{value}</p>
-    </div>
   );
 }

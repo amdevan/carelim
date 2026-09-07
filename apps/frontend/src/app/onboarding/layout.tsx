@@ -26,6 +26,7 @@ export default function OnboardingLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
+        suppressHydrationWarning
         className={`${inter.variable} antialiased bg-gray-50 dark:bg-gray-900 text-foreground`}
       >
         <ThemeProvider

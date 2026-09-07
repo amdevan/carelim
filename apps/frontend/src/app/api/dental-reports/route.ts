@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const fromStr = searchParams.get("from");
   const toStr = searchParams.get("to");
@@ -99,4 +100,4 @@ export async function GET(req: NextRequest) {
       revenue: invoices.find(iv => iv.id === p.invoiceId)?.paid || 0,
     })),
   });
-}
+});

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const { id } = await params;
     const appt = await db.appointment.findUnique({ where: { id }, include: { patient: true, doctor: true } });
@@ -12,9 +13,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     console.error("Error fetching appointment:", error);
     return NextResponse.json({ error: "Failed to fetch appointment" }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withTenant(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const { id } = await params;
     const body = await req.json();
@@ -25,9 +26,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     console.error("Error updating appointment:", error);
     return NextResponse.json({ error: "Failed to update appointment" }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const { id } = await params;
     await db.appointment.delete({ where: { id } });
@@ -36,4 +37,4 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     console.error("Error deleting appointment:", error);
     return NextResponse.json({ error: "Failed to delete appointment" }, { status: 500 });
   }
-}
+});

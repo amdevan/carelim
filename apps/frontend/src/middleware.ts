@@ -1,6 +1,24 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifyToken } from "@/lib/auth";
+import { jwtVerify } from "jose";
+
+const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "";
+
+async function verifyTokenEdge(token: string): Promise<{ userId: string; email: string; role: string; type: string; tenantId?: string } | null> {
+  try {
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    const { payload } = await jwtVerify(token, secret);
+    return {
+      userId: (payload.userId as string) || "",
+      email: (payload.email as string) || "",
+      role: (payload.role as string) || "",
+      type: (payload.type as string) || "user",
+      tenantId: (payload.tenantId as string) || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Domain → module path mapping
 // Each Carelim panel is accessible via its own subdomain.
@@ -132,7 +150,7 @@ function getTokenFromRequest(request: NextRequest): string | null {
   return null;
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || "";
   const url = request.nextUrl;
   const pathname = url.pathname;
@@ -164,7 +182,7 @@ export function middleware(request: NextRequest) {
         );
       }
 
-      const payload = verifyToken(token);
+      const payload = await verifyTokenEdge(token);
       if (!payload) {
         return NextResponse.json(
           { error: "Invalid or expired token" },
@@ -178,6 +196,9 @@ export function middleware(request: NextRequest) {
       response.headers.set("x-user-email", payload.email);
       response.headers.set("x-user-role", payload.role);
       response.headers.set("x-user-type", payload.type);
+      if (payload.tenantId) {
+        response.headers.set("x-tenant-id", payload.tenantId);
+      }
 
       // Apply security headers
       for (const [key, value] of Object.entries(securityHeaders)) {

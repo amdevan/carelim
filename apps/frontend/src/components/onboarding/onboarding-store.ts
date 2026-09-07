@@ -3,7 +3,6 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { getModulesByCategory } from "./module-data";
 
 export interface BasicInfoData {
   // Organization
@@ -29,13 +28,6 @@ export interface BasicInfoData {
   clinicLogoPreview: string;
 }
 
-export interface ModuleSelectionData {
-  selectedModuleKeys: string[];
-  recommendedModuleKeys: string[];
-  searchQuery: string;
-  activeCategory: string;
-}
-
 export interface PackageSelectionData {
   selectedPlanId: string;
   couponCode: string;
@@ -51,7 +43,6 @@ export interface OnboardingState {
 
   // Form data
   basicInfo: BasicInfoData;
-  moduleSelection: ModuleSelectionData;
   packageSelection: PackageSelectionData;
 
   // Session
@@ -68,10 +59,7 @@ export interface OnboardingState {
   nextStep: () => void;
   prevStep: () => void;
   setBasicInfo: (data: Partial<BasicInfoData>) => void;
-  setModuleSelection: (data: Partial<ModuleSelectionData>) => void;
   setPackageSelection: (data: Partial<PackageSelectionData>) => void;
-  toggleModule: (moduleKey: string) => void;
-  selectAllModules: (category: string) => void;
   setSessionId: (id: string) => void;
   setSubmitting: (loading: boolean) => void;
   setSubmitError: (error: string | null) => void;
@@ -101,13 +89,6 @@ const initialBasicInfo: BasicInfoData = {
   clinicLogoPreview: "",
 };
 
-const initialModuleSelection: ModuleSelectionData = {
-  selectedModuleKeys: [],
-  recommendedModuleKeys: [],
-  searchQuery: "",
-  activeCategory: "all",
-};
-
 const initialPackageSelection: PackageSelectionData = {
   selectedPlanId: "free_trial",
   couponCode: "",
@@ -120,9 +101,8 @@ export const useOnboardingStore = create<OnboardingState>()(
   persist(
     (set) => ({
         currentStep: 1,
-        maxStep: 4,
+        maxStep: 3,
         basicInfo: initialBasicInfo,
-        moduleSelection: initialModuleSelection,
         packageSelection: initialPackageSelection,
         sessionId: null,
         isSubmitting: false,
@@ -140,39 +120,11 @@ export const useOnboardingStore = create<OnboardingState>()(
             hasUnsavedChanges: true,
           })),
 
-        setModuleSelection: (data) =>
-          set((s) => ({
-            moduleSelection: { ...s.moduleSelection, ...data },
-            hasUnsavedChanges: true,
-          })),
-
         setPackageSelection: (data) =>
           set((s) => ({
             packageSelection: { ...s.packageSelection, ...data },
             hasUnsavedChanges: true,
           })),
-
-        toggleModule: (moduleKey) =>
-          set((s) => {
-            const isSelected = s.moduleSelection.selectedModuleKeys.includes(moduleKey);
-            const selectedModuleKeys = isSelected
-              ? s.moduleSelection.selectedModuleKeys.filter((k) => k !== moduleKey)
-              : [...s.moduleSelection.selectedModuleKeys, moduleKey];
-            return {
-              moduleSelection: { ...s.moduleSelection, selectedModuleKeys },
-              hasUnsavedChanges: true,
-            };
-          }),
-
-        selectAllModules: (category) =>
-          set((s) => {
-            const modules = getModulesByCategory(category);
-            const moduleKeys = modules.map((m) => m.key);
-            return {
-              moduleSelection: { ...s.moduleSelection, selectedModuleKeys: moduleKeys },
-              hasUnsavedChanges: true,
-            };
-          }),
 
         setSessionId: (id) => set({ sessionId: id }),
         setSubmitting: (loading) => set({ isSubmitting: loading }),
@@ -184,7 +136,6 @@ export const useOnboardingStore = create<OnboardingState>()(
           set({
             currentStep: 1,
             basicInfo: initialBasicInfo,
-            moduleSelection: initialModuleSelection,
             packageSelection: initialPackageSelection,
             sessionId: null,
             isSubmitting: false,
@@ -197,10 +148,6 @@ export const useOnboardingStore = create<OnboardingState>()(
         name: "carelim-onboarding",
         partialize: (state) => ({
           basicInfo: state.basicInfo,
-          moduleSelection: {
-            selectedModuleKeys: state.moduleSelection.selectedModuleKeys,
-            recommendedModuleKeys: state.moduleSelection.recommendedModuleKeys,
-          },
           packageSelection: state.packageSelection,
           currentStep: state.currentStep,
           sessionId: state.sessionId,

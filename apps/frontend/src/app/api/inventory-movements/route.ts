@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const itemId = searchParams.get("itemId");
   const where: Record<string, unknown> = {};
@@ -13,4 +14,4 @@ export async function GET(req: NextRequest) {
     take: 100,
   });
   return NextResponse.json(movements);
-}
+});

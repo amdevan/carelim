@@ -30,11 +30,12 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Plus, FlaskConical, Pencil, Trash2, Download, Eye,
-  ArrowUpDown, ArrowUp, ArrowDown, Boxes, Timer, Tag,
+  Boxes, Timer, Tag,
 } from "lucide-react";
 import { formatRs, statusColors, statusLabel } from "@/lib/format";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { SortHeader, InfoTile, SAMPLE_TYPES, CONTAINER_TYPES } from "./utils";
 
 interface LabDepartment {
   id: string;
@@ -115,14 +116,6 @@ const CATEGORIES = [
   "Hematology", "Biochemistry", "Microbiology", "Serology",
   "Pathology", "Endocrinology", "Immunology", "Coagulation",
 ];
-
-const SAMPLE_TYPES = ["Blood", "Urine", "Stool", "Sputum", "Tissue", "CSF", "Swab"];
-const CONTAINERS = ["EDTA Tube", "Citrate Tube", "Heparin Tube", "Plain Tube", "Fluoride Tube", "Container"];
-
-type SortableCol = keyof Pick<
-  TestMaster,
-  "name" | "code" | "category" | "sampleType" | "containerType" | "price" | "turnaroundTime" | "status"
->;
 
 const GENDER_LABEL: Record<string, string> = {
   all: "All",
@@ -428,35 +421,6 @@ export function LimsTestMaster() {
   );
 }
 
-function SortHeader({
-  label, colKey, sortKey, sortDir, onSort, className,
-}: {
-  label: string;
-  colKey: SortableCol;
-  sortKey: keyof TestMaster | "";
-  sortDir: "asc" | "desc";
-  onSort: () => void;
-  className?: string;
-}) {
-  const active = sortKey === colKey;
-  return (
-    <TableHead className={className}>
-      <button
-        type="button"
-        onClick={onSort}
-        className="inline-flex items-center gap-1 text-left hover:text-foreground transition-colors"
-      >
-        {label}
-        {active ? (
-          sortDir === "asc" ? <ArrowUp className="w-3 h-3 text-teal-600" /> : <ArrowDown className="w-3 h-3 text-teal-600" />
-        ) : (
-          <ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />
-        )}
-      </button>
-    </TableHead>
-  );
-}
-
 function TestFormFields({
   form, setForm, depts,
 }: {
@@ -523,7 +487,7 @@ function TestFormFields({
         <Select value={form.containerType} onValueChange={(v) => setForm({ ...form, containerType: v })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {CONTAINERS.map((c) => (
+            {CONTAINER_TYPES.map((c) => (
               <SelectItem key={c} value={c}>{c}</SelectItem>
             ))}
           </SelectContent>
@@ -844,10 +808,10 @@ function ViewTestSheet({
             animate={{ opacity: 1, y: 0 }}
             className="grid grid-cols-2 gap-3"
           >
-            <InfoTile icon={Tag} label="Sample Type" value={test.sampleType} />
-            <InfoTile icon={Boxes} label="Container" value={test.containerType} />
-            <InfoTile icon={Boxes} label="Volume Required" value={test.volumeRequired || "—"} />
-            <InfoTile icon={Timer} label="Turnaround Time" value={test.turnaroundTime} />
+            <InfoTile icon={<Tag />} label="Sample Type" value={test.sampleType} />
+            <InfoTile icon={<Boxes />} label="Container" value={test.containerType} />
+            <InfoTile icon={<Boxes />} label="Volume Required" value={test.volumeRequired || "—"} />
+            <InfoTile icon={<Timer />} label="Turnaround Time" value={test.turnaroundTime} />
           </motion.div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -968,20 +932,3 @@ function ViewTestSheet({
   );
 }
 
-function InfoTile({
-  icon: Icon, label, value,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-lg border p-3">
-      <div className="flex items-center gap-1.5 mb-0.5">
-        <Icon className="w-3.5 h-3.5 text-teal-600" />
-        <p className="text-[11px] text-muted-foreground">{label}</p>
-      </div>
-      <p className="text-sm font-medium">{value}</p>
-    </div>
-  );
-}

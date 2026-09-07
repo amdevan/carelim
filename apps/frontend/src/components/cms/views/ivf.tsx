@@ -24,6 +24,7 @@ import {
   Wallet, Heart, Stethoscope, ClipboardList, FileText,
 } from "lucide-react";
 import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
+import { PatientSearch } from "@/components/ui/patient-search";
 import { toast } from "sonner";
 
 /* ---------- Types ---------- */
@@ -493,11 +494,11 @@ function CreateIvfCycleDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Patient Name *</Label>
-              <Input
+              <PatientSearch
                 required
                 value={form.patientName}
-                onChange={(e) => setForm({ ...form, patientName: e.target.value })}
-                placeholder="e.g. Sita Sharma"
+                onValueChange={(v) => setForm({ ...form, patientName: v })}
+                label="Patient Name"
               />
             </div>
             <div className="space-y-1.5">

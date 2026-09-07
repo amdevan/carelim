@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useFetch } from "@/lib/use-fetch";
+import { useAppStore } from "@/store/app-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +87,8 @@ const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function ReportsView() {
+  const branchId = useAppStore((s) => s.branchId);
+  const tenantBranding = useAppStore((s) => s.tenantBranding);
   const { data, loading } = useFetch<ReportsData>("/api/reports");
   const { data: expensesData, loading: expensesLoading } = useFetch<ExpensesData>("/api/expenses");
   const [dateRange, setDateRange] = useState<"week" | "month" | "quarter" | "year" | "all">("month");
@@ -205,18 +208,18 @@ export function ReportsView() {
     <table><thead><tr><th>Doctor</th><th style="text-align:right">Patients</th><th style="text-align:right">Revenue</th></tr></thead><tbody>${doctorRows}</tbody></table>
 
     <div class="signature">
-      <div class="sig-block"><div class="line"></div><div class="name">Administrator</div><div class="role">Carelim OS Health Center</div></div>
+      <div class="sig-block"><div class="line"></div><div class="name">Administrator</div><div class="role">${tenantBranding?.clinicName || "Health Center"}</div></div>
       <div class="sig-block"><div class="line"></div><div class="name">System Generated</div><div class="role">${new Date().toLocaleString()}</div></div>
     </div>`;
   };
 
   const exportPDF = () => {
     toast.info("PDF export uses print dialog");
-    setTimeout(() => printHTML("Carelim OS Reports Summary", buildReportHTML()), 200);
+    setTimeout(() => printHTML(`${tenantBranding?.clinicName || "Clinic"} Reports Summary`, buildReportHTML()), 200);
   };
 
   const printReport = () => {
-    printHTML("Carelim OS Reports Summary", buildReportHTML());
+    printHTML(`${tenantBranding?.clinicName || "Clinic"} Reports Summary`, buildReportHTML());
     toast.success("Opening print dialog…");
   };
 

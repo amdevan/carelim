@@ -27,6 +27,7 @@ import { exportToCSV } from "@/lib/export-utils";
 import { EmptyState } from "@/components/cms/empty-state";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { StaffSearch } from "@/components/ui/staff-search";
 
 interface StaffLite {
   id: string;
@@ -409,16 +410,7 @@ function CreateLeaveDialog({
           <DialogTitle>New Leave Request</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Staff Member *</Label>
-            <Select value={form.staffId || "__none__"} onValueChange={(v) => setForm({ ...form, staffId: v === "__none__" ? "" : v })}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select staff member" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__" disabled>Select staff…</SelectItem>
-                {staffList.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} · {s.role}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          <StaffSearch value={form.staffId} onValueChange={v => setForm({ ...form, staffId: v })} label="" required />
           <div className="space-y-1.5">
             <Label>Leave Type</Label>
             <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>

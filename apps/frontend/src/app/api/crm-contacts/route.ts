@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search");
   const type = searchParams.get("type");
@@ -27,16 +29,16 @@ export async function GET(req: NextRequest) {
 
   const contacts = await db.cRMContact.findMany({ where, orderBy: { createdAt: "desc" } });
   return NextResponse.json(contacts);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const count = await db.cRMContact.count();
   const contact = await db.cRMContact.create({
-    data: { ...body, contactNo: `CON-${String(count + 1).padStart(5, "0")}` },
+    data: { ...body, contactNo: `CON-${nanoid(8).toUpperCase()}` },
   });
   await db.auditLog.create({
     data: { user: "system", action: "CREATE", module: "CRM", detail: `Created contact ${contact.contactNo} - ${contact.name}` },
   });
   return NextResponse.json(contact, { status: 201 });
-}
+});

@@ -28,6 +28,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { KpiCard } from "@/components/cms/kpi-card";
+import { StaffSearch } from "@/components/ui/staff-search";
+import { PatientSearch } from "@/components/ui/patient-search";
+import { DoctorSearch } from "@/components/ui/doctor-search";
 import { EmptyState } from "@/components/cms/empty-state";
 import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
@@ -296,14 +299,10 @@ export function DentalExaminations() {
           <DialogHeader><DialogTitle>New Clinical Examination</DialogTitle><DialogDescription>Record a comprehensive dental examination. All fields are saved to the patient&apos;s dental record.</DialogDescription></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label className="text-xs">Patient *</Label>
-              <Select value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })}><SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent className="max-h-60">{(patients || []).slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {p.patientCode}</SelectItem>)}</SelectContent>
-              </Select>
+              <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Doctor</Label>
-              <Select value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })}><SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                <SelectContent>{(doctors || []).map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <DoctorSearch value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })} label="" />
             </div>
             <div className="col-span-2 space-y-1.5"><Label className="text-xs">Chief Complaint</Label><Input value={form.chiefComplaint} onChange={e => setForm({ ...form, chiefComplaint: e.target.value })} placeholder="e.g., Pain in lower right back tooth for 1 week" /></div>
             <div className="space-y-1.5"><Label className="text-xs">Medical History</Label><Input value={form.medicalHistory} onChange={e => setForm({ ...form, medicalHistory: e.target.value })} placeholder="Hypertension, Diabetes, etc." /></div>
@@ -500,14 +499,10 @@ export function DentalTreatmentPlans() {
           <DialogHeader><DialogTitle>New Treatment Plan</DialogTitle><DialogDescription>Estimated cost is auto-filled from the treatment type.</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label className="text-xs">Patient *</Label>
-              <Select value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })}><SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent className="max-h-60">{(patients || []).slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {p.patientCode}</SelectItem>)}</SelectContent>
-              </Select>
+              <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Doctor</Label>
-              <Select value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })}><SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                <SelectContent>{(doctors || []).map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <DoctorSearch value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })} label="" />
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Treatment Type *</Label>
               <Select value={form.treatmentType} onValueChange={v => setForm({ ...form, treatmentType: v })}><SelectTrigger><SelectValue /></SelectTrigger>
@@ -636,15 +631,11 @@ export function DentalProcedures() {
           <DialogHeader><DialogTitle>Log Dental Procedure</DialogTitle><DialogDescription>An invoice will be auto-created in the Billing module. The visit is also appended to the patient&apos;s EMR timeline.</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label className="text-xs">Patient *</Label>
-              <Select value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })}><SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent className="max-h-60">{(patients || []).slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {p.patientCode}</SelectItem>)}</SelectContent>
-              </Select>
+              <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label className="text-xs">Doctor</Label>
-                <Select value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })}><SelectTrigger><SelectValue placeholder="Doctor" /></SelectTrigger>
-                  <SelectContent>{(doctors || []).map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-                </Select>
+                <DoctorSearch value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })} label="" />
               </div>
               <div className="space-y-1.5"><Label className="text-xs">Treatment Plan</Label>
                 <Select value={form.treatmentPlanId} onValueChange={v => setForm({ ...form, treatmentPlanId: v })}><SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
@@ -751,9 +742,7 @@ export function DentalImaging() {
           <DialogHeader><DialogTitle>Add Image Record</DialogTitle><DialogDescription>Record a dental radiograph or clinical photo. Upload to Radiology module for full PACS integration.</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label className="text-xs">Patient *</Label>
-              <Select value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })}><SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent className="max-h-60">{(patients || []).slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {p.patientCode}</SelectItem>)}</SelectContent>
-              </Select>
+              <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Image Type</Label>
               <Select value={form.imageType} onValueChange={v => setForm({ ...form, imageType: v })}><SelectTrigger><SelectValue /></SelectTrigger>
@@ -884,9 +873,7 @@ export function DentalLab() {
           <DialogHeader><DialogTitle>Place Lab Order</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label className="text-xs">Patient *</Label>
-              <Select value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })}><SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent className="max-h-60">{(patients || []).slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {p.patientCode}</SelectItem>)}</SelectContent>
-              </Select>
+              <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label className="text-xs">Lab Type</Label>
@@ -901,8 +888,20 @@ export function DentalLab() {
               <div className="space-y-1.5"><Label className="text-xs">Shade</Label><Input value={form.shade} onChange={e => setForm({ ...form, shade: e.target.value })} placeholder="A2" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label className="text-xs">Lab Name</Label><Input value={form.labName} onChange={e => setForm({ ...form, labName: e.target.value })} placeholder="Smile Dental Lab" /></div>
-              <div className="space-y-1.5"><Label className="text-xs">Technician</Label><Input value={form.technician} onChange={e => setForm({ ...form, technician: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">Lab Name</Label>
+                <Select value={form.labName} onValueChange={v => setForm({ ...form, labName: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select lab" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Smile Dental Lab">Smile Dental Lab</SelectItem>
+                    <SelectItem value="Precision Dental Lab">Precision Dental Lab</SelectItem>
+                    <SelectItem value="Dental Arts Lab">Dental Arts Lab</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label className="text-xs">Technician</Label>
+                <StaffSearch value={form.technician} onValueChange={v => setForm({ ...form, technician: v })} label="Technician" />
+              </div>
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Tooth Numbers</Label><Input value={form.toothNumbers} onChange={e => setForm({ ...form, toothNumbers: e.target.value })} placeholder="16 or 11,21" /></div>
             <div className="space-y-1.5"><Label className="text-xs">Expected Delivery</Label><Input type="date" value={form.deliveryDate} onChange={e => setForm({ ...form, deliveryDate: e.target.value })} /></div>
@@ -1008,14 +1007,10 @@ export function DentalOrtho() {
           <DialogHeader><DialogTitle>New Orthodontic Case</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label className="text-xs">Patient *</Label>
-              <Select value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })}><SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent className="max-h-60">{(patients || []).slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {p.patientCode}</SelectItem>)}</SelectContent>
-              </Select>
+              <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Doctor</Label>
-              <Select value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })}><SelectTrigger><SelectValue placeholder="Doctor" /></SelectTrigger>
-                <SelectContent>{(doctors || []).map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <DoctorSearch value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })} label="" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label className="text-xs">Treatment Type</Label>
@@ -1173,14 +1168,10 @@ export function DentalImplants() {
           <DialogHeader><DialogTitle>Register Implant Case</DialogTitle><DialogDescription>Track implant placement → abutment → final crown lifecycle.</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label className="text-xs">Patient *</Label>
-              <Select value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })}><SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent className="max-h-60">{(patients || []).slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {p.patientCode}</SelectItem>)}</SelectContent>
-              </Select>
+              <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Doctor</Label>
-              <Select value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })}><SelectTrigger><SelectValue placeholder="Doctor" /></SelectTrigger>
-                <SelectContent>{(doctors || []).map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <DoctorSearch value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })} label="" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label className="text-xs">Tooth Number</Label><Input value={form.toothNumber} onChange={e => setForm({ ...form, toothNumber: e.target.value })} placeholder="16" /></div>
@@ -1324,9 +1315,7 @@ export function DentalFollowups() {
           <DialogHeader><DialogTitle>Schedule Follow-up</DialogTitle><DialogDescription>Automatic SMS/Email/WhatsApp reminders can be sent to the patient.</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label className="text-xs">Patient *</Label>
-              <Select value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })}><SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent className="max-h-60">{(patients || []).slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {p.patientCode}</SelectItem>)}</SelectContent>
-              </Select>
+              <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
             </div>
             <div className="space-y-1.5"><Label className="text-xs">Type</Label>
               <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}><SelectTrigger><SelectValue /></SelectTrigger>

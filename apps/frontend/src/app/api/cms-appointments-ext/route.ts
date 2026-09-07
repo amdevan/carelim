@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const bookingSource = searchParams.get("bookingSource");
   const where: Record<string, unknown> = {};
@@ -24,11 +25,11 @@ export async function GET(req: NextRequest) {
       doctorName: aMap[e.appointmentId].doctor?.name || "—",
     } : null,
   })));
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const ext = await db.appointmentExtension.create({ data: body });
   await db.patientActivityLog.create({ data: { patientId: body.patientId || "system", appointmentId: body.appointmentId, activity: "appointment_booked", description: `Appointment booked via ${body.bookingChannel} (${body.bookingSource})`, performedBy: "system" } });
   return NextResponse.json(ext, { status: 201 });
-}
+});

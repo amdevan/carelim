@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async () => {
   const [sources, referrals, leads, campaigns, coordinators, settlements, apptExts] = await Promise.all([
     db.patientSource.findMany(),
     db.referral.findMany(),
@@ -73,4 +74,4 @@ export async function GET() {
     leadsByStatus: leads.reduce((m, l) => { m[l.status] = (m[l.status] || 0) + 1; return m; }, {} as Record<string, number>),
     referrals: referrals.map(r => ({ referralNo: r.referralNo, patientId: r.patientId, commissionAmount: r.commissionAmount, status: r.status, createdAt: r.createdAt })),
   });
-}
+});

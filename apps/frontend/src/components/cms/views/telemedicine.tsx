@@ -26,6 +26,8 @@ import {
 import { formatDate } from "@/lib/format";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { PatientSearch } from "@/components/ui/patient-search";
+import { DoctorSearch } from "@/components/ui/doctor-search";
 
 /* ─────────── Types ─────────── */
 
@@ -49,18 +51,6 @@ interface TelemedicinePatient {
   lastSession: string | null;
   totalSessions: number;
   platformPreference: string;
-}
-
-interface PatientOption {
-  id: string;
-  patientCode: string;
-  name: string;
-}
-
-interface DoctorOption {
-  id: string;
-  name: string;
-  specialization: string;
 }
 
 /* ─────────── Constants ─────────── */
@@ -524,8 +514,6 @@ function CreateSessionDialog({
   onOpenChange: (v: boolean) => void;
   onCreated: () => void;
 }) {
-  const { data: patients } = useFetch<PatientOption[]>("/api/patients");
-  const { data: doctors } = useFetch<DoctorOption[]>("/api/doctors");
   const [form, setForm] = useState({
     patientId: "",
     doctorId: "",
@@ -588,32 +576,8 @@ function CreateSessionDialog({
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Patient *</Label>
-              <Select value={form.patientId} onValueChange={(v) => setForm({ ...form, patientId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent>
-                  {(patients || []).slice(0, 200).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} <span className="text-xs text-muted-foreground">({p.patientCode})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Doctor *</Label>
-              <Select value={form.doctorId} onValueChange={(v) => setForm({ ...form, doctorId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                <SelectContent>
-                  {(doctors || []).map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name} <span className="text-xs text-muted-foreground">· {d.specialization}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <PatientSearch value={form.patientId} onValueChange={v => setForm({ ...form, patientId: v })} label="" required />
+            <DoctorSearch value={form.doctorId} onValueChange={v => setForm({ ...form, doctorId: v })} label="" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

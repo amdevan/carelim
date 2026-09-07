@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+import { withTenant } from "@/lib/with-tenant";
+export const PATCH = withTenant(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const body = await req.json();
   const data: Record<string, unknown> = { ...body };
@@ -8,4 +9,4 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.status === "paid") { data.paidAt = new Date(); data.approvedAt = data.approvedAt || new Date(); }
   const claim = await db.insuranceClaim.update({ where: { id }, data });
   return NextResponse.json(claim);
-}
+});

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const contactId = searchParams.get("contactId");
   const type = searchParams.get("type");
@@ -20,9 +21,9 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json(communications);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const communication = await db.cRMCommunication.create({ data: body });
   await db.cRMContact.update({
@@ -33,4 +34,4 @@ export async function POST(req: NextRequest) {
     data: { user: "system", action: "CREATE", module: "CRM", detail: `Created ${body.type} communication for contact ${body.contactId}` },
   });
   return NextResponse.json(communication, { status: 201 });
-}
+});

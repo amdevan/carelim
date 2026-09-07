@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { PatientSearch } from "@/components/ui/patient-search";
 import {
   Search, Plus, Download, Scan, Image as ImageIcon, FileText, Play, CheckCircle2, Send,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import { Pagination } from "@/components/cms/pagination";
 import { KpiCard } from "@/components/cms/kpi-card";
 import { EmptyState } from "@/components/cms/empty-state";
 import { toast } from "sonner";
+import { useAppStore } from "@/store/app-store";
 
 interface Study {
   id: string; studyUid: string; bodyPart: string; status: string; priority: string;
@@ -42,12 +44,6 @@ interface Study {
   modality: { id: string; name: string; code: string; baseFee: number; contrastFee: number };
   images: { id: string; imageUrl: string; thumbnailUrl: string | null; instanceNumber: number; description: string | null }[];
   report: { id: string; examination: string | null; findings: string | null; impression: string | null; technique: string | null; status: string; radiologistName: string | null } | null;
-}
-
-interface PatientLite {
-  id: string;
-  patientCode: string;
-  name: string;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -252,9 +248,7 @@ interface NewStudyDialogProps {
 }
 
 function NewStudyDialog({ open, onOpenChange, onCreated }: NewStudyDialogProps) {
-  const { data: patients, loading: patientsLoading } = useFetch<PatientLite[]>(
-    open ? "/api/patients" : null,
-  );
+  const branchId = useAppStore((s) => s.branchId);
 
   const [patientId, setPatientId] = useState("");
   const [modality, setModality] = useState("X-Ray");
@@ -304,6 +298,7 @@ function NewStudyDialog({ open, onOpenChange, onCreated }: NewStudyDialogProps) 
           priority,
           orderedBy: orderedBy.trim(),
           notes: notes.trim() || null,
+          branchId,
         }),
       });
       if (!res.ok) {
@@ -331,19 +326,7 @@ function NewStudyDialog({ open, onOpenChange, onCreated }: NewStudyDialogProps) 
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="patient">Patient *</Label>
-            <Select value={patientId} onValueChange={setPatientId}>
-              <SelectTrigger id="patient" disabled={patientsLoading}>
-                <SelectValue placeholder={patientsLoading ? "Loading patients…" : "Select patient"} />
-              </SelectTrigger>
-              <SelectContent>
-                {(patients || []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name} ({p.patientCode})</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <PatientSearch value={patientId} onValueChange={setPatientId} label="" required />
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
               <Label htmlFor="modality">Modality *</Label>

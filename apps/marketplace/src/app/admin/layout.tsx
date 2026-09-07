@@ -27,6 +27,7 @@ import {
   LogOut,
   ChevronDown,
   Store,
+  FileText,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -34,6 +35,12 @@ const NAV_ITEMS = [
     label: "Overview",
     items: [
       { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      { label: "CMS", href: "/cms", icon: FileText },
     ],
   },
   {

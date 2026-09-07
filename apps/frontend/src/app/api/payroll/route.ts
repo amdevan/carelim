@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async () => {
   const payrolls = await db.payroll.findMany({ include: { staff: true }, orderBy: { month: "desc" } });
   return NextResponse.json(payrolls);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const payroll = await db.payroll.create({
     data: {
@@ -17,4 +18,4 @@ export async function POST(req: NextRequest) {
   });
   await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Payroll", detail: `Created payroll for ${body.month}` } });
   return NextResponse.json(payroll, { status: 201 });
-}
+});

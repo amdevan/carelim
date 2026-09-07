@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { rawDb as db } from "@/lib/db";
 
 // POST /api/admin-impersonate — Create impersonation session
 export async function POST(req: NextRequest) {

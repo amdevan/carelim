@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const patientId = searchParams.get("patientId");
   const status = searchParams.get("status");
@@ -10,15 +12,15 @@ export async function GET(req: NextRequest) {
   if (status) where.status = status;
   const orders = await db.dentalLabOrder.findMany({ where, orderBy: { sentDate: "desc" } });
   return NextResponse.json(orders);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const count = await db.dentalLabOrder.count();
   const order = await db.dentalLabOrder.create({
     data: {
       ...body,
-      orderNo: `DLO-${String(count + 1).padStart(5, "0")}`,
+      orderNo: `DLO-${nanoid(8).toUpperCase()}`,
       sentDate: body.sentDate ? new Date(body.sentDate) : new Date(),
       deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
       receivedDate: body.receivedDate ? new Date(body.receivedDate) : null,
@@ -26,4 +28,4 @@ export async function POST(req: NextRequest) {
   });
   await db.auditLog.create({ data: { user: body.doctorId || "system", action: "CREATE", module: "Dental", detail: `Created lab order ${order.orderNo} (${order.labType})` } });
   return NextResponse.json(order, { status: 201 });
-}
+});

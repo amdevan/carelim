@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
 // GET - Get patient profile by userId
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId");
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
@@ -28,10 +29,10 @@ export async function GET(req: NextRequest) {
   });
   if (!patient) return NextResponse.json({ error: "Patient not found" }, { status: 404 });
   return NextResponse.json({ ...patient, userId: user.id, userName: user.name, userEmail: user.email, userPhone: user.phone });
-}
+});
 
 // PUT - Update patient profile
-export async function PUT(req: NextRequest) {
+export const PUT = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const { userId, ...patientData } = body;
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
@@ -41,4 +42,4 @@ export async function PUT(req: NextRequest) {
 
   const patient = await db.patient.update({ where: { id: user.patientId }, data: patientData });
   return NextResponse.json(patient);
-}
+});

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const sourceType = searchParams.get("sourceType");
   const q = searchParams.get("q");
@@ -35,16 +37,16 @@ export async function GET(req: NextRequest) {
     result = result.filter(r => r.patient?.name.toLowerCase().includes(ql) || r.trackingId.toLowerCase().includes(ql) || r.patient?.phone.includes(q) || r.patient?.patientCode.toLowerCase().includes(ql));
   }
   return NextResponse.json(result);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const count = await db.patientSource.count();
-  const trackingId = `CMS-${String(count + 1).padStart(5, "0")}`;
+  const trackingId = `CMS-${nanoid(8).toUpperCase()}`;
   const source = await db.patientSource.create({
     data: { ...body, trackingId },
   });
   await db.patientActivityLog.create({ data: { patientId: body.patientId, activity: "appointment_booked", description: `Patient registered as ${body.sourceType} via ${body.sourceName}`, performedBy: body.createdBy || "system" } });
   await db.auditLog.create({ data: { user: body.createdBy || "system", action: "CREATE", module: "Carelim MS", detail: `Created patient source ${trackingId} (${body.sourceType}/${body.sourceName})` } });
   return NextResponse.json({ ...source, trackingId }, { status: 201 });
-}
+});

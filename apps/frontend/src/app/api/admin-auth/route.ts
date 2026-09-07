@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { rawDb as db } from "@/lib/db";
 import { verifyPassword, signToken } from "@/lib/auth";
 import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 

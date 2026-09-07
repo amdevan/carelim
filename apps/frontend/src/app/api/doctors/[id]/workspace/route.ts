@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -68,4 +69,4 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     todayAppointments: todayAppts.map(a => ({ id: a.id, time: a.time, patient: a.patient.name, patientCode: a.patient.patientCode, status: a.status, token: a.tokenNo })),
     timeline: timeline.slice(0, 8),
   });
-}
+});

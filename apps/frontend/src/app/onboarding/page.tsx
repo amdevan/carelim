@@ -9,7 +9,6 @@ import { ArrowLeft, ArrowRight, Loader2, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/onboarding/step-indicator";
 import { Step1BasicInfo } from "@/components/onboarding/step1-basic-info";
-import { Step2Modules } from "@/components/onboarding/step2-modules";
 import { Step3Pricing } from "@/components/onboarding/step3-pricing";
 import { Step4Success } from "@/components/onboarding/step4-success";
 import { useOnboardingStore } from "@/components/onboarding/onboarding-store";
@@ -21,7 +20,6 @@ export default function OnboardingPage() {
     currentStep,
     maxStep,
     basicInfo,
-    moduleSelection,
     packageSelection,
     isSubmitting,
     submitError,
@@ -53,7 +51,6 @@ export default function OnboardingPage() {
           body: JSON.stringify({
             sessionId: session.sessionId,
             organizationData: session.basicInfo,
-            selectedModules: session.moduleSelection.selectedModuleKeys,
             selectedPlan: session.packageSelection,
             currentStep: session.currentStep,
           }),
@@ -65,7 +62,7 @@ export default function OnboardingPage() {
 
     const timeout = setTimeout(saveProgress, 3000);
     return () => clearTimeout(timeout);
-  }, [basicInfo, moduleSelection.selectedModuleKeys, packageSelection, currentStep]);
+  }, [basicInfo, packageSelection, currentStep]);
 
   // Validate step 1
   const validateStep1 = () => {
@@ -85,21 +82,11 @@ export default function OnboardingPage() {
     return errors;
   };
 
-  // Validate step 2
-  const validateStep2 = () => {
-    if (moduleSelection.selectedModuleKeys.length === 0) {
-      return ["Please select at least one module"];
-    }
-    return [];
-  };
-
   const handleNext = () => {
     let errors: string[] = [];
 
     if (currentStep === 1) {
       errors = validateStep1();
-    } else if (currentStep === 2) {
-      errors = validateStep2();
     }
 
     if (errors.length > 0) {
@@ -128,7 +115,6 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           basicInfo,
-          selectedModules: moduleSelection.selectedModuleKeys,
           selectedPlan: packageSelection.selectedPlanId,
           packageSelection,
           skipPackage: packageSelection.skipPackage,
@@ -160,10 +146,8 @@ export default function OnboardingPage() {
       case 1:
         return <Step1BasicInfo />;
       case 2:
-        return <Step2Modules />;
-      case 3:
         return <Step3Pricing />;
-      case 4:
+      case 3:
         return <Step4Success />;
       default:
         return <Step1BasicInfo />;
@@ -205,64 +189,69 @@ export default function OnboardingPage() {
           </motion.div>
         </AnimatePresence>
 
-        {/* Navigation Buttons (Steps 1 & 2 only) */}
-        {currentStep < maxStep - 1 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex items-center justify-between mt-6"
-          >
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              disabled={currentStep === 1}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Previous
-            </Button>
-
-            <Button
-              onClick={handleNext}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-            >
-              Continue
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </motion.div>
-        )}
-
-        {/* Submit Button for Step 3 -> Step 4 */}
-        {currentStep === maxStep - 1 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mt-6"
-          >
-            <Button
-              onClick={handleComplete}
-              disabled={isSubmitting}
-              className="w-full bg-blue-600 hover:bg-blue-700 py-6 text-lg"
-              size="lg"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Creating your organization...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-5 h-5 mr-2" />
-                  Complete Onboarding
-                </>
-              )}
-            </Button>
-            {submitError && (
-              <p className="text-sm text-red-500 text-center mt-2">{submitError}</p>
+        {/* Navigation Buttons */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="flex items-center justify-between mt-6"
+        >
+          <div>
+            {currentStep === 2 && (
+              <Button
+                variant="outline"
+                onClick={handleBack}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Previous
+              </Button>
             )}
-          </motion.div>
+            {currentStep === 3 && (
+              <Button
+                variant="outline"
+                onClick={handleBack}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Payment
+              </Button>
+            )}
+          </div>
+
+          <div>
+            {currentStep === 1 && (
+              <Button
+                onClick={handleNext}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+              >
+                Continue
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            )}
+            {currentStep === 2 && (
+              <Button
+                onClick={handleComplete}
+                disabled={isSubmitting}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Complete Onboarding
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </motion.div>
+        {submitError && (
+          <p className="text-sm text-red-500 text-center mt-2">{submitError}</p>
         )}
 
         {/* Footer */}

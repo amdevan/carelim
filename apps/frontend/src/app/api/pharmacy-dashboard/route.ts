@@ -1,18 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const branchId = searchParams.get("branchId");
+  const branchFilter = branchId ? { branchId } : {};
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
   const [medicines, todaySales, todayPurchases, allSales, monthSales, purchaseOrders, suppliers, salesReturns, purchaseReturns] = await Promise.all([
-    db.medicine.findMany({ include: { supplier: true, batches: true } }),
-    db.pharmacySale.findMany({ where: { saleDate: { gte: startOfDay, lt: endOfDay } } }),
+    db.medicine.findMany({ where: branchFilter, include: { supplier: true, batches: true } }),
+    db.pharmacySale.findMany({ where: { ...branchFilter, saleDate: { gte: startOfDay, lt: endOfDay } } }),
     db.purchaseOrder.findMany({ where: { orderDate: { gte: startOfDay, lt: endOfDay } } }),
-    db.pharmacySale.findMany(),
-    db.pharmacySale.findMany({ where: { saleDate: { gte: startOfMonth } } }),
+    db.pharmacySale.findMany({ where: branchFilter }),
+    db.pharmacySale.findMany({ where: { ...branchFilter, saleDate: { gte: startOfMonth } } }),
     db.purchaseOrder.findMany({ include: { supplier: true, items: true } }),
     db.supplier.findMany(),
     db.salesReturn.findMany(),
@@ -39,7 +43,7 @@ export async function GET() {
   for (let i = 5; i >= 0; i--) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
     const dn = new Date(today.getFullYear(), today.getMonth() - i + 1, 1);
-    const s = await db.pharmacySale.findMany({ where: { saleDate: { gte: d, lt: dn } } });
+    const s = await db.pharmacySale.findMany({ where: { ...branchFilter, saleDate: { gte: d, lt: dn } } });
     const p = await db.purchaseOrder.findMany({ where: { orderDate: { gte: d, lt: dn } } });
     const salesTotal = s.reduce((sum, sale) => sum + sale.total, 0);
     monthlyTrend.push({
@@ -64,7 +68,7 @@ export async function GET() {
   const revenueByCategory = Object.entries(categoryStock).map(([name, data]) => ({ name, value: Math.round(data.value), count: data.count }));
 
   // Top selling medicines (by sale item count)
-  const saleItems = await db.pharmacySaleItem.findMany({ include: { medicine: true } });
+  const saleItems = await db.pharmacySaleItem.findMany({ where: { sale: branchFilter }, include: { medicine: true } });
   const medSales: Record<string, { name: string; qty: number; revenue: number }> = {};
   saleItems.forEach(si => {
     const key = si.medicineId;
@@ -135,4 +139,4 @@ export async function GET() {
     pendingPOs: pendingPOs.map(p => ({ poNumber: p.poNumber, supplier: p.supplier?.name, totalAmount: p.totalAmount, status: p.status })),
     pendingTransfers: pendingTransferRequests.length,
   });
-}
+});

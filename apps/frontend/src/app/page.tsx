@@ -33,40 +33,84 @@ import { PublicBookingView } from "@/components/cms/views/public-booking";
 import { NotificationsView } from "@/components/cms/views/notifications";
 import { InsuranceView } from "@/components/cms/views/insurance";
 import { BranchesView } from "@/components/cms/views/branches";
-import { motion, AnimatePresence } from "framer-motion";
+import { CrmView } from "@/components/cms/views/crm";
+import { TenantSettingsView } from "@/components/cms/views/tenant-settings";
+import { DentalDashboard } from "@/components/dental/dashboard";
+import { DentalOdontogram } from "@/components/dental/odontogram";
+import {
+  DentalExaminations, DentalTreatmentPlans, DentalProcedures,
+  DentalImaging, DentalLab, DentalOrtho, DentalImplants,
+  DentalFollowups, DentalReports, DentalPatients,
+} from "@/components/dental/modules";
+import { IvfCycles } from "@/components/ivf/cycles";
+import {
+  IvfAssessments, IvfProtocols, IvfFollicular, IvfOPU, IvfAndrology,
+  IvfEmbryology, IvfCryobank, IvfTransfer, IvfPregnancy, IvfDonors,
+  IvfConsents, IvfPackagesView, IvfReports,
+} from "@/components/ivf/modules";
+/* Stable view map — defined at module scope so element references never change */
+const VIEWS: Record<string, React.ReactNode> = {
+  dashboard: <DashboardView />,
+  patients: <PatientsView />,
+  doctors: <DoctorsView />,
+  appointments: <AppointmentsView />,
+  emr: <EmrView />,
+  pharmacy: <PharmacyView />,
+  laboratory: <LaboratoryView />,
+  radiology: <RadiologyView />,
+  billing: <BillingView />,
+  accounting: <AccountingView />,
+  inventory: <InventoryView />,
+  reports: <ReportsView />,
+  hr: <HrView />,
+  settings: <SettingsView />,
+  audit: <AuditView />,
+  dental: <DentalView />,
+  ivf: <IvfView />,
+  telemedicine: <TelemedicineView />,
+  "clinical-notes": <ClinicalNotesView />,
+  staff: <StaffView />,
+  leave: <LeaveView />,
+  "public-booking": <PublicBookingView />,
+  notifications: <NotificationsView />,
+  insurance: <InsuranceView />,
+  branches: <BranchesView />,
+  crm: <CrmView />,
+  "tenant-settings": <TenantSettingsView />,
+  // Dental sub-views
+  "dental-odontogram": <DentalOdontogram />,
+  "dental-examination": <DentalExaminations />,
+  "dental-treatment": <DentalTreatmentPlans />,
+  "dental-procedures": <DentalProcedures />,
+  "dental-imaging": <DentalImaging />,
+  "dental-lab": <DentalLab />,
+  "dental-ortho": <DentalOrtho />,
+  "dental-implant": <DentalImplants />,
+  "dental-followup": <DentalFollowups />,
+  "dental-reports": <DentalReports />,
+  // IVF sub-views
+  "ivf-couples": <IvfAssessments />,
+  "ivf-cycles": <IvfCycles />,
+  "ivf-protocols": <IvfProtocols />,
+  "ivf-stimulation": <IvfAssessments />,
+  "ivf-follicular": <IvfFollicular />,
+  "ivf-opu": <IvfOPU />,
+  "ivf-andrology": <IvfAndrology />,
+  "ivf-embryology": <IvfEmbryology />,
+  "ivf-cryobank": <IvfCryobank />,
+  "ivf-transfer": <IvfTransfer />,
+  "ivf-pregnancy": <IvfPregnancy />,
+  "ivf-donors": <IvfDonors />,
+  "ivf-consents": <IvfConsents />,
+  "ivf-packages": <IvfPackagesView />,
+  "ivf-reports": <IvfReports />,
+};
 
 export default function Home() {
-  const { authed, view } = useAppStore();
+  const authed = useAppStore((s) => s.authed);
+  const view = useAppStore((s) => s.view);
 
   if (!authed) return <LoginScreen />;
-
-  const views: Record<string, React.ReactNode> = {
-    dashboard: <DashboardView />,
-    patients: <PatientsView />,
-    doctors: <DoctorsView />,
-    appointments: <AppointmentsView />,
-    emr: <EmrView />,
-    pharmacy: <PharmacyView />,
-    laboratory: <LaboratoryView />,
-    radiology: <RadiologyView />,
-    billing: <BillingView />,
-    accounting: <AccountingView />,
-    inventory: <InventoryView />,
-    reports: <ReportsView />,
-    hr: <HrView />,
-    settings: <SettingsView />,
-    audit: <AuditView />,
-    dental: <DentalView />,
-    ivf: <IvfView />,
-    telemedicine: <TelemedicineView />,
-    "clinical-notes": <ClinicalNotesView />,
-    staff: <StaffView />,
-    leave: <LeaveView />,
-    "public-booking": <PublicBookingView />,
-    notifications: <NotificationsView />,
-    insurance: <InsuranceView />,
-    branches: <BranchesView />,
-  };
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -74,17 +118,9 @@ export default function Home() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1 p-4 sm:p-5 lg:p-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={view}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              {views[view] ?? <DashboardView />}
-            </motion.div>
-          </AnimatePresence>
+          <div key={view} className="animate-fade-in">
+            {VIEWS[view] ?? <DashboardView />}
+          </div>
         </main>
         <Footer />
       </div>

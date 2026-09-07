@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { rawDb as db } from "@/lib/db";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = db as any;
 

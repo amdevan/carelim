@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const patientId = searchParams.get("patientId");
   const status = searchParams.get("status");
@@ -10,19 +12,19 @@ export async function GET(req: NextRequest) {
   if (status) where.status = status;
   const followups = await db.dentalFollowup.findMany({ where, orderBy: { scheduledDate: "asc" } });
   return NextResponse.json(followups);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const count = await db.dentalFollowup.count();
   const f = await db.dentalFollowup.create({
     data: {
       ...body,
-      followupNo: `DFU-${String(count + 1).padStart(5, "0")}`,
+      followupNo: `DFU-${nanoid(8).toUpperCase()}`,
       scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : new Date(),
       completedDate: body.completedDate ? new Date(body.completedDate) : null,
     },
   });
   await db.auditLog.create({ data: { user: body.doctorId || "system", action: "CREATE", module: "Dental", detail: `Scheduled follow-up ${f.followupNo} (${f.type})` } });
   return NextResponse.json(f, { status: 201 });
-}
+});

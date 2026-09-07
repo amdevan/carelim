@@ -35,6 +35,7 @@ import { usePagination, useSort } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { StaffSearch } from "@/components/ui/staff-search";
 
 interface StaffAttendance {
   id: string;
@@ -587,6 +588,7 @@ function StaffFormDialog({
   onSaved: () => void;
 }) {
   const isEdit = !!staff;
+  const { data: branches } = useFetch<{ id: string; name: string }[]>("/api/branches");
   const [form, setForm] = useState({
     name: staff?.name ?? "",
     email: staff?.email ?? "",
@@ -597,6 +599,7 @@ function StaffFormDialog({
     salary: staff?.salary ?? 0,
     joinDate: staff?.joinDate ? staff.joinDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
     status: staff?.status ?? "active",
+    branchId: (staff as any)?.branchId ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -615,6 +618,7 @@ function StaffFormDialog({
       salary: staff?.salary ?? 0,
       joinDate: staff?.joinDate ? staff.joinDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
       status: staff?.status ?? "active",
+      branchId: (staff as any)?.branchId ?? "",
     });
   }
 
@@ -665,7 +669,7 @@ function StaffFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Email *</Label>
-            <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="john@carelim.health" />
+            <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="john@your-clinic.com" />
           </div>
           <div className="space-y-1.5">
             <Label>Phone</Label>
@@ -693,6 +697,16 @@ function StaffFormDialog({
           <div className="space-y-1.5">
             <Label>Designation</Label>
             <Input value={form.designation} onChange={(e) => set("designation", e.target.value)} placeholder="Senior Receptionist" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Branch</Label>
+            <Select value={form.branchId || "__none__"} onValueChange={(v) => set("branchId" as any, v === "__none__" ? "" : v)}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select branch" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— None —</SelectItem>
+                {(branches || []).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <Label>Salary (Rs)</Label>
@@ -912,16 +926,7 @@ function GeneratePayrollDialog({
           <DialogDescription>Create a new payroll entry for an employee</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Employee *</Label>
-            <Select value={staffId || "__none__"} onValueChange={onStaffChange}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select employee" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__" disabled>Select employee…</SelectItem>
-                {staff.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} · {s.role}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          <StaffSearch value={staffId} onValueChange={onStaffChange} label="" required />
           <div className="space-y-1.5">
             <Label>Month</Label>
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
@@ -1098,11 +1103,10 @@ function LeaveTab({
 }
 
 function ApplyLeaveDialog({
-  open, onOpenChange, staff, onSaved,
+  open, onOpenChange, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  staff: Staff[];
   onSaved: () => void;
 }) {
   const [staffId, setStaffId] = useState("");
@@ -1143,16 +1147,7 @@ function ApplyLeaveDialog({
           <DialogDescription>Submit a leave request on behalf of an employee</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Employee *</Label>
-            <Select value={staffId || "__none__"} onValueChange={setStaffId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select employee" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__" disabled>Select employee…</SelectItem>
-                {staff.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} · {s.role}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          <StaffSearch value={staffId} onValueChange={setStaffId} label="" required />
           <div className="space-y-1.5">
             <Label>Leave Type</Label>
             <Select value={type} onValueChange={setType}>

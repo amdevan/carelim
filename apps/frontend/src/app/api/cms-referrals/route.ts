@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const where: Record<string, unknown> = {};
@@ -25,13 +27,13 @@ export async function GET(req: NextRequest) {
     doctorName: r.doctorId ? dMap[r.doctorId] || "—" : "—",
     clinicName: r.clinicId ? bMap[r.clinicId] || "—" : "—",
   })));
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const count = await db.referral.count();
   const referral = await db.referral.create({
-    data: { ...body, referralNo: `REF-${String(count + 1).padStart(5, "0")}` },
+    data: { ...body, referralNo: `REF-${nanoid(8).toUpperCase()}` },
   });
   // Tag patient as coming from Carelim MS (if not already tagged)
   const existingSource = await db.patientSource.findFirst({ where: { patientId: body.patientId } });
@@ -49,4 +51,4 @@ export async function POST(req: NextRequest) {
   await db.patientActivityLog.create({ data: { patientId: body.patientId, activity: "commission_generated", description: `Referral ${referral.referralNo} created — ${body.commissionRate}% commission`, performedBy: "system" } });
   await db.auditLog.create({ data: { user: "system", action: "CREATE", module: "Carelim MS", detail: `Created referral ${referral.referralNo}` } });
   return NextResponse.json(referral, { status: 201 });
-}
+});

@@ -80,67 +80,21 @@ export const MODULES: ModuleDef[] = [
 
 // Smart recommendations based on clinic type
 export const CLINIC_TYPE_RECOMMENDATIONS: Record<string, string[]> = {
-  "ivf-fertility-center": [
+  "General": [
+    "patient-management", "appointment-management", "doctor-management",
+    "emr-ehr", "prescription", "laboratory", "radiology", "pharmacy",
+    "billing", "accounts", "inventory", "reports", "sms",
+    "notification-center", "online-appointment", "patient-portal",
+    "queue-management", "hr", "payroll",
+  ],
+  "Dental": [
+    "dental", "patient-management", "appointment-management",
+    "emr-ehr", "prescription", "billing", "inventory", "reports",
+  ],
+  "IVF": [
     "ivf-fertility", "laboratory", "pharmacy", "hormone-tracking",
     "embryology", "billing", "appointment-management",
     "patient-management", "prescription", "reports",
-  ],
-  "dental-clinic": [
-    "dental", "x-ray", "appointment-management", "billing",
-    "patient-management", "prescription", "inventory", "reports",
-  ],
-  "laboratory": [
-    "laboratory", "reports", "home-sample-collection",
-    "patient-management", "billing", "inventory", "appointment-management",
-  ],
-  "diagnostic-center": [
-    "radiology", "laboratory", "reports", "home-sample-collection",
-    "patient-management", "billing", "package-management",
-  ],
-  "hospital": [
-    "patient-management", "appointment-management", "doctor-management",
-    "emr-ehr", "prescription", "billing", "accounts", "inventory",
-    "pharmacy", "laboratory", "radiology", "opd", "ipd",
-    "queue-management", "reports", "sms", "whatsapp",
-    "notification-center", "video-consultation", "online-appointment",
-    "patient-portal", "telemedicine", "attendance", "hr", "payroll",
-  ],
-  "eye-hospital": [
-    "eye-care", "patient-management", "appointment-management",
-    "emr-ehr", "prescription", "billing", "inventory",
-    "laboratory", "radiology", "reports", "sms", "whatsapp",
-  ],
-  "pharmacy": [
-    "pharmacy", "inventory", "billing", "accounts",
-    "patient-management", "prescription", "reports", "sms",
-  ],
-  "clinic": [
-    "patient-management", "appointment-management", "doctor-management",
-    "emr-ehr", "prescription", "billing", "reports", "sms",
-    "whatsapp", "notification-center", "online-appointment",
-    "patient-portal", "queue-management",
-  ],
-  "mental-health-clinic": [
-    "patient-management", "appointment-management", "emr-ehr",
-    "prescription", "billing", "reports", "telemedicine",
-    "video-consultation", "patient-portal",
-  ],
-  "physiotherapy": [
-    "patient-management", "appointment-management", "emr-ehr",
-    "prescription", "billing", "reports", "sms", "whatsapp",
-  ],
-  "home-healthcare": [
-    "patient-management", "appointment-management", "emr-ehr",
-    "prescription", "billing", "reports", "home-care",
-    "patient-portal", "video-consultation",
-  ],
-  "veterinary": [
-    "patient-management", "appointment-management", "emr-ehr",
-    "prescription", "billing", "reports", "inventory",
-  ],
-  "other": [
-    "patient-management", "appointment-management", "doctor-management",
-    "emr-ehr", "prescription", "billing", "reports", "sms",
   ],
 };
 

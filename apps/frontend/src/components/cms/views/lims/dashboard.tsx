@@ -195,7 +195,7 @@ export function LimsDashboard() {
               <CardContent className="p-3.5">
                 <div className="flex items-start justify-between">
                   <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${k.accent} flex items-center justify-center text-white shadow-sm`}>
-                    <k.icon className="w-4.5 h-4.5" />
+                    <k.icon className="w-[18px] h-[18px]" />
                   </div>
                 </div>
                 <p className="text-xl font-bold mt-2 leading-tight">{k.value}</p>

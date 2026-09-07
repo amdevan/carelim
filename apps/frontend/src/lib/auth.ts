@@ -17,6 +17,7 @@ export interface TokenPayload {
   email: string;
   role: string;
   type: "user" | "admin" | "doctor" | "patient";
+  tenantId?: string;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -78,4 +79,26 @@ export function getAuthUser(request: Request): TokenPayload | null {
  */
 export function getAuthEmail(request: Request): string {
   return request.headers.get("x-user-email") || "system@carelim.health";
+}
+
+/**
+ * Get the tenant ID from request headers (set by middleware).
+ * Returns null if not available (e.g., super admin or no tenant context).
+ */
+export function getAuthTenantId(request: Request): string | null {
+  return request.headers.get("x-tenant-id") || null;
+}
+
+/**
+ * Get the authenticated user type from request headers (set by middleware).
+ */
+export function getAuthUserType(request: Request): string {
+  return request.headers.get("x-user-type") || "user";
+}
+
+/**
+ * Get the authenticated user role from request headers (set by middleware).
+ */
+export function getAuthUserRole(request: Request): string {
+  return request.headers.get("x-user-role") || "";
 }

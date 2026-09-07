@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const patientId = searchParams.get("patientId");
   const where = patientId ? { patientId } : {};
   const procs = await db.dentalProcedure.findMany({ where, orderBy: { procedureDate: "desc" } });
   return NextResponse.json(procs);
-}
+});
 
 // POST creates the procedure AND automatically creates an invoice via the Billing module.
 // It also deducts materials from inventory (if itemId is a valid inventoryItem) and
 // appends a clinical note to the patient's EMR timeline.
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const count = await db.dentalProcedure.count();
-  const procNo = `DPR-${String(count + 1).padStart(5, "0")}`;
+  const procNo = `DPR-${nanoid(8).toUpperCase()}`;
   const procDate = body.procedureDate ? new Date(body.procedureDate) : new Date();
 
   // Determine cost from treatment plan if not provided
@@ -115,4 +117,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ...proc, invoice }, { status: 201 });
-}
+});

@@ -20,5 +20,8 @@
     "db:push": "npm run db:push --workspace=packages/database",
     "db:generate": "npm run db:generate --workspace=packages/database",
     "seed": "npm run seed --workspace=packages/database"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
   }
 }

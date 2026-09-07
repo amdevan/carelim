@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const orderId = searchParams.get("orderId");
@@ -17,4 +18,4 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json(results);
-}
+});

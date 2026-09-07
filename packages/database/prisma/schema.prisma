@@ -12,6 +12,10 @@ datasource db {
 
 model Department {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   name        String
   code        String
   description String?
@@ -25,6 +29,10 @@ model Department {
 
 model Doctor {
   id             String   @id @default(cuid())
+  tenantId       String?
+  tenant         Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId       String?
+  branch         Branch?  @relation(fields: [branchId], references: [id])
   name           String
   email          String   @unique
   password       String   @default("carelim123")
@@ -68,6 +76,10 @@ model DoctorScheduleSlot {
 
 model Patient {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId        String?
+  branch          Branch?  @relation(fields: [branchId], references: [id])
   patientCode     String   @unique
   name            String
   email           String?
@@ -104,6 +116,8 @@ model Patient {
 
 model Appointment {
   id          String   @id @default(cuid())
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   tokenNo     Int
   patientId   String
   patient     Patient @relation(fields: [patientId], references: [id])
@@ -125,6 +139,8 @@ model Appointment {
 
 model Prescription {
   id          String   @id @default(cuid())
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   code        String   @unique
   patientId   String
   patient     Patient @relation(fields: [patientId], references: [id])
@@ -138,9 +154,6 @@ model Prescription {
   status      String   @default("active")
   createdAt   DateTime @default(now())
   items       PrescriptionItem[]
-  // Rich clinical data matching the OPD prescription template (JSON string):
-  // { chiefComplaints, presentIllness, history, examination, diagnosis detail,
-  //   investigations, procedures, advice detail, referral, vitals detail }
   clinicalData String?
 }
 
@@ -158,6 +171,10 @@ model PrescriptionItem {
 
 model Medicine {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId        String?
+  branch          Branch?  @relation(fields: [branchId], references: [id])
   name            String
   genericName     String?
   strength        String?  // e.g. "500mg", "250mg/5ml"
@@ -228,6 +245,8 @@ model MedicineBatch {
 
 model Supplier {
   id        String   @id @default(cuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   name      String
   contact   String
   email     String?
@@ -312,6 +331,8 @@ model StockMovement {
 
 model PharmacySale {
   id          String   @id @default(cuid())
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   invoiceNo   String   @unique
   patientId   String?
   patientName String?
@@ -372,6 +393,8 @@ model SalesReturn {
 
 model Invoice {
   id          String   @id @default(cuid())
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   invoiceNo   String   @unique
   patientId   String
   patient     Patient @relation(fields: [patientId], references: [id])
@@ -400,6 +423,8 @@ model InvoiceItem {
 
 model LabTest {
   id          String   @id @default(cuid())
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   testCode    String   @unique
   patientId   String
   patient     Patient @relation(fields: [patientId], references: [id])
@@ -417,6 +442,10 @@ model LabTest {
 
 model Staff {
   id           String   @id @default(cuid())
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId     String?
+  branch       Branch?  @relation(fields: [branchId], references: [id])
   name         String
   email        String   @unique
   phone        String
@@ -443,6 +472,8 @@ model StaffAttendance {
 
 model AuditLog {
   id        String   @id @default(cuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   user      String
   action    String
   module    String
@@ -452,9 +483,11 @@ model AuditLog {
 }
 
 model Setting {
-  id    String @id @default(cuid())
-  key   String @unique
-  value String
+  id       String @id @default(cuid())
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+  key      String @unique
+  value    String
 }
 
 // ===== Multi-Tenant & RBAC =====
@@ -479,6 +512,21 @@ model Branch {
   logo            String?
   status          String   @default("active")
   createdAt       DateTime @default(now())
+  users           User[]
+  doctors         Doctor[]
+  staff           Staff[]
+  patients        Patient[]
+  departments     Department[]
+  appointments    Appointment[]
+  prescriptions   Prescription[]
+  medicines       Medicine[]
+  invoices        Invoice[]
+  labTests        LabTest[]
+  radiologyTests  RadiologyTest[]
+  expenses        Expense[]
+  pharmacySales   PharmacySale[]
+  patientPayments PatientPayment[]
+  clinicalNotes   ClinicalNote[]
 }
 
 model ClinicSettings {
@@ -548,6 +596,8 @@ model RolePermission {
 
 model User {
   id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
   name          String
   email         String   @unique
   password      String   @default("medcore123")
@@ -555,6 +605,7 @@ model User {
   roleId        String?
   role          Role?    @relation(fields: [roleId], references: [id])
   branchId      String?
+  branch        Branch?  @relation(fields: [branchId], references: [id])
   status        String   @default("active")
   lastLogin     DateTime?
   createdAt     DateTime @default(now())
@@ -563,6 +614,10 @@ model User {
 // ===== Radiology =====
 model RadiologyTest {
   id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId      String?
+  branch        Branch?  @relation(fields: [branchId], references: [id])
   testCode      String   @unique
   patientId     String
   patient       Patient @relation(fields: [patientId], references: [id])
@@ -601,8 +656,10 @@ model RadiologyTest {
 
 model RadiologyModality {
   id          String   @id @default(cuid())
-  name        String   @unique
-  code        String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  name        String
+  code        String
   description String?
   baseFee     Float    @default(0)
   contrastFee Float    @default(0)
@@ -611,12 +668,16 @@ model RadiologyModality {
   createdAt   DateTime @default(now())
   equipment   RadiologyEquipment[]
   studies     RadiologyStudy[]
+  @@unique([tenantId, name])
+  @@unique([tenantId, code])
 }
 
 model RadiologyEquipment {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   name            String
-  code            String   @unique
+  code            String
   modalityId      String
   modality        RadiologyModality @relation(fields: [modalityId], references: [id])
   manufacturer    String?
@@ -628,10 +689,13 @@ model RadiologyEquipment {
   lastServiceDate DateTime?
   nextServiceDate DateTime?
   createdAt       DateTime @default(now())
+  @@unique([tenantId, code])
 }
 
 model RadiologyStudy {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   studyUid        String   @unique
   orderId         String?
   patientId       String
@@ -691,6 +755,8 @@ model RadiologyReport {
 
 model RadiologyTemplate {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   name            String
   modality        String
   bodyPart        String
@@ -703,6 +769,8 @@ model RadiologyTemplate {
 
 model RadiologyAlert {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   studyId         String?
   patientId       String?
   patientName     String?
@@ -722,6 +790,8 @@ model RadiologyAlert {
 
 model RadiologySchedule {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   patientId   String
   patientName String?
   modality    String
@@ -738,7 +808,11 @@ model RadiologySchedule {
 // ===== Accounting & Finance =====
 model Expense {
   id          String   @id @default(cuid())
-  code        String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
+  code        String
   category    String   // rent | salary | utilities | supplies | maintenance | marketing | fuel | cleaning | other
   description String
   amount      Float
@@ -748,6 +822,7 @@ model Expense {
   approvedBy  String?
   createdBy   String?
   attachment  String?
+  @@unique([tenantId, code])
 }
 
 model Payroll {
@@ -766,7 +841,9 @@ model Payroll {
 
 model Account {
   id        String   @id @default(cuid())
-  code      String   @unique
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  code      String
   name      String
   type      String   // asset | liability | equity | income | expense
   group     String   // current_asset | fixed_asset | current_liability | long_term_liability | revenue | cogs | operating_expense
@@ -775,11 +852,14 @@ model Account {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   journalItems JournalItem[]
+  @@unique([tenantId, code])
 }
 
 model JournalEntry {
   id          String   @id @default(cuid())
-  entryNo     String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  entryNo     String
   date        DateTime @default(now())
   description String
   reference   String?  // invoice no, PO no, etc.
@@ -790,6 +870,7 @@ model JournalEntry {
   createdBy   String?
   createdAt   DateTime @default(now())
   items       JournalItem[]
+  @@unique([tenantId, entryNo])
 }
 
 model JournalItem {
@@ -805,7 +886,11 @@ model JournalItem {
 
 model PatientPayment {
   id            String   @id @default(cuid())
-  receiptNo     String   @unique
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId      String?
+  branch        Branch?  @relation(fields: [branchId], references: [id])
+  receiptNo     String
   patientId     String
   patientName   String
   invoiceId     String?
@@ -815,11 +900,14 @@ model PatientPayment {
   date          DateTime @default(now())
   notes         String?
   collectedBy   String?
+  @@unique([tenantId, receiptNo])
 }
 
 model SupplierPayment {
   id            String   @id @default(cuid())
-  paymentNo     String   @unique
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  paymentNo     String
   supplierName  String
   purchaseOrderId String?
   amount        Float
@@ -827,10 +915,13 @@ model SupplierPayment {
   date          DateTime @default(now())
   notes         String?
   paidBy        String?
+  @@unique([tenantId, paymentNo])
 }
 
 model DoctorCommission {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   doctorId    String
   doctorName  String
   month       String
@@ -842,10 +933,13 @@ model DoctorCommission {
   totalCommission Float @default(0)
   status      String   @default("pending") // pending | settled
   settledAt   DateTime?
+  @@unique([tenantId, doctorId, month])
 }
 
 model InsuranceClaim {
   id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
   claimNo       String   @unique
   patientName   String
   insuranceCompany String
@@ -861,6 +955,8 @@ model InsuranceClaim {
 
 model CashTransaction {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   type        String   // receipt | payment | deposit | withdraw | transfer
   amount      Float
   description String
@@ -872,6 +968,8 @@ model CashTransaction {
 
 model BankTransaction {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   bankName    String
   accountNo   String?
   type        String   // deposit | withdraw | transfer | payment | receipt
@@ -886,6 +984,10 @@ model BankTransaction {
 // ===== Clinical Extensions =====
 model ClinicalNote {
   id        String   @id @default(cuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
   patientId String
   patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
   doctorId  String?
@@ -896,6 +998,8 @@ model ClinicalNote {
 
 model LeaveRequest {
   id        String   @id @default(cuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   staffId   String
   staff     Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
   type      String   @default("casual") // casual | sick | earned | unpaid
@@ -912,8 +1016,10 @@ model LeaveRequest {
 
 model LabDepartment {
   id          String   @id @default(cuid())
-  name        String   @unique
-  code        String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  name        String
+  code        String
   description String?
   headTechnician String?
   color       String   @default("#0d9488")
@@ -921,12 +1027,16 @@ model LabDepartment {
   createdAt   DateTime @default(now())
   tests       LabTestMaster[]
   equipment   LabEquipment[]
+  @@unique([tenantId, name])
+  @@unique([tenantId, code])
 }
 
 model LabTestMaster {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   name            String
-  code            String   @unique
+  code            String
   category        String   @default("Hematology")
   departmentId    String?
   department      LabDepartment? @relation(fields: [departmentId], references: [id])
@@ -945,6 +1055,7 @@ model LabTestMaster {
   orderItems      LabOrderItem[]
   packageTests    LabPackageTest[]
   qcRecords       LabQualityControl[]
+  @@unique([tenantId, code])
 }
 
 model LabTestParameter {
@@ -976,14 +1087,17 @@ model LabReferenceRange {
 
 model LabPackage {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   name        String
-  code        String   @unique
+  code        String
   description String?
   price       Float    @default(0)
   discountPct Float    @default(0)
   status      String   @default("active")
   createdAt   DateTime @default(now())
   tests       LabPackageTest[]
+  @@unique([tenantId, code])
 }
 
 model LabPackageTest {
@@ -996,6 +1110,8 @@ model LabPackageTest {
 
 model LabOrder {
   id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
   orderNo       String   @unique
   patientId     String
   patient       Patient @relation(fields: [patientId], references: [id])
@@ -1102,7 +1218,9 @@ model LabResultParameter {
 
 model LabQualityControl {
   id          String   @id @default(cuid())
-  code        String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  code        String
   testId      String?
   test        LabTestMaster? @relation(fields: [testId], references: [id])
   equipmentId String?
@@ -1115,12 +1233,15 @@ model LabQualityControl {
   performedBy String?
   performedAt DateTime @default(now())
   comments    String?
+  @@unique([tenantId, code])
 }
 
 model LabEquipment {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   name            String
-  serialNumber    String   @unique
+  serialNumber    String
   type            String   // analyzer | microscope | centrifuge | imaging | other
   manufacturer    String?
   model           String?
@@ -1133,10 +1254,13 @@ model LabEquipment {
   maintenanceSchedule String?
   status          String   @default("operational") // operational | maintenance | breakdown
   createdAt       DateTime @default(now())
+  @@unique([tenantId, serialNumber])
 }
 
 model LabInventory {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   name        String
   type        String   @default("reagent") // reagent | chemical | kit | consumable | tube | slide
   category    String?
@@ -1155,6 +1279,8 @@ model LabInventory {
 
 model LabSupplier {
   id        String   @id @default(cuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   name      String
   contact   String
   email     String?
@@ -1170,8 +1296,10 @@ model LabSupplier {
 
 model InventoryLocation {
   id        String   @id @default(cuid())
-  name      String   @unique
-  code      String   @unique
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  name      String
+  code      String
   type      String   @default("store") // pharmacy | store | icu | ot | emergency | lab | warehouse
   address   String?
   manager   String?
@@ -1182,10 +1310,14 @@ model InventoryLocation {
   transfersFrom StockTransfer[] @relation("transferFrom")
   transfersTo   StockTransfer[] @relation("transferTo")
   audits    StockAudit[]
+  @@unique([tenantId, name])
+  @@unique([tenantId, code])
 }
 
 model InventoryItem {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   name            String
   genericName     String?
   brandName       String?
@@ -1229,6 +1361,8 @@ model InventoryItem {
 
 model InventoryBatch {
   id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
   itemId        String
   item          InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
   batchNo       String
@@ -1256,6 +1390,8 @@ model InventoryStock {
 
 model InventoryMovement {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   itemId      String
   item        InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
   locationId  String?
@@ -1272,6 +1408,8 @@ model InventoryMovement {
 
 model StockTransfer {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   transferNo  String   @unique
   fromLocationId String
   fromLocation InventoryLocation @relation("transferFrom", fields: [fromLocationId], references: [id])
@@ -1300,6 +1438,8 @@ model StockTransferItem {
 
 model StockAudit {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   auditNo     String   @unique
   locationId  String
   location    InventoryLocation @relation(fields: [locationId], references: [id])
@@ -1345,6 +1485,83 @@ model Tenant {
   usageRecords UsageTracking[]
   supportTickets SupportTicket[]
   auditLogs SaaSAuditLog[]
+  departments Department[]
+  doctors Doctor[]
+  patients Patient[]
+  medicines Medicine[]
+  suppliers Supplier[]
+  staff Staff[]
+  settings Setting[]
+  radiologyTests RadiologyTest[]
+  radiologyModalities RadiologyModality[]
+  radiologyEquipment RadiologyEquipment[]
+  radiologyStudies RadiologyStudy[]
+  radiologyTemplates RadiologyTemplate[]
+  radiologyAlerts RadiologyAlert[]
+  radiologySchedules RadiologySchedule[]
+  expenses Expense[]
+  accounts Account[]
+  journalEntries JournalEntry[]
+  patientPayments PatientPayment[]
+  supplierPayments SupplierPayment[]
+  doctorCommissions DoctorCommission[]
+  insuranceClaims InsuranceClaim[]
+  cashTransactions CashTransaction[]
+  bankTransactions BankTransaction[]
+  clinicalNotes ClinicalNote[]
+  leaveRequests LeaveRequest[]
+  labDepartments LabDepartment[]
+  labTestMasters LabTestMaster[]
+  labPackages LabPackage[]
+  labOrders LabOrder[]
+  labEquipments LabEquipment[]
+  labInventories LabInventory[]
+  labSuppliers LabSupplier[]
+  labQualityControls LabQualityControl[]
+  inventoryLocations InventoryLocation[]
+  inventoryItems InventoryItem[]
+  inventoryBatches InventoryBatch[]
+  inventoryMovements InventoryMovement[]
+  stockTransfers StockTransfer[]
+  stockAudits StockAudit[]
+  organizations Organization[]
+  patientUsers PatientUser[]
+  crmContacts CRMContact[]
+  crmDeals CRMDeal[]
+  emailTemplates EmailTemplate[]
+  treatmentProtocols TreatmentProtocol[]
+  donorProfiles DonorProfile[]
+  dentalExaminations DentalExamination[]
+  odontograms Odontogram[]
+  dentalTreatmentPlans DentalTreatmentPlan[]
+  dentalProcedures DentalProcedure[]
+  dentalImages DentalImage[]
+  dentalLabOrders DentalLabOrder[]
+  orthodonticCases OrthodonticCase[]
+  implantCases ImplantCase[]
+  dentalFollowups DentalFollowup[]
+  ivfCycles IVFCycle[]
+  ivfConsents IVFConsent[]
+  ivfPackages IVFPackage[]
+  cryobankStorages CryobankStorage[]
+  fertilityAssessments FertilityAssessment[]
+  semenProcessings SemenProcessing[]
+  embryos Embryo[]
+  embryoTransfers EmbryoTransfer[]
+  eggRetrievals EggRetrieval[]
+  follicularMonitorings FollicularMonitoring[]
+  pregnancyFollowups PregnancyFollowup[]
+  patientSources PatientSource[]
+  appointmentExtensions AppointmentExtension[]
+  campaigns Campaign[]
+  msLeads MSLead[]
+  referrals Referral[]
+  commissionSettlements CommissionSettlement[]
+  clinicAuditLogs AuditLog[]
+  users User[]
+  bookingConfigs BookingConfig[]
+  bookingLinks BookingLink[]
+  publicBookings PublicBooking[]
 }
 model Plan {
   id String @id @default(cuid())
@@ -1473,7 +1690,9 @@ model Lead {
 
 model IVFCycle {
   id              String   @id @default(cuid())
-  cycleNo         String   @unique
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
+  cycleNo         String
   patientId       String
   partnerId       String?
   doctorId        String?
@@ -1497,10 +1716,13 @@ model IVFCycle {
   embryoRecords   Embryo[]
   transfers       EmbryoTransfer[]
   pregnancy       PregnancyFollowup?
+  @@unique([tenantId, cycleNo])
 }
 
 model FertilityAssessment {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   patientId   String
   partnerId   String?
   assessmentDate DateTime @default(now())
@@ -1521,8 +1743,10 @@ model FertilityAssessment {
 
 model TreatmentProtocol {
   id          String   @id @default(cuid())
-  name        String   @unique
-  code        String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  name        String
+  code        String
   description String?
   type        String   @default("antagonist") // antagonist | agonist | natural | mild
   duration    Int      @default(12) // days
@@ -1530,10 +1754,14 @@ model TreatmentProtocol {
   monitoring  String?  // monitoring schedule
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+  @@unique([tenantId, name])
+  @@unique([tenantId, code])
 }
 
 model FollicularMonitoring {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   cycleId     String
   cycle       IVFCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   monitoringDate DateTime @default(now())
@@ -1551,6 +1779,8 @@ model FollicularMonitoring {
 
 model EggRetrieval {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   cycleId     String   @unique
   opuDate     DateTime @default(now())
   folliclesPunctured Int @default(0)
@@ -1568,6 +1798,8 @@ model EggRetrieval {
 
 model SemenProcessing {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   cycleId         String?
   patientId       String?
   donorId         String?
@@ -1586,6 +1818,8 @@ model SemenProcessing {
 
 model Embryo {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   cycleId     String
   cycle       IVFCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   embryoNo    Int      @default(1)
@@ -1603,6 +1837,8 @@ model Embryo {
 
 model EmbryoTransfer {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   cycleId     String
   cycle       IVFCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   transferDate DateTime @default(now())
@@ -1618,7 +1854,9 @@ model EmbryoTransfer {
 
 model CryobankStorage {
   id          String   @id @default(cuid())
-  barcode     String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  barcode     String
   type        String   // embryo | oocyte | sperm
   patientId   String?
   donorId     String?
@@ -1632,10 +1870,13 @@ model CryobankStorage {
   quantity    Int      @default(1)
   notes       String?
   createdAt   DateTime @default(now())
+  @@unique([tenantId, barcode])
 }
 
 model PregnancyFollowup {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   cycleId     String   @unique
   cycle       IVFCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   testDate    DateTime @default(now())
@@ -1654,7 +1895,9 @@ model PregnancyFollowup {
 
 model DonorProfile {
   id          String   @id @default(cuid())
-  donorCode   String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  donorCode   String
   type        String   // egg | sperm | embryo
   anonymous   Boolean  @default(true)
   age         Int?
@@ -1668,11 +1911,14 @@ model DonorProfile {
   screeningStatus String @default("pending") // pending | cleared | rejected
   status      String   @default("active") // active | used | retired
   createdAt   DateTime @default(now())
+  @@unique([tenantId, donorCode])
 }
 
 model IVFConsent {
   id          String   @id @default(cuid())
-  consentNo   String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  consentNo   String
   patientId   String
   partnerId   String?
   cycleId     String?
@@ -1685,17 +1931,22 @@ model IVFConsent {
   witness     String?
   documentUrl String?
   createdAt   DateTime @default(now())
+  @@unique([tenantId, consentNo])
 }
 
 model IVFPackage {
   id          String   @id @default(cuid())
-  name        String   @unique
-  code        String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  name        String
+  code        String
   description String?
   totalCost   Float    @default(0)
   includes    String?  // JSON: list of included services
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+  @@unique([tenantId, name])
+  @@unique([tenantId, code])
 }
 
 // ============================================================
@@ -1706,7 +1957,9 @@ model IVFPackage {
 
 model DentalExamination {
   id                  String   @id @default(cuid())
-  examNo              String   @unique
+  tenantId            String?
+  tenant              Tenant?  @relation(fields: [tenantId], references: [id])
+  examNo              String
   patientId           String   // -> Patient.id
   doctorId            String?  // -> Doctor.id
   appointmentId       String?  // -> Appointment.id
@@ -1725,10 +1978,13 @@ model DentalExamination {
   clinicalNotes        String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @default(now()) @updatedAt
+  @@unique([tenantId, examNo])
 }
 
 model Odontogram {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   patientId   String   // -> Patient.id
   numberingSystem String @default("fdi") // fdi | universal | palmer
   notes       String?
@@ -1754,7 +2010,9 @@ model Tooth {
 
 model DentalTreatmentPlan {
   id            String   @id @default(cuid())
-  planNo        String   @unique
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  planNo        String
   patientId     String
   doctorId      String?
   appointmentId String?
@@ -1768,11 +2026,14 @@ model DentalTreatmentPlan {
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
+  @@unique([tenantId, planNo])
 }
 
 model DentalProcedure {
   id             String   @id @default(cuid())
-  procNo         String   @unique
+  tenantId       String?
+  tenant         Tenant?  @relation(fields: [tenantId], references: [id])
+  procNo         String
   patientId      String
   doctorId       String?
   assistantId    String?
@@ -1791,10 +2052,13 @@ model DentalProcedure {
   status         String   @default("completed") // scheduled | in_progress | completed | cancelled
   createdAt      DateTime @default(now())
   updatedAt      DateTime @default(now()) @updatedAt
+  @@unique([tenantId, procNo])
 }
 
 model DentalImage {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   patientId   String
   procedureId String?
   imageType   String   // iopa | opg | cbct | ceph | clinical_photo | before_after
@@ -1808,7 +2072,9 @@ model DentalImage {
 
 model DentalLabOrder {
   id            String   @id @default(cuid())
-  orderNo       String   @unique
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  orderNo       String
   patientId     String
   doctorId      String?
   procedureId   String?
@@ -1826,11 +2092,14 @@ model DentalLabOrder {
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
+  @@unique([tenantId, orderNo])
 }
 
 model OrthodonticCase {
   id             String   @id @default(cuid())
-  caseNo         String   @unique
+  tenantId       String?
+  tenant         Tenant?  @relation(fields: [tenantId], references: [id])
+  caseNo         String
   patientId      String
   doctorId       String?
   treatmentType  String   @default("braces") // braces | aligners | functional | retainer
@@ -1845,11 +2114,14 @@ model OrthodonticCase {
   paidAmount     Float    @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @default(now()) @updatedAt
+  @@unique([tenantId, caseNo])
 }
 
 model ImplantCase {
   id               String   @id @default(cuid())
-  caseNo           String   @unique
+  tenantId         String?
+  tenant           Tenant?  @relation(fields: [tenantId], references: [id])
+  caseNo           String
   patientId        String
   doctorId         String?
   procedureId      String?
@@ -1869,11 +2141,14 @@ model ImplantCase {
   cost             Float    @default(0)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now()) @updatedAt
+  @@unique([tenantId, caseNo])
 }
 
 model DentalFollowup {
   id              String   @id @default(cuid())
-  followupNo      String   @unique
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
+  followupNo      String
   patientId       String
   doctorId        String?
   procedureId     String?
@@ -1885,6 +2160,7 @@ model DentalFollowup {
   status          String   @default("scheduled") // scheduled | completed | cancelled | no_show
   reminderSent    Boolean  @default(false)
   createdAt       DateTime @default(now())
+  @@unique([tenantId, followupNo])
 }
 
 // ============================================================
@@ -1898,18 +2174,23 @@ model DentalFollowup {
 
 model PatientSource {
   id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   patientId   String   // -> Patient.id (existing HMS)
   sourceType  String   // carelim | clinic
   sourceName  String   // website | mobile_app | call_center | whatsapp | facebook | google | landing_page | partner | walk_in | reception | phone | hospital_website | existing
   campaignId  String?  // -> Campaign.id (optional)
   clinicId    String?  // -> Branch.id (partner clinic)
-  trackingId  String   @unique // CMS-XXXXX — for cross-clinic tracking
+  trackingId  String   // CMS-XXXXX — for cross-clinic tracking
   createdBy   String?
   createdAt   DateTime @default(now())
+  @@unique([tenantId, trackingId])
 }
 
 model AppointmentExtension {
   id                 String   @id @default(cuid())
+  tenantId           String?
+  tenant             Tenant?  @relation(fields: [tenantId], references: [id])
   appointmentId      String   @unique // -> Appointment.id (existing HMS)
   bookingSource      String   // CARELIM | CLINIC
   bookingChannel     String   // website | mobile_app | call_center | whatsapp | facebook | google | landing_page | walk_in | reception | phone
@@ -1923,6 +2204,8 @@ model AppointmentExtension {
 
 model Referral {
   id              String   @id @default(cuid())
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   referralNo      String   @unique
   appointmentId   String?  // -> Appointment.id
   patientId       String   // -> Patient.id
@@ -1940,6 +2223,7 @@ model Referral {
 
 model PatientActivityLog {
   id            String   @id @default(cuid())
+  tenantId      String?
   patientId     String   // -> Patient.id
   appointmentId String?  // -> Appointment.id
   activity      String   // appointment_booked | appointment_confirmed | checked_in | consultation | prescription_created | lab_ordered | billing_completed | commission_generated | followup_scheduled | sms_sent | whatsapp_sent
@@ -1950,6 +2234,7 @@ model PatientActivityLog {
 
 model CareCoordinator {
   id           String   @id @default(cuid())
+  tenantId     String?
   patientId    String   // -> Patient.id
   coordinatorId String? // -> Staff.id or name
   coordinatorName String?
@@ -1962,7 +2247,9 @@ model CareCoordinator {
 
 model MSLead {
   id          String   @id @default(cuid())
-  leadNo      String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  leadNo      String
   patientName String
   phone       String
   email       String?
@@ -1978,11 +2265,14 @@ model MSLead {
   assignedTo  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
+  @@unique([tenantId, leadNo])
 }
 
 model Campaign {
   id          String   @id @default(cuid())
-  name        String   @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  name        String
   platform    String   // facebook | google | instagram | whatsapp | website | call_center
   budget      Float    @default(0)
   spent       Float    @default(0)
@@ -1996,7 +2286,9 @@ model Campaign {
 
 model CommissionSettlement {
   id          String   @id @default(cuid())
-  settlementNo String  @unique
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  settlementNo String
   referralId  String   // -> Referral.id
   clinicId    String?  // -> Branch.id
   doctorId    String?  // -> Doctor.id
@@ -2005,6 +2297,7 @@ model CommissionSettlement {
   paidAt      DateTime?
   month       String   // e.g. "2025-07"
   createdAt   DateTime @default(now())
+  @@unique([tenantId, settlementNo])
 }
 
 // ============================================================
@@ -2013,6 +2306,8 @@ model CommissionSettlement {
 
 model Organization {
   id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
   name          String
   clinicType    String
   registrationNo String?
@@ -2081,12 +2376,13 @@ model OnboardingSession {
 
 model OrganizationSetting {
   id            String   @id @default(cuid())
+  tenantId      String?
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   key           String
   value         String
   category      String   @default("general")
-  @@unique([organizationId, key])
+  @@unique([tenantId, organizationId, key])
 }
 
 // ============================================================
@@ -2095,6 +2391,8 @@ model OrganizationSetting {
 
 model PatientUser {
   id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
   patientId     String?  @unique // links to existing Patient model
   name          String
   email         String   @unique
@@ -2112,6 +2410,7 @@ model PatientUser {
 
 model PatientDocument {
   id          String   @id @default(cuid())
+  tenantId    String?
   userId      String
   user        PatientUser @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
@@ -2119,6 +2418,7 @@ model PatientDocument {
   size        String   // e.g. "1.2 MB"
   fileData    String?  // base64 encoded file data
   uploadedAt  DateTime @default(now())
+  @@unique([tenantId, userId, name])
 }
 
 model PatientMessage {
@@ -2160,7 +2460,9 @@ model PatientReminder {
 
 model CRMContact {
   id            String   @id @default(cuid())
-  contactNo     String   @unique // CON-XXXXX
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  contactNo     String   // CON-XXXXX
   name          String
   email         String?
   phone         String
@@ -2181,11 +2483,14 @@ model CRMContact {
   deals         CRMDeal[]
   communications CRMCommunication[]
   tasks         CRMTask[]
+  @@unique([tenantId, contactNo])
 }
 
 model CRMDeal {
   id            String   @id @default(cuid())
-  dealNo        String   @unique // DEAL-XXXXX
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  dealNo        String   // DEAL-XXXXX
   title         String
   contactId     String
   contact       CRMContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -2207,6 +2512,7 @@ model CRMDeal {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
   activities    CRMActivity[]
+  @@unique([tenantId, dealNo])
 }
 
 model CRMCommunication {
@@ -2256,6 +2562,8 @@ model CRMActivity {
 
 model EmailTemplate {
   id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
   name          String
   category      String   @default("general") // general | follow_up | appointment | promotion | welcome | feedback
   subject       String
@@ -2264,4 +2572,53 @@ model EmailTemplate {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
+  @@unique([tenantId, name])
+}
+
+// ── Public Booking ───────────────────────────────────────────
+
+model BookingConfig {
+  id               String   @id @default(cuid())
+  tenantId         String?
+  tenant           Tenant?  @relation(fields: [tenantId], references: [id])
+  enabled          Boolean  @default(false)
+  requireLogin     Boolean  @default(false)
+  showDepartments  Boolean  @default(true)
+  showDoctors      Boolean  @default(true)
+  allowedTimeSlots String   @default("30")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  links            BookingLink[]
+  @@unique([tenantId])
+}
+
+model BookingLink {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  configId    String?
+  config      BookingConfig? @relation(fields: [configId], references: [id], onDelete: Cascade)
+  doctorName  String?
+  department  String?
+  url         String
+  slug        String   @unique
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  @@unique([tenantId, slug])
+}
+
+model PublicBooking {
+  id           String   @id @default(cuid())
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+  patientName  String
+  email        String?
+  phone        String
+  doctorName   String
+  department   String?
+  date         DateTime
+  time         String
+  status       String   @default("pending")
+  notes        String?
+  createdAt    DateTime @default(now())
 }

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const { id } = await params;
     const p = await db.prescription.findUnique({
@@ -15,9 +16,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     console.error("Error fetching prescription:", error);
     return NextResponse.json({ error: "Failed to fetch prescription" }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const { id } = await params;
     await db.prescription.delete({ where: { id } });
@@ -27,4 +28,4 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     console.error("Error deleting prescription:", error);
     return NextResponse.json({ error: "Failed to delete prescription" }, { status: 500 });
   }
-}
+});

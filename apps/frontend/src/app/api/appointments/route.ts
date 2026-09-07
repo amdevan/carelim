@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
+import { requirePermission } from "@/lib/api-guard";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
     const doctorId = searchParams.get("doctorId");
     const status = searchParams.get("status");
+    const branchId = searchParams.get("branchId");
     const where: Record<string, unknown> = {};
     if (date) {
       const d = new Date(date);
@@ -17,6 +20,7 @@ export async function GET(req: NextRequest) {
     }
     if (doctorId) where.doctorId = doctorId;
     if (status) where.status = status;
+    if (branchId) where.branchId = branchId;
     const appointments = await db.appointment.findMany({
       where,
       include: { patient: true, doctor: { include: { department: true } } },
@@ -27,9 +31,11 @@ export async function GET(req: NextRequest) {
     console.error("Error fetching appointments:", error);
     return NextResponse.json({ error: "Failed to fetch appointments" }, { status: 500 });
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
+  const denied = await requirePermission(req, "Appointment", "create");
+  if (denied) return denied;
   try {
     const body = await req.json();
     const count = await db.appointment.count({
@@ -37,6 +43,7 @@ export async function POST(req: NextRequest) {
     });
     const appt = await db.appointment.create({
       data: {
+        branchId: body.branchId || null,
         patientId: body.patientId,
         doctorId: body.doctorId,
         departmentId: body.departmentId || undefined,
@@ -58,4 +65,4 @@ export async function POST(req: NextRequest) {
     console.error("Error creating appointment:", error);
     return NextResponse.json({ error: "Failed to create appointment" }, { status: 500 });
   }
-}
+});

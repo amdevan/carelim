@@ -50,14 +50,15 @@ export function HRStaff(_props: { filter?: string }) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const { data: branches } = useFetch<{ id: string; name: string }[]>("/api/branches");
   const [form, setForm] = useState({
     name: "", email: "", phone: "", role: "", department: "",
-    hireDate: "", status: "active",
+    hireDate: "", status: "active", branchId: "",
   });
 
   const resetForm = () => setForm({
     name: "", email: "", phone: "", role: "", department: "",
-    hireDate: "", status: "active",
+    hireDate: "", status: "active", branchId: "",
   });
 
   const handleSubmit = async () => {
@@ -245,6 +246,16 @@ export function HRStaff(_props: { filter?: string }) {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Branch</Label>
+              <Select value={form.branchId || "__none__"} onValueChange={(v) => setForm({ ...form, branchId: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {(branches || []).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

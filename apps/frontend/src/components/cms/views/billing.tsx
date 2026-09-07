@@ -1,10 +1,14 @@
 "use client";
 import { fetchAPI } from "@/lib/api";
+import { useAppStore } from "@/store/app-store";
+import { Barcode } from "@/components/ui/barcode";
 
 import { useFetch } from "@/lib/use-fetch";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DoctorSearch } from "@/components/ui/doctor-search";
+import { PatientSearch } from "@/components/ui/patient-search";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,7 +39,7 @@ import {
   Search, Plus, Receipt, Wallet, TrendingUp, AlertTriangle,
   Eye, CreditCard, Printer, X, Download, RotateCcw, Mail, MessageSquare,
   ArrowUpDown, Stethoscope, Pill, FlaskConical, Package, BedDouble,
-  FileText, Calendar, User,
+  FileText, Trash2,
 } from "lucide-react";
 import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
 import { exportToCSV, printHTML, docHeader } from "@/lib/export-utils";
@@ -70,13 +74,6 @@ interface Invoice {
   items: InvoiceItem[];
 }
 
-interface PatientLite {
-  id: string;
-  patientCode: string;
-  name: string;
-  phone: string;
-}
-
 const TYPE_COLORS: Record<string, string> = {
   consultation: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
   pharmacy: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
@@ -99,21 +96,21 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 ];
 
 /* ---------- Invoice print HTML builder ---------- */
-function buildInvoiceHTML(inv: Invoice): string {
+function buildInvoiceHTML(inv: Invoice, settings?: Record<string, string>): string {
   const statusClass =
     inv.status === "paid" ? "emerald" :
     inv.status === "partial" ? "teal" :
     inv.status === "refunded" ? "rose" : "rose";
   const statusBadge = `<span class="badge ${statusClass}">${statusLabel(inv.status)}</span>`;
+  const clinicName = settings?.clinic_name || settings?.organization_name || "Health Center";
+  const footerText = settings?.billing_footer_text || `Thank you for choosing ${clinicName}`;
 
   const patientGrid = `
-    <div class="info-grid">
-      <div><div class="label">Bill To</div><div><strong>${escapeHTML(inv.patient.name)}</strong></div>
-        <div>Code: <span style="font-family:monospace">${escapeHTML(inv.patient.patientCode)}</span></div>
-        <div>Phone: ${escapeHTML(inv.patient.phone || "—")}</div></div>
-      <div><div class="label">Type</div><div>${escapeHTML(inv.type)}</div>
-        <div class="label" style="margin-top:6px">Payment Method</div>
-        <div>${escapeHTML(inv.paymentMethod || "—")}</div></div>
+    <div class="info-grid-2col">
+      <div class="info-cell"><span class="label">Bill To</span> <strong>${escapeHTML(inv.patient.name)}</strong> <span class="dim">(${escapeHTML(inv.patient.patientCode)})</span></div>
+      <div class="info-cell"><span class="label">Phone</span> ${escapeHTML(inv.patient.phone || "—")}</div>
+      <div class="info-cell"><span class="label">Type</span> ${escapeHTML(inv.type)}</div>
+      <div class="info-cell"><span class="label">Payment</span> ${escapeHTML(inv.paymentMethod || "—")}</div>
     </div>`;
 
   const itemRows = (inv.items?.length ? inv.items : []).map((it) => `
@@ -141,13 +138,14 @@ function buildInvoiceHTML(inv: Invoice): string {
       <div class="row"><span>Due</span><span>${formatRs(inv.due)}</span></div>
     </div>`;
 
-  return `${docHeader(inv.invoiceNo, "INVOICE", formatDate(inv.date), statusBadge)}
+  return `${docHeader(inv.invoiceNo, "INVOICE", formatDate(inv.date), statusBadge, clinicName)}
     ${patientGrid}
     ${itemsTable}
     ${totals}
+    ${footerText ? `<p style="text-align:center;font-size:11px;color:#94a3b8;margin-top:16px">${escapeHTML(footerText)}</p>` : ""}
     <div class="signature">
       <div class="sig-block"><div class="line"></div><div class="name">Received By</div><div class="role">Patient / Guardian</div></div>
-      <div class="sig-block"><div class="line"></div><div class="name">Authorized Signatory</div><div class="role">MedCore Health Center</div></div>
+      <div class="sig-block"><div class="line"></div><div class="name">Authorized Signatory</div><div class="role">${escapeHTML(clinicName)}</div></div>
     </div>`;
 }
 
@@ -156,16 +154,19 @@ function escapeHTML(s: string): string {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 }
 
-function printInvoice(inv: Invoice) {
-  printHTML(`Invoice ${inv.invoiceNo}`, buildInvoiceHTML(inv));
+function printInvoice(inv: Invoice, settings?: Record<string, string>) {
+  const clinicName = settings?.clinic_name || settings?.organization_name;
+  printHTML(`Invoice ${inv.invoiceNo}`, buildInvoiceHTML(inv, settings), clinicName);
 }
 
 export function BillingView() {
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  const branchId = useAppStore((s) => s.branchId);
   const { data: invoices, loading, error } = useFetch<Invoice[]>(
-    refreshKey ? `/api/invoices?_r=${refreshKey}` : "/api/invoices",
+    refreshKey ? `/api/invoices?_r=${refreshKey}&branchId=${branchId || ""}` : `/api/invoices?branchId=${branchId || ""}`,
   );
+  const { data: settings } = useFetch<Record<string, string>>("/api/settings");
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("date");
@@ -176,6 +177,8 @@ export function BillingView() {
   const [viewId, setViewId] = useState<string | null>(null);
   const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
   const [refundInvoice, setRefundInvoice] = useState<Invoice | null>(null);
+  const [deleteInvoice, setDeleteInvoice] = useState<Invoice | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     if (!invoices) return [];
@@ -207,7 +210,7 @@ export function BillingView() {
       revenue: invoices.reduce((s, i) => s + (i.total || 0), 0),
       collected: invoices.reduce((s, i) => s + (i.paid || 0), 0),
       due: invoices.reduce((s, i) => s + (i.due || 0), 0),
-      overdue: invoices.filter((i) => i.status === "unpaid").length,
+      overdue: invoices.filter((i) => i.status === "unpaid" && i.due > 0).length,
     };
   }, [invoices]);
 
@@ -257,7 +260,9 @@ export function BillingView() {
           <Button
             size="sm"
             className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
-            onClick={() => setBillTypeOpen(true)}
+            disabled={!branchId}
+            title={!branchId ? "Select a branch first" : ""}
+            onClick={() => branchId && setBillTypeOpen(true)}
           >
             <Plus className="w-4 h-4" /> Create Invoice
           </Button>
@@ -292,6 +297,16 @@ export function BillingView() {
           </motion.div>
         ))}
       </div>
+
+      {!branchId && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No Branch Selected</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">Select a branch from the header to create invoices. All Branches view is read-only.</p>
+          </div>
+        </div>
+      )}
 
       {/* Filters + table */}
       <Card>
@@ -379,7 +394,10 @@ export function BillingView() {
                   </TableRow>
                 ) : paged.map((inv) => (
                   <TableRow key={inv.id} className="hover:bg-accent/40">
-                    <TableCell className="font-mono text-xs">{inv.invoiceNo}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <div>{inv.invoiceNo}</div>
+                      <Barcode value={inv.invoiceNo} height={18} fontSize={0} displayValue={false} className="max-w-[80px] mt-0.5" />
+                    </TableCell>
                     <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                       {formatDate(inv.date)}
                     </TableCell>
@@ -439,9 +457,18 @@ export function BillingView() {
                           size="sm"
                           className="h-7 w-7 p-0 text-muted-foreground hover:text-teal-600"
                           title="Print invoice"
-                          onClick={() => printInvoice(inv)}
+                          onClick={() => printInvoice(inv, settings ?? undefined)}
                         >
                           <Printer className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
+                          title="Delete invoice"
+                          onClick={() => setDeleteInvoice(inv)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </TableCell>
@@ -496,9 +523,56 @@ export function BillingView() {
       {/* View invoice sheet */}
       <Sheet open={!!viewId} onOpenChange={(o) => !o && setViewId(null)}>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto scrollbar-thin p-0">
-          {selected && <InvoiceDetail invoice={selected} />}
+          {selected && <InvoiceDetail invoice={selected} settings={settings ?? undefined} onDelete={() => { setDeleteInvoice(selected); setViewId(null); }} />}
         </SheetContent>
       </Sheet>
+
+      {/* Delete invoice confirmation */}
+      <AlertDialog open={!!deleteInvoice} onOpenChange={(o) => !o && setDeleteInvoice(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-4 h-4 text-rose-600" /> Delete Invoice?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You are about to permanently delete invoice{" "}
+              <span className="font-mono font-semibold text-foreground">{deleteInvoice?.invoiceNo}</span> for{" "}
+              <span className="font-semibold text-foreground">{deleteInvoice?.patient.name}</span> (Total{" "}
+              <span className="font-semibold text-foreground">{formatRs(deleteInvoice?.total || 0)}</span>).
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!deleteInvoice) return;
+                setDeleting(true);
+                try {
+                  const res = await fetchAPI(`/api/invoices/${deleteInvoice.id}`, { method: "DELETE" });
+                  if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    toast.error(err.error || "Failed to delete invoice");
+                  } else {
+                    toast.success(`${deleteInvoice.invoiceNo} deleted`);
+                    setDeleteInvoice(null);
+                    refresh();
+                  }
+                } catch {
+                  toast.error("Failed to delete invoice");
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {deleting ? "Deleting…" : "Yes, Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -565,8 +639,10 @@ function BillTypeDialog({
 function CreateInvoiceDialog({
   open, onOpenChange, onCreated, billType,
 }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void; billType: string | null }) {
-  const { data: patients } = useFetch<PatientLite[]>("/api/patients");
   const { data: settings } = useFetch<Record<string, string>>("/api/settings");
+  const { data: doctors } = useFetch<{ id: string; name: string; consultationFee: number; specialization?: string }[]>("/api/doctors");
+  const { data: labTests } = useFetch<{ id: string; name: string; code: string; price: number; sampleType: string; category: string; isPackage: boolean; status: string }[]>("/api/lab-tests-master");
+  const { data: labPackages } = useFetch<{ id: string; name: string; code: string; price: number; description?: string; status: string }[]>("/api/lab-packages");
   const [patientId, setPatientId] = useState("");
   const [type, setType] = useState("consultation");
   const [items, setItems] = useState<InvoiceItem[]>([{ description: "", qty: 1, rate: 0, amount: 0 }]);
@@ -575,11 +651,10 @@ function CreateInvoiceDialog({
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [paid, setPaid] = useState(0);
   const [saving, setSaving] = useState(false);
+  const branchId = useAppStore((s) => s.branchId);
 
-  // Consultation-specific
   const [consultationFee, setConsultationFee] = useState(0);
   const [doctorName, setDoctorName] = useState("");
-  const [consultationNotes, setConsultationNotes] = useState("");
 
   // Pharmacy-specific
   const [medItems, setMedItems] = useState<{ medicineName: string; qty: number; unitPrice: number; batchNo: string; expiry: string; }[]>([
@@ -594,15 +669,12 @@ function CreateInvoiceDialog({
   // Package-specific
   const [packageName, setPackageName] = useState("");
   const [packagePrice, setPackagePrice] = useState(0);
-  const [includedServices, setIncludedServices] = useState("");
 
   // IPD-specific
-  const [roomType, setRoomType] = useState("general");
-  const [admissionDate, setAdmissionDate] = useState("");
-  const [dischargeDate, setDischargeDate] = useState("");
   const [ipdItems, setIpdItems] = useState<InvoiceItem[]>([{ description: "", qty: 1, rate: 0, amount: 0 }]);
   const [dailyRoomCharge, setDailyRoomCharge] = useState(0);
   const [medicineCharges, setMedicineCharges] = useState(0);
+  const [roomType, setRoomType] = useState("general");
 
   useEffect(() => {
     if (billType && open) {
@@ -617,6 +689,16 @@ function CreateInvoiceDialog({
     }
   }, [open, settings]);
 
+  // Auto-fill consultation fee when doctor is selected
+  useEffect(() => {
+    if (doctorName && doctors) {
+      const doctor = doctors.find((d) => d.id === doctorName);
+      if (doctor && doctor.consultationFee > 0) {
+        setConsultationFee(doctor.consultationFee);
+      }
+    }
+  }, [doctorName, doctors]);
+
   // Compute subtotal from type-specific items
   const itemsSubtotal = useMemo(() => {
     if (type === "consultation") return consultationFee;
@@ -630,7 +712,15 @@ function CreateInvoiceDialog({
   const subtotal = itemsSubtotal;
   const taxAmount = useMemo(() => (subtotal - discount) * (taxRate / 100), [subtotal, discount, taxRate]);
   const total = Math.max(0, subtotal - discount + taxAmount);
+  const change = Math.max(0, paid - total);
   const due = Math.max(0, total - paid);
+
+  // Auto-fill paid amount to match total for consultation
+  useEffect(() => {
+    if (type === "consultation" && total > 0 && paid === 0) {
+      setPaid(total);
+    }
+  }, [total, type, paid]);
 
   // Pharmacy helpers
   const updateMedItem = (idx: number, patch: Partial<typeof medItems[0]>) => {
@@ -701,18 +791,14 @@ function CreateInvoiceDialog({
     setPaid(0);
     setConsultationFee(0);
     setDoctorName("");
-    setConsultationNotes("");
     setMedItems([{ medicineName: "", qty: 1, unitPrice: 0, batchNo: "", expiry: "" }]);
     setLabItems([{ testName: "", sampleType: "", rate: 0 }]);
     setPackageName("");
     setPackagePrice(0);
-    setIncludedServices("");
-    setRoomType("general");
-    setAdmissionDate("");
-    setDischargeDate("");
     setIpdItems([{ description: "", qty: 1, rate: 0, amount: 0 }]);
     setDailyRoomCharge(0);
     setMedicineCharges(0);
+    setRoomType("general");
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -725,6 +811,7 @@ function CreateInvoiceDialog({
     setSaving(true);
     try {
       const body = {
+        branchId,
         patientId,
         type,
         subtotal,
@@ -773,19 +860,7 @@ function CreateInvoiceDialog({
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           {/* Patient Selector — full width */}
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> Patient *</Label>
-            <Select value={patientId} onValueChange={setPatientId}>
-              <SelectTrigger><SelectValue placeholder="Search and select patient..." /></SelectTrigger>
-              <SelectContent>
-                {patients?.slice(0, 100).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name} · <span className="font-mono text-xs">{p.patientCode}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <PatientSearch value={patientId} onValueChange={setPatientId} label="" required />
 
           {/* Type-specific sections */}
           {type === "consultation" && (
@@ -798,23 +873,27 @@ function CreateInvoiceDialog({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Doctor Name</Label>
-                  <Input placeholder="e.g. Dr. Sharma" value={doctorName} onChange={(e) => setDoctorName(e.target.value)} className="h-9" />
+                  <DoctorSearch value={doctorName} onValueChange={setDoctorName} label="Doctor Name" required />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Consultation Fee (Rs)</Label>
-                  <Input type="number" value={consultationFee} onChange={(e) => setConsultationFee(Number(e.target.value))} className="h-9" />
+                  <div className="relative">
+                    <Input type="number" min="0" value={consultationFee || ""} onChange={(e) => setConsultationFee(Math.max(0, Number(e.target.value)))} className="h-9 pr-16" placeholder="0" />
+                    {doctorName && consultationFee > 0 && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-teal-600 bg-teal-100 dark:bg-teal-900/50 px-1.5 py-0.5 rounded font-medium">Auto-filled</span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Notes</Label>
-                <textarea
-                  className="w-full h-16 rounded-lg border bg-white dark:bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition"
-                  placeholder="Additional notes..."
-                  value={consultationNotes}
-                  onChange={(e) => setConsultationNotes(e.target.value)}
-                />
-              </div>
+              {doctorName && doctors && (() => {
+                const doc = doctors.find((d) => d.id === doctorName);
+                return doc?.specialization ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-teal-400 inline-block" />
+                    Specialization: {doc.specialization}
+                  </p>
+                ) : null;
+              })()}
             </div>
           )}
 
@@ -858,22 +937,96 @@ function CreateInvoiceDialog({
                   </div>
                   <p className="text-sm font-semibold text-cyan-800 dark:text-cyan-300">Lab Test Items</p>
                 </div>
-                <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addLabItem}>
-                  <Plus className="w-3.5 h-3.5" /> Add Test
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addLabItem}>
+                    <Plus className="w-3.5 h-3.5" /> Add Manual
+                  </Button>
+                </div>
               </div>
+
+              {/* Quick Add from Test Master */}
+              {labTests && labTests.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  <Select onValueChange={(testId) => {
+                    const test = labTests.find((t) => t.id === testId);
+                    if (test) {
+                      setLabItems((prev) => {
+                        const empty = prev.findIndex((l) => !l.testName);
+                        const newItem = { testName: test.name, sampleType: test.sampleType, rate: test.price };
+                        if (empty >= 0) {
+                          const next = [...prev];
+                          next[empty] = newItem;
+                          return next;
+                        }
+                        return [...prev, newItem];
+                      });
+                    }
+                  }}>
+                    <SelectTrigger className="h-8 w-auto text-xs"><SelectValue placeholder="Quick Add: Test" /></SelectTrigger>
+                    <SelectContent>
+                      {labTests.filter((t) => t.status === "active" && !t.isPackage).map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name} — {formatRs(t.price)} ({t.sampleType})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select onValueChange={(pkgId) => {
+                    const pkg = labPackages?.find((p) => p.id === pkgId);
+                    if (pkg) {
+                      setLabItems((prev) => {
+                        const empty = prev.findIndex((l) => !l.testName);
+                        const newItem = { testName: pkg.name, sampleType: "Multiple", rate: pkg.price };
+                        if (empty >= 0) {
+                          const next = [...prev];
+                          next[empty] = newItem;
+                          return next;
+                        }
+                        return [...prev, newItem];
+                      });
+                    }
+                  }}>
+                    <SelectTrigger className="h-8 w-auto text-xs"><SelectValue placeholder="Quick Add: Package" /></SelectTrigger>
+                    <SelectContent>
+                      {labPackages?.filter((p) => p.status === "active").map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} — {formatRs(p.price)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-thin">
                 {labItems.map((l, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                    <Input className="col-span-12 sm:col-span-4 h-9 text-sm" placeholder="Test Name" value={l.testName} onChange={(e) => updateLabItem(idx, { testName: e.target.value })} />
-                    <Input className="col-span-5 sm:col-span-4 h-9 text-sm" placeholder="Sample Type" value={l.sampleType} onChange={(e) => updateLabItem(idx, { sampleType: e.target.value })} />
-                    <Input type="number" className="col-span-5 sm:col-span-3 h-9 text-sm" placeholder="Rate" value={l.rate} onChange={(e) => updateLabItem(idx, { rate: Number(e.target.value) })} />
-                    <Button type="button" variant="ghost" size="sm" className="col-span-2 h-8 w-8 p-0 text-rose-500 hover:text-rose-600" onClick={() => removeLabItem(idx)} disabled={labItems.length === 1}>
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="col-span-12 sm:col-span-5">
+                      <Input className="h-9 text-sm" placeholder="Test Name" value={l.testName} onChange={(e) => updateLabItem(idx, { testName: e.target.value })} title={l.testName} />
+                    </div>
+                    <div className="col-span-5 sm:col-span-3">
+                      <Input className="h-9 text-sm" placeholder="Sample" value={l.sampleType} onChange={(e) => updateLabItem(idx, { sampleType: e.target.value })} />
+                    </div>
+                    <div className="col-span-5 sm:col-span-3">
+                      <Input type="number" min="0" className="h-9 text-sm" placeholder="Rate" value={l.rate} onChange={(e) => updateLabItem(idx, { rate: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div className="col-span-2 flex justify-center">
+                      <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-rose-500 hover:text-rose-600" onClick={() => removeLabItem(idx)} disabled={labItems.length === 1}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
+
+              {/* Lab items total */}
+              {labItems.some((l) => l.testName) && (
+                <div className="flex justify-between items-center text-xs text-muted-foreground border-t pt-2">
+                  <span>{labItems.filter((l) => l.testName).length} test(s) selected</span>
+                  <span className="font-medium text-cyan-700 dark:text-cyan-400">Subtotal: {formatRs(labItems.reduce((s, l) => s + (Number(l.rate) || 0), 0))}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -894,15 +1047,6 @@ function CreateInvoiceDialog({
                   <Label className="text-xs">Package Price (Rs)</Label>
                   <Input type="number" value={packagePrice} onChange={(e) => setPackagePrice(Number(e.target.value))} className="h-9" />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Included Services</Label>
-                <textarea
-                  className="w-full h-16 rounded-lg border bg-white dark:bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
-                  placeholder="List included services..."
-                  value={includedServices}
-                  onChange={(e) => setIncludedServices(e.target.value)}
-                />
               </div>
             </div>
           )}
@@ -927,14 +1071,6 @@ function CreateInvoiceDialog({
                       <SelectItem value="icu">ICU</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs flex items-center gap-1"><Calendar className="w-3 h-3" /> Admission Date</Label>
-                  <Input type="date" value={admissionDate} onChange={(e) => setAdmissionDate(e.target.value)} className="h-9" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs flex items-center gap-1"><Calendar className="w-3 h-3" /> Discharge Date</Label>
-                  <Input type="date" value={dischargeDate} onChange={(e) => setDischargeDate(e.target.value)} className="h-9" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Daily Room Charge (Rs)</Label>
@@ -975,11 +1111,11 @@ function CreateInvoiceDialog({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Discount (Rs)</Label>
-                <Input type="number" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} className="h-9" />
+                <Input type="number" min="0" value={discount || ""} onChange={(e) => { const v = e.target.value; setDiscount(v === "" ? 0 : Math.max(0, Number(v))); }} className="h-9" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Tax Rate (%)</Label>
-                <Input type="number" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value))} className="h-9" />
+                <Input type="number" min="0" max="100" value={taxRate || ""} onChange={(e) => { const v = e.target.value; setTaxRate(v === "" ? 0 : Math.max(0, Math.min(100, Number(v)))); }} className="h-9" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Payment Method</Label>
@@ -992,19 +1128,42 @@ function CreateInvoiceDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Paid (Rs)</Label>
-                <Input type="number" value={paid} onChange={(e) => setPaid(Number(e.target.value))} className="h-9" />
+                <Input type="number" min="0" value={paid || ""} onChange={(e) => { const v = e.target.value; setPaid(v === "" ? 0 : Math.max(0, Number(v))); }} className="h-9" />
               </div>
             </div>
+            {total > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <button type="button" onClick={() => setPaid(total)} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Full ({formatRs(total)})</button>
+                <span className="text-muted-foreground">·</span>
+                <button type="button" onClick={() => setPaid(Math.ceil(total / 2))} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Half ({formatRs(Math.ceil(total / 2))})</button>
+                <span className="text-muted-foreground">·</span>
+                <button type="button" onClick={() => setPaid(0)} className="text-muted-foreground hover:text-foreground underline underline-offset-2">Clear</button>
+              </div>
+            )}
           </div>
 
           {/* Totals */}
-          <div className="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20 p-4 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="font-medium">{formatRs(subtotal)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="font-medium text-rose-600">- {formatRs(discount)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Tax ({taxRate}%)</span><span className="font-medium">+ {formatRs(taxAmount)}</span></div>
-            <div className="flex justify-between font-semibold border-t border-teal-200 dark:border-teal-800 pt-2 mt-1"><span>Total</span><span className="text-teal-700 dark:text-teal-300">{formatRs(total)}</span></div>
-            <div className="flex justify-between text-emerald-600"><span>Paid</span><span className="font-medium">{formatRs(paid)}</span></div>
-            <div className="flex justify-between font-semibold text-rose-600"><span>Due</span><span>{formatRs(due)}</span></div>
+          <div className="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20 p-4 text-sm">
+            <div className="space-y-1.5">
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="font-medium">{formatRs(subtotal)}</span></div>
+              {discount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="font-medium text-rose-600">- {formatRs(discount)}</span></div>}
+              {taxAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Tax ({taxRate}%)</span><span className="font-medium">+ {formatRs(taxAmount)}</span></div>}
+              <div className="flex justify-between font-semibold border-t border-teal-200 dark:border-teal-800 pt-2 mt-1"><span>Total</span><span className="text-teal-700 dark:text-teal-300">{formatRs(total)}</span></div>
+              <div className="flex justify-between text-emerald-600"><span>Paid</span><span className="font-medium">{formatRs(paid)}</span></div>
+              {change > 0 ? (
+                <div className="flex justify-between font-semibold text-blue-600 bg-blue-50 dark:bg-blue-950/30 -mx-4 px-4 py-1.5 rounded-lg">
+                  <span>Change</span><span>{formatRs(change)}</span>
+                </div>
+              ) : due > 0 ? (
+                <div className="flex justify-between font-semibold text-rose-600 bg-rose-50 dark:bg-rose-950/30 -mx-4 px-4 py-1.5 rounded-lg">
+                  <span>Due</span><span>{formatRs(due)}</span>
+                </div>
+              ) : total > 0 ? (
+                <div className="flex justify-between font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 -mx-4 px-4 py-1.5 rounded-lg">
+                  <span>Fully Paid</span><span className="text-xs">✓</span>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <DialogFooter className="pt-2">
@@ -1044,6 +1203,7 @@ function CollectPaymentDialog({
 
   const newPaidTotal = (invoice.paid || 0) + (Number(amount) || 0);
   const newDue = Math.max(0, invoice.total - newPaidTotal);
+  const overpay = Math.max(0, newPaidTotal - invoice.total);
   const newStatus = newDue <= 0 ? "paid" : newPaidTotal > 0 ? "partial" : "unpaid";
 
   const submit = async (e: React.FormEvent) => {
@@ -1054,7 +1214,7 @@ function CollectPaymentDialog({
       const res = await fetchAPI(`/api/invoices/${invoice.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paid: newPaidTotal, status: newStatus, paymentMethod: method }),
+        body: JSON.stringify({ paid: newPaidTotal, due: newDue, status: newStatus, paymentMethod: method }),
       });
       if (!res.ok) throw new Error("Failed to record payment");
       toast.success(`Payment of ${formatRs(amount)} recorded for ${invoice.invoiceNo}`);
@@ -1078,15 +1238,18 @@ function CollectPaymentDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
+          {/* Invoice summary */}
           <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
             <div className="flex justify-between"><span className="text-muted-foreground">Invoice Total</span><span className="font-medium">{formatRs(invoice.total)}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Already Paid</span><span className="text-emerald-600">{formatRs(invoice.paid)}</span></div>
             <div className="flex justify-between font-semibold"><span>Outstanding Due</span><span className="text-rose-600">{formatRs(invoice.due)}</span></div>
           </div>
+
+          {/* Payment inputs */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Amount (Rs) *</Label>
-              <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} min={0} max={invoice.due} />
+              <Input type="number" min="0" value={amount || ""} onChange={(e) => { const v = e.target.value; setAmount(v === "" ? 0 : Math.max(0, Number(v))); }} />
             </div>
             <div className="space-y-1.5">
               <Label>Method</Label>
@@ -1098,13 +1261,31 @@ function CollectPaymentDialog({
               </Select>
             </div>
           </div>
+
+          {/* Quick pay shortcuts */}
+          {invoice.due > 0 && (
+            <div className="flex items-center gap-2 text-xs">
+              <button type="button" onClick={() => setAmount(invoice.due)} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Full Due ({formatRs(invoice.due)})</button>
+              <span className="text-muted-foreground">·</span>
+              <button type="button" onClick={() => setAmount(Math.ceil(invoice.due / 2))} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Half ({formatRs(Math.ceil(invoice.due / 2))})</button>
+              <span className="text-muted-foreground">·</span>
+              <button type="button" onClick={() => setAmount(0)} className="text-muted-foreground hover:text-foreground underline underline-offset-2">Clear</button>
+            </div>
+          )}
+
+          {/* Preview */}
           <div className="rounded-lg border bg-teal-50 dark:bg-teal-950/20 p-3 text-sm space-y-1">
             <div className="flex justify-between"><span className="text-muted-foreground">New Paid Total</span><span className="text-emerald-600 font-medium">{formatRs(newPaidTotal)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Remaining Due</span><span className="font-medium">{formatRs(newDue)}</span></div>
+            {overpay > 0 ? (
+              <div className="flex justify-between font-semibold text-blue-600"><span>Overpayment (Change)</span><span>{formatRs(overpay)}</span></div>
+            ) : (
+              <div className="flex justify-between"><span className="text-muted-foreground">Remaining Due</span><span className="font-medium">{formatRs(newDue)}</span></div>
+            )}
             <div className="flex justify-between"><span className="text-muted-foreground">New Status</span>
               <Badge className={`text-[10px] ${statusColors[newStatus]}`}>{statusLabel(newStatus)}</Badge>
             </div>
           </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
@@ -1181,7 +1362,7 @@ function RefundDialog({
 
 /* ---------- Invoice Detail Sheet ---------- */
 
-function InvoiceDetail({ invoice }: { invoice: Invoice }) {
+function InvoiceDetail({ invoice, settings, onDelete }: { invoice: Invoice; settings?: Record<string, string>; onDelete?: () => void }) {
   return (
     <div>
       <SheetHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30">
@@ -1201,9 +1382,12 @@ function InvoiceDetail({ invoice }: { invoice: Invoice }) {
                 <span className="text-xs">via {invoice.paymentMethod}</span>
               )}
             </SheetDescription>
+            <div className="mt-2">
+              <Barcode value={invoice.invoiceNo} height={30} fontSize={10} className="max-w-[150px]" />
+            </div>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printInvoice(invoice)}>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printInvoice(invoice, settings ?? undefined)}>
               <Printer className="w-4 h-4" /> Print Invoice
             </Button>
             <Button
@@ -1221,6 +1405,14 @@ function InvoiceDetail({ invoice }: { invoice: Invoice }) {
               onClick={() => toast.info("SMS gateway not configured — invoice PDF ready to attach")}
             >
               <MessageSquare className="w-4 h-4" /> SMS
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/30"
+              onClick={onDelete}
+            >
+              <Trash2 className="w-4 h-4" /> Delete
             </Button>
           </div>
         </div>

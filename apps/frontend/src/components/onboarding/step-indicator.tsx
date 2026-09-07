@@ -13,8 +13,7 @@ interface StepIndicatorProps {
 }
 
 const stepLabels = [
-  { label: "Basic Information", description: "Organization & admin details" },
-  { label: "Select Modules", description: "Choose your features" },
+  { label: "Basic Information", description: "Clinic & admin details" },
   { label: "Choose Plan", description: "Subscription & payment" },
   { label: "Success", description: "Welcome to Carelim OS" },
 ];

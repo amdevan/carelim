@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-export async function GET() {
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
+export const GET = withTenant(async () => {
   const payments = await db.patientPayment.findMany({ orderBy: { date: "desc" } });
   return NextResponse.json(payments);
-}
-export async function POST(req: NextRequest) {
+});
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const count = await db.patientPayment.count();
   const payment = await db.patientPayment.create({
-    data: { ...body, receiptNo: `RCP-${String(count + 1).padStart(5, "0")}` },
+    data: { ...body, receiptNo: `RCP-${nanoid(8).toUpperCase()}` },
   });
   // Auto journal entry
   const cashAcc = await db.account.findFirst({ where: { code: "1000" } });
@@ -34,4 +36,4 @@ export async function POST(req: NextRequest) {
   }
   await db.auditLog.create({ data: { user: "system", action: "CREATE", module: "Payment", detail: `Payment ${payment.receiptNo}` } });
   return NextResponse.json(payment, { status: 201 });
-}
+});

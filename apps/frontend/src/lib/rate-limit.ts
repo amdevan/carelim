@@ -26,12 +26,12 @@ export interface RateLimitConfig {
 }
 
 export const RATE_LIMITS = {
-  // Login: 5 attempts per 15 minutes
-  login: { windowMs: 15 * 60 * 1000, max: 5 },
-  // General API: 100 requests per minute
-  api: { windowMs: 60 * 1000, max: 100 },
-  // Strict: 20 requests per minute (for sensitive operations)
-  strict: { windowMs: 60 * 1000, max: 20 },
+  // Login: 20 attempts per 15 minutes
+  login: { windowMs: 15 * 60 * 1000, max: 20 },
+  // General API: 500 requests per minute
+  api: { windowMs: 60 * 1000, max: 500 },
+  // Strict: 100 requests per minute
+  strict: { windowMs: 60 * 1000, max: 100 },
 } as const;
 
 export function checkRateLimit(

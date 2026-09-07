@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store/app-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -119,15 +121,27 @@ const NOTIFICATIONS = [
 // Page
 // =====================================================================
 export default function DentalPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen"><div className="animate-spin w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full" /></div>}>
+      <DentalPageInner />
+    </Suspense>
+  );
+}
+
+function DentalPageInner() {
+  const searchParams = useSearchParams();
+  const initialView = (searchParams.get("view") as ViewTab) || "dashboard";
+  const { authed: mainAuthed, user: mainUser } = useAppStore();
   const [authed, setAuthed] = useState(false);
   const [user, setUser] = useState<{ id: number; name: string; email: string; role: string; branchId?: number; permissions?: string[] } | null>(null);
-  const [tab, setTab] = useState<ViewTab>("dashboard");
+  const [tab, setTab] = useState<ViewTab>(initialView);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [search, setSearch] = useState("");
   const allNavItems = useMemo(() => NAV_GROUPS.flatMap((g) => g.items), []);
 
   useEffect(() => {
+    // Check dental-specific auth first
     try {
       const stored = localStorage.getItem("dental-user");
       if (stored) {
@@ -135,10 +149,17 @@ export default function DentalPage() {
         if (parsed?.user) {
           setUser(parsed.user);
           setAuthed(true);
+          return;
         }
       }
     } catch { /* ignore */ }
-  }, []);
+
+    // Fall back to main app auth
+    if (mainAuthed && mainUser) {
+      setUser({ id: 0, name: mainUser.name, email: mainUser.email, role: mainUser.role });
+      setAuthed(true);
+    }
+  }, [mainAuthed, mainUser]);
 
   const logout = () => {
     localStorage.removeItem("dental-user");
@@ -524,7 +545,7 @@ function DentalHeader({
 // Login
 // =====================================================================
 function DentalLogin({ onLogin }: { onLogin: () => void }) {
-  const [email, setEmail] = useState("dental@carelim.health");
+  const [email, setEmail] = useState("admin@carelim.health");
   const [password, setPassword] = useState("carelim123");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -645,7 +666,7 @@ function DentalLogin({ onLogin }: { onLogin: () => void }) {
           </div>
           <div className="mt-6 p-3 rounded-lg bg-muted/40 border border-border text-center">
             <p className="text-[10px] text-muted-foreground mb-1">Demo credentials</p>
-            <p className="text-xs font-mono">dental@carelim.health · carelim123</p>
+            <p className="text-xs font-mono">admin@carelim.health · carelim123</p>
           </div>
         </div>
       </div>

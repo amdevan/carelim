@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const priority = searchParams.get("priority");
@@ -22,9 +24,9 @@ export async function GET(req: NextRequest) {
     orderBy: { orderedAt: "desc" },
   });
   return NextResponse.json(orders);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const { testIds, patientId, doctorId, priority, clinicalNotes, discount } = body;
   const count = await db.labOrder.count();
@@ -57,4 +59,4 @@ export async function POST(req: NextRequest) {
   });
   await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "LabOrder", detail: `Created lab order ${order.orderNo}` } });
   return NextResponse.json(order, { status: 201 });
-}
+});

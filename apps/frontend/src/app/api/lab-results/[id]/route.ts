@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
 // Enter/update results, verify, approve, release
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withTenant(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const body = await req.json();
   const { action, parameters, technicianName, pathologistComments, rejectionReason, verifiedBy, approvedBy, releasedBy } = body;
@@ -56,4 +57,4 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const result = await db.labResult.update({ where: { id }, data, include: { parameters: { include: { parameter: true } } } });
   await db.auditLog.create({ data: { user: technicianName || verifiedBy || approvedBy || releasedBy || "system", action: action.toUpperCase(), module: "LabResult", detail: `Result ${result.id} → ${action}` } });
   return NextResponse.json(result);
-}
+});

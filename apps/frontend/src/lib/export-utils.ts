@@ -22,11 +22,12 @@ export function exportToCSV(filename: string, headers: string[], rows: (string |
 }
 
 // Open a formatted print window with custom HTML content
-export function printHTML(title: string, bodyHTML: string) {
+export function printHTML(title: string, bodyHTML: string, clinicName?: string) {
   const w = window.open("", "_blank", "width=900,height=700");
   if (!w) return;
   w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
   <meta charset="utf-8"/>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a2e35; padding: 32px; }
@@ -37,10 +38,23 @@ export function printHTML(title: string, bodyHTML: string) {
     .brand p { font-size: 12px; color: #64748b; }
     .doc-meta { text-align: right; font-size: 12px; color: #64748b; }
     .doc-meta .code { font-size: 18px; font-weight: bold; color: #1a2e35; }
-    h2 { font-size: 16px; color: #0d9488; margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
+    .barcode-wrap { margin-top: 6px; text-align: right; }
+    .barcode-wrap svg { max-width: 180px; height: auto; }
+    h2 { font-size: 15px; color: #0d9488; margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0; }
+    .section-block { margin-bottom: 12px; }
+    .section-block p { font-size: 13px; line-height: 1.6; color: #334155; }
     .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; font-size: 13px; margin-bottom: 16px; }
     .info-grid div { padding: 4px 0; }
     .info-grid .label { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .info-compact { font-size: 13px; margin-bottom: 8px; }
+    .info-grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; font-size: 13px; margin-bottom: 8px; }
+    .info-cell { padding: 2px 0; line-height: 1.5; }
+    .info-cell.full { grid-column: 1 / -1; }
+    .info-cell .label { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; display: inline; }
+    .info-cell .dim { color: #94a3b8; font-size: 12px; }
+    .info-row { padding: 2px 0; line-height: 1.5; }
+    .info-row .label { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; min-width: 80px; }
+    .info-row .dim { color: #94a3b8; font-size: 12px; }
     table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
     th { background: #f0fdfa; color: #0d9488; text-align: left; padding: 10px 12px; border-bottom: 2px solid #0d9488; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
     td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }
@@ -48,9 +62,11 @@ export function printHTML(title: string, bodyHTML: string) {
     .totals { margin-left: auto; width: 280px; font-size: 13px; margin-top: 16px; }
     .totals .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; }
     .totals .row.grand { font-weight: bold; font-size: 16px; color: #0d9488; border-bottom: 2px solid #0d9488; padding: 10px 0; }
-    .rx-item { padding: 10px 14px; border-left: 3px solid #0d9488; background: #f0fdfa; margin: 8px 0; border-radius: 0 8px 8px 0; }
-    .rx-item .med { font-weight: bold; font-size: 14px; }
-    .rx-item .sig { color: #475569; font-size: 12px; margin-top: 2px; }
+    .rx-item { display: flex; gap: 10px; padding: 8px 12px; border-left: 3px solid #0d9488; background: #f0fdfa; margin: 6px 0; border-radius: 0 6px 6px 0; align-items: flex-start; }
+    .rx-num { font-weight: bold; color: #0d9488; font-size: 13px; min-width: 18px; padding-top: 1px; }
+    .rx-body { flex: 1; }
+    .rx-item .med { font-weight: bold; font-size: 13px; }
+    .rx-item .sig { color: #475569; font-size: 12px; margin-top: 1px; }
     .signature { margin-top: 48px; display: flex; justify-content: space-between; }
     .signature .sig-block { text-align: center; }
     .signature .line { border-top: 1px solid #475569; width: 200px; margin-bottom: 4px; }
@@ -63,23 +79,42 @@ export function printHTML(title: string, bodyHTML: string) {
     .badge.emerald { background: #ecfdf5; color: #059669; }
     @media print { body { padding: 16px; } .no-print { display: none; } }
   </style></head><body>${bodyHTML}
-  <div class="footer">MedCore Health Systems · Generated on ${new Date().toLocaleString()} · This is a computer-generated document.</div>
-  <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); }</script>
+  <div class="footer">${clinicName || "Healthcare Provider"} · Generated on ${new Date().toLocaleString()} · This is a computer-generated document.</div>
+  <script>
+    window.onload = function(){
+      try {
+        document.querySelectorAll('.barcode-svg').forEach(function(el){
+          JsBarcode(el, el.getAttribute('data-code'), {
+            format: 'CODE128',
+            width: 1.5,
+            height: 40,
+            displayValue: true,
+            fontSize: 12,
+            font: 'monospace',
+            textMargin: 2,
+            margin: 0
+          });
+        });
+      } catch(e){}
+      setTimeout(function(){ window.print(); }, 500);
+    };
+  <\/script>
   </body></html>`);
   w.document.close();
 }
 
-export function docHeader(code: string, codeLabel: string, dateStr: string, statusBadge = "") {
+export function docHeader(code: string, codeLabel: string, dateStr: string, statusBadge = "", clinicName?: string) {
   return `<div class="doc-header">
     <div class="brand">
       <div class="logo">+</div>
-      <div><h1>MedCore Health Center</h1><p>Putalisadak, Kathmandu, Nepal · +977-1-4XXXXXX</p></div>
+      <div><h1>${clinicName || "Health Center"}</h1><p>${clinicName ? "" : "Healthcare Provider"}</p></div>
     </div>
     <div class="doc-meta">
       <div class="code">${code}</div>
       <div>${codeLabel}</div>
       <div>${dateStr}</div>
       ${statusBadge}
+      <div class="barcode-wrap"><svg class="barcode-svg" data-code="${code}"></svg></div>
     </div>
   </div>`;
 }

@@ -31,11 +31,12 @@ import { exportToCSV } from "@/lib/export-utils";
 import {
   CalendarPlus, ChevronLeft, ChevronRight, CalendarDays, ClipboardList,
   CheckCircle2, XCircle, ListChecks, LogIn, Stethoscope, Download,
-  Calendar as CalendarIcon, Megaphone, Clock, User, Hash,
+  Calendar as CalendarIcon, Megaphone, Clock, User, Hash, AlertTriangle,
 } from "lucide-react";
 import { formatRs, statusColors, statusLabel } from "@/lib/format";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { useAppStore } from "@/store/app-store";
 
 interface Patient {
   id: string; patientCode: string; name: string; phone: string;
@@ -94,6 +95,7 @@ function shiftDate(ymd: string, days: number) {
 type TabValue = "daily" | "calendar" | "queue";
 
 export function AppointmentsView() {
+  const branchId = useAppStore((s) => s.branchId);
   const [tab, setTab] = useState<TabValue>("daily");
   const [selectedDate, setSelectedDate] = useState<string>(toYMD(new Date()));
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -219,11 +221,27 @@ export function AppointmentsView() {
           <Button size="sm" variant="outline" className="gap-1.5" onClick={handleExport}>
             <Download className="w-4 h-4" /> Export CSV
           </Button>
-          <Button size="sm" className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white" onClick={() => setBookOpen(true)}>
+          <Button
+            size="sm"
+            className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
+            disabled={!branchId}
+            title={!branchId ? "Select a branch first" : ""}
+            onClick={() => branchId && setBookOpen(true)}
+          >
             <CalendarPlus className="w-4 h-4" /> Book Appointment
           </Button>
         </div>
       </div>
+
+      {!branchId && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No Branch Selected</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">Select a branch from the header to book appointments. All Branches view is read-only.</p>
+          </div>
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabValue)}>
         <TabsList>
@@ -895,10 +913,10 @@ function BookAppointmentDialog({
   onOpenChange: (v: boolean) => void;
   onBooked: () => void;
 }) {
+  const branchId = useAppStore((s) => s.branchId);
   const { data: patients } = useFetch<Patient[]>("/api/patients");
   const { data: doctors } = useFetch<Doctor[]>("/api/doctors");
   const { data: departments } = useFetch<Department[]>("/api/departments");
-
   const [isGuest, setIsGuest] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
@@ -1003,6 +1021,7 @@ function BookAppointmentDialog({
             body: JSON.stringify({
               name: guestName, phone: guestPhone, gender: "other",
               age: 0, bloodGroup: "O+",
+              branchId,
             }),
           });
           if (!createRes.ok) throw new Error("Failed to create guest patient");
@@ -1026,6 +1045,7 @@ function BookAppointmentDialog({
           referralName: form.type === "referral" ? referralName : null,
           fee,
           status: "scheduled",
+          branchId,
         }),
       });
       if (!res.ok) throw new Error("Failed");

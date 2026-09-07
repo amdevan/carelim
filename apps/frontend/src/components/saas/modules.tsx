@@ -1870,6 +1870,8 @@ export function SaasUsers(_props: { filter?: string }) {
   );
   const [showDialog, setShowDialog] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "carelim123", role: "admin" });
+  const ROLE_COLORS = ["bg-violet-100 text-violet-700", "bg-teal-100 text-teal-700", "bg-blue-100 text-blue-700", "bg-amber-100 text-amber-700", "bg-rose-100 text-rose-700", "bg-emerald-100 text-emerald-700"];
+  const getRoleColor = (r: string) => ROLE_COLORS[r.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % ROLE_COLORS.length];
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const create = async () => {
@@ -1964,11 +1966,7 @@ export function SaasUsers(_props: { filter?: string }) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={`text-[9px] capitalize ${
-                        u.role === "super_admin" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" :
-                        u.role === "admin" ? "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300" :
-                        "bg-gray-100 text-gray-600"
-                      }`}>{u.role.replace("_", " ")}</Badge>
+                      <Badge className={`text-[9px] capitalize ${getRoleColor(u.role)}`}>{u.role.replace("_", " ")}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge className={`text-[9px] ${u.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" : "bg-gray-100 text-gray-600"}`}>

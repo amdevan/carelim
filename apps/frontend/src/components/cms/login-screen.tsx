@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export function LoginScreen() {
-  const { login } = useAppStore();
+  const { login, setTenantBranding, setBranchId, setBranchClinicType } = useAppStore();
   const [email, setEmail] = useState("admin@carelim.health");
   const [password, setPassword] = useState("carelim123");
   const [showPwd, setShowPwd] = useState(false);
@@ -43,7 +43,20 @@ export function LoginScreen() {
         return;
       }
       localStorage.setItem("cms-user", JSON.stringify(data.user));
-      login(email);
+      login(email, data.token, data.user?.tenantId, data.user?.permissions || [], data.user?.name, data.user?.role);
+      // Set branch from user profile if available
+      if (data.user?.branchId) {
+        setBranchId(data.user.branchId);
+        if (data.user?.branchClinicType) setBranchClinicType(data.user.branchClinicType);
+      }
+      // Store tenant branding for white-label display
+      if (data.user?.clinicName || data.user?.logoUrl || data.user?.primaryColor) {
+        setTenantBranding({
+          clinicName: data.user.clinicName || null,
+          logoUrl: data.user.logoUrl || null,
+          primaryColor: data.user.primaryColor || null,
+        });
+      }
       toast.success("Welcome back!", { description: `Signed in as ${data.user.name || email}` });
     } catch {
       toast.error("Login failed", { description: "Unable to reach the server. Please try again." });

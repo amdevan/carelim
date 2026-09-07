@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const category = searchParams.get("category");
   const isActive = searchParams.get("isActive");
@@ -12,13 +13,13 @@ export async function GET(req: NextRequest) {
 
   const templates = await db.emailTemplate.findMany({ where, orderBy: { name: "asc" } });
   return NextResponse.json(templates);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const template = await db.emailTemplate.create({ data: body });
   await db.auditLog.create({
     data: { user: "system", action: "CREATE", module: "CRM", detail: `Created template: ${template.name}` },
   });
   return NextResponse.json(template, { status: 201 });
-}
+});

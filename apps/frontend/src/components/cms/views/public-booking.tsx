@@ -27,6 +27,7 @@ import {
   Trash2, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { DoctorSearch } from "@/components/ui/doctor-search";
 
 /* ---------- Types ---------- */
 
@@ -588,11 +589,11 @@ export function PublicBookingView() {
           </DialogHeader>
           <form onSubmit={handleCreateLink} className="space-y-3">
             <div>
-              <Label className="text-xs mb-1 block">Doctor Name</Label>
-              <Input
+              <DoctorSearch
+                label="Doctor Name"
                 value={linkForm.doctorName}
-                onChange={(e) => setLinkForm((f) => ({ ...f, doctorName: e.target.value }))}
-                placeholder="e.g. Dr. Smith"
+                onValueChange={(val) => setLinkForm((f) => ({ ...f, doctorName: val }))}
+                required
               />
             </div>
             <div>

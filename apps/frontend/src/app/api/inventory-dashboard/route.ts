@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async () => {
   const today = new Date();
 
   const [items, locations, stocks, movements, transfers, audits, batches] = await Promise.all([
@@ -113,4 +114,4 @@ export async function GET() {
     recentMovements: movements.slice(0, 8).map(m => ({ id: m.id, itemName: m.item.name, type: m.type, direction: m.direction, quantity: m.quantity, department: m.department, performedBy: m.performedBy, createdAt: m.createdAt })),
     pendingTransfersList: transfers.filter(t => t.status === "pending" || t.status === "approved").slice(0, 5).map(t => ({ transferNo: t.transferNo, from: t.fromLocation.name, to: t.toLocation.name, status: t.status, items: t.items.length })),
   });
-}
+});

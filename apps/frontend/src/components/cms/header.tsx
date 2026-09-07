@@ -16,14 +16,7 @@ import {
   Keyboard,
   ArrowLeftFromLine,
   Building2,
-  LayoutGrid,
-  Stethoscope,
-  HeartPulse,
-  Smile,
-  Baby,
-  Shield,
-  Network,
-  CalendarCheck,
+
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,12 +28,59 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { fetchAPI } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function Header() {
-  const { view, setView, user, logout, setCommandOpen, toggleSidebar, impersonation, exitImpersonation } = useAppStore();
+  const view = useAppStore((s) => s.view);
+  const setView = useAppStore((s) => s.setView);
+  const user = useAppStore((s) => s.user);
+  const logout = useAppStore((s) => s.logout);
+  const setCommandOpen = useAppStore((s) => s.setCommandOpen);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const impersonation = useAppStore((s) => s.impersonation);
+  const exitImpersonation = useAppStore((s) => s.exitImpersonation);
+  const branchId = useAppStore((s) => s.branchId);
+  const setBranchId = useAppStore((s) => s.setBranchId);
+  const setBranchClinicType = useAppStore((s) => s.setBranchClinicType);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [branches, setBranches] = useState<{ id: string; name: string; clinicType: string }[]>([]);
+
+  useEffect(() => {
+    fetchAPI("/api/branches")
+      .then((r) => r.json())
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data?.branches || [];
+        setBranches(list);
+        // Auto-select if only 1 branch, clear if 0 branches
+        if (list.length === 1 && !branchId) {
+          setBranchId(list[0].id);
+          setBranchClinicType(list[0].clinicType || "General");
+        } else if (list.length === 0) {
+          setBranchId(null);
+          setBranchClinicType(null);
+        } else if (branchId) {
+          // Restore selected branch clinic type
+          const branch = list.find((b: { id: string; name: string; clinicType: string }) => b.id === branchId);
+          if (branch) {
+            setBranchClinicType(branch.clinicType || "General");
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleBranchChange = (id: string | null) => {
+    setBranchId(id);
+    if (!id) {
+      setBranchClinicType(null);
+    } else {
+      const branch = branches.find((b) => b.id === id);
+      setBranchClinicType(branch?.clinicType || "General");
+    }
+  };
 
   const current = navItems.find((n) => n.key === view);
 
@@ -125,39 +165,21 @@ export function Header() {
 
       {!impersonation && <div className="flex-1" />}
 
-      {/* Modules Dropdown */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-xs">
-            <LayoutGrid className="w-4 h-4" /> Modules
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="text-xs">Switch Module</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => window.location.href = "/doctor"}>
-            <Stethoscope className="w-4 h-4" /> Doctor Panel
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => window.location.href = "/patient"}>
-            <HeartPulse className="w-4 h-4" /> Patient Portal
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => window.location.href = "/dental"}>
-            <Smile className="w-4 h-4" /> Dental Module
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => window.location.href = "/ivf"}>
-            <Baby className="w-4 h-4" /> IVF Module
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => window.location.href = "/admin"}>
-            <Shield className="w-4 h-4" /> SaaS Admin
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => window.location.href = "/carelim-ms"}>
-            <Network className="w-4 h-4" /> Carelim MS
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => window.location.href = "/book"}>
-            <CalendarCheck className="w-4 h-4" /> Public Booking
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Branch Selector — only show when tenant has 2+ branches */}
+      {branches.length >= 2 && (
+        <Select value={branchId ?? "__all__"} onValueChange={(v) => handleBranchChange(v === "__all__" ? null : v)}>
+          <SelectTrigger size="sm" className="h-8 gap-1.5 border border-input bg-muted/50 text-xs px-2.5">
+            <Building2 className="w-3.5 h-3.5 shrink-0" />
+            <SelectValue placeholder="All Branches" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All Branches</SelectItem>
+            {branches.map((b) => (
+              <SelectItem key={b.id} value={b.id}>{b.name} <span className="text-[10px] text-muted-foreground ml-1">({b.clinicType})</span></SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       {/* Profile */}
       <DropdownMenu>

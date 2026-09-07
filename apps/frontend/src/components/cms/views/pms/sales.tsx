@@ -1,5 +1,6 @@
 "use client";
 import { fetchAPI } from "@/lib/api";
+import { useAppStore } from "@/store/app-store";
 
 import { useFetch } from "@/lib/use-fetch";
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from "react";
@@ -27,7 +28,7 @@ import {
   Receipt, Eye, Printer, Download, X, Trash2, CreditCard,
   Pill, Stethoscope, FileText, Package, Percent, User,
   Minus, Barcode, Clock, RotateCcw, ArrowRight, Banknote,
-  Smartphone, Building2, CheckCircle2, AlertTriangle,
+  Smartphone, Building2, CheckCircle2, AlertTriangle, Pencil, IndianRupee,
 } from "lucide-react";
 import { formatRs, formatDate, timeAgo, statusColors, statusLabel } from "@/lib/format";
 import { exportToCSV, printHTML, docHeader } from "@/lib/export-utils";
@@ -36,6 +37,8 @@ import { Pagination } from "@/components/cms/pagination";
 import { KpiCard } from "@/components/cms/kpi-card";
 import { EmptyState } from "@/components/cms/empty-state";
 import { toast } from "sonner";
+import { PatientSearch } from "@/components/ui/patient-search";
+import { DoctorSearch } from "@/components/ui/doctor-search";
 import { motion } from "framer-motion";
 
 /* ---------------- Types ---------------- */
@@ -56,7 +59,7 @@ interface SaleItem {
   unitPrice: number;
   discount: number;
   total: number;
-  medicine: { name: string; strength?: string | null };
+  medicine: { name: string; strength?: string | null; batchNo?: string; expiryDate?: string | null };
 }
 
 interface PharmacySale {
@@ -142,7 +145,7 @@ function isSameMonth(d1: Date, d2: Date): boolean {
   return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth();
 }
 
-function buildReceiptHTML(sale: PharmacySale): string {
+function buildReceiptHTML(sale: PharmacySale, clinicName?: string): string {
   const statusBadge = `<span class="badge ${sale.status === "completed" ? "emerald" : "rose"}">${statusLabel(sale.status)}</span>`;
   const patientGrid = `
     <div class="info-grid">
@@ -155,7 +158,11 @@ function buildReceiptHTML(sale: PharmacySale): string {
 
   const itemRows = (sale.items?.length ? sale.items : []).map((it) => `
     <tr>
-      <td>${escapeHTML(it.medicine.name)}${it.medicine.strength ? ` <span style="color:#94a3b8">(${escapeHTML(it.medicine.strength)})</span>` : ""}</td>
+      <td>
+        ${escapeHTML(it.medicine.name)}${it.medicine.strength ? ` <span style="color:#94a3b8">(${escapeHTML(it.medicine.strength)})</span>` : ""}
+        ${it.medicine.batchNo ? `<br/><span style="font-size:11px;color:#64748b">Batch: ${escapeHTML(it.medicine.batchNo)}</span>` : ""}
+        ${it.medicine.expiryDate ? `<br/><span style="font-size:11px;color:#64748b">Exp: ${formatDate(it.medicine.expiryDate)}</span>` : ""}
+      </td>
       <td style="text-align:right">${it.quantity}</td>
       <td style="text-align:right">${formatRs(it.unitPrice)}</td>
       <td style="text-align:right">${formatRs(it.total)}</td>
@@ -168,13 +175,15 @@ function buildReceiptHTML(sale: PharmacySale): string {
       <tbody>${itemRows || `<tr><td colspan="4" style="text-align:center;color:#94a3b8">No items</td></tr>`}</tbody>
     </table>`;
 
+  const due = Math.max(0, sale.total - (sale.paidAmount || 0));
   const totals = `
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>${formatRs(sale.subtotal)}</span></div>
-      <div class="row"><span>Discount</span><span>- ${formatRs(sale.discount)}</span></div>
-      <div class="row"><span>Tax</span><span>+ ${formatRs(sale.tax)}</span></div>
+      ${sale.discount ? `<div class="row"><span>Discount</span><span>- ${formatRs(sale.discount)}</span></div>` : ""}
+      ${sale.tax ? `<div class="row"><span>Tax</span><span>+ ${formatRs(sale.tax)}</span></div>` : ""}
       <div class="row grand"><span>Total</span><span>${formatRs(sale.total)}</span></div>
       <div class="row"><span>Paid (${escapeHTML(sale.paymentMethod)})</span><span>${formatRs(sale.paidAmount)}</span></div>
+      ${due > 0 ? `<div class="row" style="color:#e11d48;font-weight:bold"><span>Outstanding Due</span><span>${formatRs(due)}</span></div>` : ""}
     </div>`;
 
   return `${docHeader(sale.invoiceNo, "PHARMACY RECEIPT", formatDate(sale.saleDate), statusBadge)}
@@ -183,17 +192,18 @@ function buildReceiptHTML(sale: PharmacySale): string {
     ${totals}
     <div class="signature">
       <div class="sig-block"><div class="line"></div><div class="name">Customer</div><div class="role">Signature</div></div>
-      <div class="sig-block"><div class="line"></div><div class="name">Pharmacist</div><div class="role">Carelim OS Pharmacy</div></div>
+      <div class="sig-block"><div class="line"></div><div class="name">Pharmacist</div><div class="role">${clinicName || "Pharmacy"}</div></div>
     </div>`;
 }
 
-function printReceipt(sale: PharmacySale) {
-  printHTML(`Receipt ${sale.invoiceNo}`, buildReceiptHTML(sale));
+function printReceipt(sale: PharmacySale, clinicName?: string) {
+  printHTML(`Receipt ${sale.invoiceNo}`, buildReceiptHTML(sale, clinicName), clinicName);
 }
 
 /* ---------------- Main View ---------------- */
 export function PmsSales() {
   const [refresh, setRefresh] = useState(0);
+  const tenantBranding = useAppStore((s) => s.tenantBranding);
   const refreshFn = useCallback(() => setRefresh((r) => r + 1), []);
   const { data: sales, loading, error } = useFetch<PharmacySale[]>(
     refresh ? `/api/pharmacy-sales?_r=${refresh}` : "/api/pharmacy-sales",
@@ -203,6 +213,68 @@ export function PmsSales() {
   const [payFilter, setPayFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [viewId, setViewId] = useState<string | null>(null);
+
+  // Collect due payment state
+  const [collectSale, setCollectSale] = useState<PharmacySale | null>(null);
+  const [collectAmount, setCollectAmount] = useState(0);
+  const [collectMethod, setCollectMethod] = useState("Cash");
+  const [collectSaving, setCollectSaving] = useState(false);
+
+  // Edit sale state
+  const [editingSale, setEditingSale] = useState<PharmacySale | null>(null);
+  const [editPatientName, setEditPatientName] = useState("");
+  const [editDoctorName, setEditDoctorName] = useState("");
+  const [editPaymentMethod, setEditPaymentMethod] = useState("Cash");
+  const [editPaidAmount, setEditPaidAmount] = useState(0);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Collect due payment handler
+  const handleCollectDue = async () => {
+    if (!collectSale || collectAmount <= 0) { toast.error("Enter a valid amount"); return; }
+    setCollectSaving(true);
+    try {
+      const newPaid = (collectSale.paidAmount || 0) + collectAmount;
+      const res = await fetchAPI(`/api/pharmacy-sales/${collectSale.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paidAmount: newPaid }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast.success(`Payment of ${formatRs(collectAmount)} recorded`);
+      setCollectSale(null);
+      setRefresh((r) => r + 1);
+    } catch {
+      toast.error("Failed to record payment");
+    } finally {
+      setCollectSaving(false);
+    }
+  };
+
+  // Edit sale handler
+  const handleEditSale = async () => {
+    if (!editingSale) return;
+    setEditSaving(true);
+    try {
+      const res = await fetchAPI(`/api/pharmacy-sales/${editingSale.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientName: editPatientName,
+          doctorName: editDoctorName || null,
+          paymentMethod: editPaymentMethod,
+          paidAmount: editPaidAmount,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast.success("Sale updated");
+      setEditingSale(null);
+      setRefresh((r) => r + 1);
+    } catch {
+      toast.error("Failed to update sale");
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     if (!sales) return [];
@@ -349,6 +421,7 @@ export function PmsSales() {
                   <TableHead className="text-center hidden md:table-cell">Items</TableHead>
                   <TableHead className="text-right hidden sm:table-cell">Subtotal</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Due</TableHead>
                   <TableHead className="text-center">Payment</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -358,12 +431,12 @@ export function PmsSales() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={10}><Skeleton className="h-8 w-full" /></TableCell>
+                      <TableCell colSpan={11}><Skeleton className="h-8 w-full" /></TableCell>
                     </TableRow>
                   ))
                 ) : paged.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="py-2">
+                    <TableCell colSpan={11} className="py-2">
                       <EmptyState
                         icon={ShoppingCart}
                         title="No sales found"
@@ -399,6 +472,9 @@ export function PmsSales() {
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-right text-sm">{formatRs(s.subtotal)}</TableCell>
                     <TableCell className="text-right text-sm font-semibold">{formatRs(s.total)}</TableCell>
+                    <TableCell className="text-right text-sm">
+                      {(() => { const due = Math.max(0, (s.total || 0) - (s.paidAmount || 0)); return due > 0 ? <span className="text-rose-600 font-semibold">{formatRs(due)}</span> : <span className="text-emerald-600">—</span>; })()}
+                    </TableCell>
                     <TableCell className="text-center">
                       <Badge className={`text-[10px] ${PAYMENT_COLORS[s.paymentMethod] || "bg-gray-100"}`}>
                         {s.paymentMethod}
@@ -411,6 +487,11 @@ export function PmsSales() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {(() => { const due = Math.max(0, (s.total || 0) - (s.paidAmount || 0)); return due > 0 ? (
+                          <Button variant="ghost" size="sm" className="h-7 text-amber-600 text-xs gap-1" onClick={() => { setCollectSale(s); setCollectAmount(due); }}>
+                            Pay Due
+                          </Button>
+                        ) : null; })()}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -422,9 +503,18 @@ export function PmsSales() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                          title="Edit"
+                          onClick={() => { setEditingSale(s); setEditPatientName(s.patientName || ""); setEditDoctorName(s.doctorName || ""); setEditPaymentMethod(s.paymentMethod); setEditPaidAmount(s.paidAmount || 0); }}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="h-7 w-7 p-0 text-muted-foreground hover:text-teal-600"
                           title="Print receipt"
-                          onClick={() => printReceipt(s)}
+                          onClick={() => printReceipt(s, tenantBranding?.clinicName ?? undefined)}
                         >
                           <Printer className="w-3.5 h-3.5" />
                         </Button>
@@ -457,9 +547,118 @@ export function PmsSales() {
       {/* View sheet */}
       <Sheet open={!!viewId} onOpenChange={(o) => !o && setViewId(null)}>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto scrollbar-thin p-0">
-          {selected && <SaleDetail sale={selected} onPrint={() => printReceipt(selected)} />}
+          {selected && <SaleDetail sale={selected} onPrint={() => printReceipt(selected, tenantBranding?.clinicName ?? undefined)} />}
         </SheetContent>
       </Sheet>
+
+      {/* ---------------- Collect Due Payment Dialog ---------------- */}
+      {collectSale && (
+        <Dialog open onOpenChange={() => setCollectSale(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-amber-600" /> Collect Payment
+              </DialogTitle>
+              <DialogDescription>{collectSale.invoiceNo} — {collectSale.patientName || "Walk-in"}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-semibold">{formatRs(collectSale.total)}</span></div>
+                <div className="flex justify-between text-emerald-600"><span>Paid</span><span>{formatRs(collectSale.paidAmount || 0)}</span></div>
+                <div className="flex justify-between font-semibold text-rose-600"><span>Due</span><span>{formatRs(Math.max(0, collectSale.total - (collectSale.paidAmount || 0)))}</span></div>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Label>Amount (Rs) *</Label>
+                  <Input type="number" min="0" value={collectAmount || ""} onChange={(e) => setCollectAmount(Math.max(0, Number(e.target.value) || 0))} className="mt-1" />
+                </div>
+                <div className="w-36">
+                  <Label>Method</Label>
+                  <Select value={collectMethod} onValueChange={setCollectMethod}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash">Cash</SelectItem>
+                      <SelectItem value="Card">Card</SelectItem>
+                      <SelectItem value="UPI">UPI</SelectItem>
+                      <SelectItem value="Insurance">Insurance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex gap-2 text-xs">
+                <button type="button" className="text-amber-600 underline" onClick={() => setCollectAmount(Math.max(0, collectSale.total - (collectSale.paidAmount || 0)))}>Pay Full Due</button>
+                <span className="text-muted-foreground">·</span>
+                <button type="button" className="text-amber-600 underline" onClick={() => setCollectAmount(Math.floor(Math.max(0, collectSale.total - (collectSale.paidAmount || 0)) / 2))}>Pay Half</button>
+                <span className="text-muted-foreground">·</span>
+                <button type="button" className="text-muted-foreground underline" onClick={() => setCollectAmount(0)}>Clear</button>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCollectSale(null)}>Cancel</Button>
+              <Button className="bg-teal-600 hover:bg-teal-700" onClick={handleCollectDue} disabled={collectSaving || collectAmount <= 0}>
+                {collectSaving ? "Saving..." : `Pay ${formatRs(collectAmount)}`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ---------------- Edit Sale Dialog ---------------- */}
+      {editingSale && (
+        <Dialog open onOpenChange={() => setEditingSale(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-teal-600" /> Edit Sale
+              </DialogTitle>
+              <DialogDescription>{editingSale.invoiceNo}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Patient Name</Label>
+                <Input value={editPatientName} onChange={(e) => setEditPatientName(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>Doctor Name</Label>
+                <Input value={editDoctorName} onChange={(e) => setEditDoctorName(e.target.value)} className="mt-1" placeholder="Optional" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Payment Method</Label>
+                  <Select value={editPaymentMethod} onValueChange={setEditPaymentMethod}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash">Cash</SelectItem>
+                      <SelectItem value="Card">Card</SelectItem>
+                      <SelectItem value="UPI">UPI</SelectItem>
+                      <SelectItem value="Insurance">Insurance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Paid Amount (Rs)</Label>
+                  <Input type="number" min="0" value={editPaidAmount || ""} onChange={(e) => setEditPaidAmount(Math.max(0, Number(e.target.value) || 0))} className="mt-1" />
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-semibold">{formatRs(editingSale.total)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">New Paid</span><span>{formatRs(editPaidAmount)}</span></div>
+                {(() => { const due = Math.max(0, editingSale.total - editPaidAmount); return due > 0 ? (
+                  <div className="flex justify-between font-semibold text-rose-600"><span>New Due</span><span>{formatRs(due)}</span></div>
+                ) : (
+                  <div className="flex justify-between font-semibold text-emerald-600"><span>Status</span><span>Fully Paid</span></div>
+                ); })()}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingSale(null)}>Cancel</Button>
+              <Button className="bg-teal-600 hover:bg-teal-700" onClick={handleEditSale} disabled={editSaving}>
+                {editSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -468,10 +667,12 @@ export function PmsSales() {
 function NewSaleDialog({
   open, onOpenChange, onCreated,
 }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+  const branchId = useAppStore((s) => s.branchId);
   const { data: medicines } = useFetch<MedicineLite[]>("/api/medicines");
   const searchRef = useRef<HTMLInputElement>(null);
 
   // State
+  const [patientId, setPatientId] = useState("");
   const [patientName, setPatientName] = useState("");
   const [doctorName, setDoctorName] = useState("");
   const [prescriptionRef, setPrescriptionRef] = useState("");
@@ -483,7 +684,7 @@ function NewSaleDialog({
   const [saving, setSaving] = useState(false);
   const [cashTendered, setCashTendered] = useState(0);
   const [showRecent, setShowRecent] = useState(false);
-  const [heldSales, setHeldSales] = useState<{ cart: DraftCartItem[]; patient: string; doctor: string; rx: string; discount: number }[]>([]);
+  const [heldSales, setHeldSales] = useState<{ cart: DraftCartItem[]; patientId: string; patient: string; doctor: string; rx: string; discount: number }[]>([]);
 
   // Focus search on open
   useEffect(() => {
@@ -538,7 +739,7 @@ function NewSaleDialog({
   // Hold / Recall
   const holdSale = () => {
     if (cart.length === 0) { toast.info("Cart is empty"); return; }
-    setHeldSales((prev) => [...prev, { cart: [...cart], patient: patientName, doctor: doctorName, rx: prescriptionRef, discount }]);
+    setHeldSales((prev) => [...prev, { cart: [...cart], patientId, patient: patientName, doctor: doctorName, rx: prescriptionRef, discount }]);
     clearCart();
     setPatientName(""); setDoctorName(""); setPrescriptionRef("");
     toast.success("Sale held");
@@ -548,6 +749,7 @@ function NewSaleDialog({
     if (heldSales.length === 0) { toast.info("No held sales"); return; }
     const last = heldSales[heldSales.length - 1];
     setCart(last.cart);
+    setPatientId(last.patientId || "");
     setPatientName(last.patient);
     setDoctorName(last.doctor);
     setPrescriptionRef(last.rx);
@@ -609,6 +811,7 @@ function NewSaleDialog({
     setSaving(true);
     try {
       const body = {
+        branchId,
         patientName: patientName || "Walk-in Customer",
         doctorName: doctorName || null,
         prescriptionRef: prescriptionRef || null,
@@ -630,7 +833,7 @@ function NewSaleDialog({
       });
       if (!res.ok) throw new Error("Failed");
       clearCart();
-      setPatientName(""); setDoctorName(""); setPrescriptionRef("");
+      setPatientId(""); setPatientName(""); setDoctorName(""); setPrescriptionRef("");
       setCashTendered(0);
       onCreated();
     } catch {
@@ -784,20 +987,10 @@ function NewSaleDialog({
           <div className="border-b px-4 py-3 space-y-2 shrink-0">
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" /> Patient</Label>
-              <Input
-                value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
-                placeholder="Walk-in customer"
-                className="h-8 text-sm"
-              />
+              <PatientSearch value={patientId} onValueChange={setPatientId} onSelect={(p) => setPatientName(p?.name || "")} label="Patient" required />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Input
-                value={doctorName}
-                onChange={(e) => setDoctorName(e.target.value)}
-                placeholder="Doctor (optional)"
-                className="h-8 text-sm"
-              />
+              <DoctorSearch value={doctorName} onValueChange={setDoctorName} label="Doctor" />
               <Input
                 value={prescriptionRef}
                 onChange={(e) => setPrescriptionRef(e.target.value)}
@@ -1068,6 +1261,10 @@ function SaleDetail({ sale, onPrint }: { sale: PharmacySale; onPrint: () => void
                       {it.medicine.strength && (
                         <p className="text-[11px] text-muted-foreground">{it.medicine.strength}</p>
                       )}
+                      <div className="flex gap-2 mt-0.5">
+                        {it.medicine.batchNo && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Batch: {it.medicine.batchNo}</span>}
+                        {it.medicine.expiryDate && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Exp: {formatDate(it.medicine.expiryDate)}</span>}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right text-sm">{it.quantity}</TableCell>
                     <TableCell className="text-right text-sm">{formatRs(it.unitPrice)}</TableCell>
@@ -1089,6 +1286,9 @@ function SaleDetail({ sale, onPrint }: { sale: PharmacySale; onPrint: () => void
           <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span>+ {formatRs(sale.tax)}</span></div>
           <div className="flex justify-between font-semibold border-t pt-1.5 mt-1.5 text-base"><span>Total</span><span>{formatRs(sale.total)}</span></div>
           <div className="flex justify-between text-emerald-600"><span>Paid</span><span>{formatRs(sale.paidAmount)}</span></div>
+          {sale.total - (sale.paidAmount || 0) > 0 && (
+            <div className="flex justify-between font-semibold text-rose-600"><span>Outstanding Due</span><span>{formatRs(sale.total - (sale.paidAmount || 0))}</span></div>
+          )}
         </div>
       </div>
     </div>

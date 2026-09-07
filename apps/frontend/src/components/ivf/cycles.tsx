@@ -33,6 +33,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { KpiCard } from "@/components/cms/kpi-card";
+import { PatientSearch } from "@/components/ui/patient-search";
+import { DoctorSearch } from "@/components/ui/doctor-search";
 import { EmptyState } from "@/components/cms/empty-state";
 import { Pagination } from "@/components/cms/pagination";
 import { usePagination } from "@/lib/use-pagination";
@@ -587,32 +589,14 @@ function NewCycleDialog({
           {/* Patient */}
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> Patient *</Label>
-            <Select value={patientId} onValueChange={setPatientId}>
-              <SelectTrigger><SelectValue placeholder="Select patient…" /></SelectTrigger>
-              <SelectContent>
-                {(patients || []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name} · {p.patientCode}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <PatientSearch value={patientId} onValueChange={setPatientId} label="" required />
           </div>
 
           {/* Doctor + Protocol */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5"><UserCog className="w-3.5 h-3.5" /> Doctor</Label>
-              <Select value={doctorId} onValueChange={setDoctorId}>
-                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
-                <SelectContent>
-                  {(doctors || []).map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}{d.specialization ? ` · ${d.specialization}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <DoctorSearch value={doctorId} onValueChange={setDoctorId} label="" />
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5"><Stethoscope className="w-3.5 h-3.5" /> Protocol</Label>

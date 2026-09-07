@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const branchId = searchParams.get("branchId");
+  const branchFilter = branchId ? { branchId } : {};
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -108,4 +112,4 @@ export async function GET() {
     doctorSchedule: doctorSchedule.slice(0, 8).map(a => ({ id: a.id, time: a.time, patientName: a.patient.name, doctorName: a.doctor?.name || "—", status: a.status, reason: a.reason })),
     pendingLabOrdersList: labOrders.filter(l => ["pending", "in_lab"].includes(l.status)).slice(0, 5).map(l => ({ id: l.id, orderNo: l.orderNo, patientId: l.patientId, labType: l.labType, status: l.status, sentDate: l.sentDate, deliveryDate: l.deliveryDate })),
   });
-}
+});

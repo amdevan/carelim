@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const patientId = searchParams.get("patientId");
   const imageType = searchParams.get("imageType");
@@ -10,9 +11,9 @@ export async function GET(req: NextRequest) {
   if (imageType) where.imageType = imageType;
   const imgs = await db.dentalImage.findMany({ where, orderBy: { takenAt: "desc" } });
   return NextResponse.json(imgs);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const img = await db.dentalImage.create({
     data: {
@@ -23,4 +24,4 @@ export async function POST(req: NextRequest) {
   });
   await db.auditLog.create({ data: { user: "system", action: "CREATE", module: "Dental", detail: `Added dental image (${body.imageType}) for patient ${body.patientId}` } });
   return NextResponse.json(img, { status: 201 });
-}
+});

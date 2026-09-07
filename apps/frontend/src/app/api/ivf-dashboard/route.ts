@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async () => {
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
@@ -64,4 +65,4 @@ export async function GET() {
     })),
     donors: donors.slice(0, 5).map(d => ({ id: d.id, donorCode: d.donorCode, type: d.type, screeningStatus: d.screeningStatus, status: d.status })),
   });
-}
+});

@@ -5,6 +5,9 @@ import { useFetch } from "@/lib/use-fetch";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { StaffSearch } from "@/components/ui/staff-search";
+import { PatientSearch } from "@/components/ui/patient-search";
+import { DoctorSearch } from "@/components/ui/doctor-search";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,10 +37,11 @@ import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { useAppStore } from "@/store/app-store";
+import { escapeHTML, TAX_RATE, SAMPLE_TYPES, CONTAINER_TYPES, StatCard, InfoTile } from "./utils";
 
 /* ---------- Types ---------- */
 
-interface LabDepartment { id: string; name: string; color: string; }
 interface LabTestDepartment { id: string; name: string; color: string | null; }
 
 interface LabTestMaster {
@@ -147,22 +151,6 @@ interface LabOrder {
   results: LabResult[];
 }
 
-interface PatientLite {
-  id: string;
-  patientCode: string;
-  name: string;
-  phone: string;
-  age?: number;
-  gender?: string;
-}
-
-interface DoctorLite {
-  id: string;
-  name: string;
-  specialization: string;
-  department?: { id: string; name: string } | null;
-}
-
 /* ---------- Constants ---------- */
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -201,18 +189,11 @@ const FLAG_COLORS: Record<string, string> = {
 const STATUS_FILTERS = ["all", "ordered", "collected", "processing", "completed", "cancelled"] as const;
 const PRIORITY_FILTERS = ["all", "normal", "urgent", "emergency"] as const;
 
-const TAX_RATE = 0.13;
-
 /* ---------- Helpers ---------- */
 
-function escapeHTML(s: string): string {
-  return String(s ?? "").replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
-}
-
-function buildOrderHTML(o: LabOrder): string {
+function buildOrderHTML(o: LabOrder, clinicName?: string): string {
   const statusBadge = `<span class="badge teal">${statusLabel(o.status)}</span>`;
-  const priorityBadge = `<span class="badge ${o.priority === "emergency" ? "rose" : o.priority === "urgent" ? "teal" : "teal"}">${statusLabel(o.priority)} Priority</span>`;
+  const priorityBadge = `<span class="badge ${o.priority === "emergency" ? "rose" : o.priority === "urgent" ? "amber" : "teal"}">${statusLabel(o.priority)} Priority</span>`;
 
   const patientGrid = `
     <div class="info-grid">
@@ -263,18 +244,19 @@ function buildOrderHTML(o: LabOrder): string {
     ${totals}
     <div class="signature">
       <div class="sig-block"><div class="line"></div><div class="name">Collected By</div><div class="role">Lab Technician</div></div>
-      <div class="sig-block"><div class="line"></div><div class="name">Authorized Signatory</div><div class="role">Carelim OS Lab Services</div></div>
+      <div class="sig-block"><div class="line"></div><div class="name">Authorized Signatory</div><div class="role">${clinicName || "Lab Services"}</div></div>
     </div>`;
 }
 
-function printOrder(o: LabOrder) {
-  printHTML(`Lab Order ${o.orderNo}`, buildOrderHTML(o));
+function printOrder(o: LabOrder, clinicName?: string) {
+  printHTML(`Lab Order ${o.orderNo}`, buildOrderHTML(o, clinicName), clinicName);
 }
 
 /* ---------- Main Component ---------- */
 
 export function LimsOrders() {
   const [refresh, setRefresh] = useState(0);
+  const tenantBranding = useAppStore((s) => s.tenantBranding);
   const refreshList = useCallback(() => setRefresh((r) => r + 1), []);
   const { data: orders, loading, error } = useFetch<LabOrder[]>(
     refresh ? `/api/lab-orders?_r=${refresh}` : "/api/lab-orders",
@@ -408,7 +390,7 @@ export function LimsOrders() {
             <Card className="border-border/60">
               <CardContent className="p-3.5">
                 <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${s.accent} flex items-center justify-center text-white shadow-sm`}>
-                  <s.icon className="w-4.5 h-4.5" />
+                  <s.icon className="w-[18px] h-[18px]" />
                 </div>
                 <p className="text-xl font-bold mt-2">{s.value}</p>
                 <p className="text-[11px] text-muted-foreground">{s.label}</p>
@@ -596,7 +578,7 @@ export function LimsOrders() {
                           size="sm"
                           variant="ghost"
                           className="h-7 w-7 p-0"
-                          onClick={() => printOrder(o)}
+                          onClick={() => printOrder(o, tenantBranding?.clinicName ?? undefined)}
                           title="Print order"
                         >
                           <Printer className="w-3.5 h-3.5" />
@@ -650,6 +632,7 @@ export function LimsOrders() {
 /* ---------- Order Detail Sheet ---------- */
 
 function OrderDetail({ order }: { order: LabOrder }) {
+  const tenantBranding = useAppStore((s) => s.tenantBranding);
   return (
     <div>
       <SheetHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30">
@@ -674,7 +657,7 @@ function OrderDetail({ order }: { order: LabOrder }) {
               )}
             </SheetDescription>
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => printOrder(order)}>
+          <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => printOrder(order, tenantBranding?.clinicName ?? undefined)}>
             <Printer className="w-4 h-4" /> Print
           </Button>
         </div>
@@ -916,6 +899,7 @@ interface CollectDialogProps {
 }
 
 function CollectSampleDialog({ order, open, onClose, onCollected }: CollectDialogProps) {
+  const branchId = useAppStore((s) => s.branchId);
   const [saving, setSaving] = useState(false);
   const [collectorName, setCollectorName] = useState("");
   const [sampleType, setSampleType] = useState("Blood");
@@ -948,6 +932,7 @@ function CollectSampleDialog({ order, open, onClose, onCollected }: CollectDialo
           containerType,
           collectorName,
           location,
+          branchId,
         }),
       });
       if (!res.ok) {
@@ -978,13 +963,7 @@ function CollectSampleDialog({ order, open, onClose, onCollected }: CollectDialo
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="collector">Collector Name *</Label>
-            <Input
-              id="collector"
-              value={collectorName}
-              onChange={(e) => setCollectorName(e.target.value)}
-              placeholder="e.g. Ram Thapa"
-              required
-            />
+            <StaffSearch value={collectorName} onValueChange={setCollectorName} label="Collector Name" required />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
@@ -1046,12 +1025,6 @@ interface NewOrderProps {
 }
 
 function NewLabOrderDialog({ open, onClose, onCreated }: NewOrderProps) {
-  const { data: patients, loading: patientsLoading } = useFetch<PatientLite[]>(
-    open ? "/api/patients" : null,
-  );
-  const { data: doctors, loading: doctorsLoading } = useFetch<DoctorLite[]>(
-    open ? "/api/doctors" : null,
-  );
   const { data: tests, loading: testsLoading } = useFetch<LabTestMaster[]>(
     open ? "/api/lab-tests-master" : null,
   );
@@ -1181,37 +1154,8 @@ function NewLabOrderDialog({ open, onClose, onCreated }: NewOrderProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Patient + Doctor + Priority */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="patient">Patient *</Label>
-              <Select value={patientId} onValueChange={setPatientId} required>
-                <SelectTrigger id="patient">
-                  <SelectValue placeholder={patientsLoading ? "Loading patients…" : "Select patient"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(patients || []).slice(0, 100).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} ({p.patientCode})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="doctor">Referring Doctor (optional)</Label>
-              <Select value={doctorId} onValueChange={setDoctorId}>
-                <SelectTrigger id="doctor">
-                  <SelectValue placeholder={doctorsLoading ? "Loading doctors…" : "Select doctor"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No referring doctor</SelectItem>
-                  {(doctors || []).map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name} {d.specialization ? `· ${d.specialization}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <PatientSearch value={patientId} onValueChange={setPatientId} label="" required />
+            <DoctorSearch value={doctorId} onValueChange={setDoctorId} label="" />
           </div>
 
           <div className="space-y-1.5">

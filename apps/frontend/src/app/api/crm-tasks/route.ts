@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const priority = searchParams.get("priority");
@@ -22,13 +23,13 @@ export async function GET(req: NextRequest) {
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
   });
   return NextResponse.json(tasks);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const task = await db.cRMTask.create({ data: body });
   await db.auditLog.create({
     data: { user: "system", action: "CREATE", module: "CRM", detail: `Created task: ${task.title}` },
   });
   return NextResponse.json(task, { status: 201 });
-}
+});

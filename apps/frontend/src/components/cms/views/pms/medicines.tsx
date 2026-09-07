@@ -1,5 +1,6 @@
 "use client";
 import { fetchAPI } from "@/lib/api";
+import { useAppStore } from "@/store/app-store";
 
 import { useFetch } from "@/lib/use-fetch";
 import { usePagination, useSort } from "@/lib/use-pagination";
@@ -182,7 +183,8 @@ function MedicinesSkeleton() {
 
 export function PmsMedicines() {
   const [refresh, setRefresh] = useState(0);
-  const url = refresh ? `/api/medicines?_r=${refresh}` : "/api/medicines";
+  const branchId = useAppStore((s) => s.branchId);
+  const url = refresh ? `/api/medicines?_r=${refresh}&branchId=${branchId || ""}` : `/api/medicines?branchId=${branchId || ""}`;
   const { data: medicines, loading } = useFetch<Medicine[]>(url);
 
   const [search, setSearch] = useState("");
@@ -860,6 +862,7 @@ function MedicineFormDialog({ medicine, open, onOpenChange, onChanged }: FormDia
   const { data: suppliers } = useFetch<Supplier[]>("/api/suppliers");
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const branchId = useAppStore((s) => s.branchId);
 
   useEffect(() => {
     if (medicine) {
@@ -910,6 +913,7 @@ function MedicineFormDialog({ medicine, open, onOpenChange, onChanged }: FormDia
     }
     setSaving(true);
     const payload = {
+      branchId,
       name: form.name,
       genericName: form.genericName || null,
       strength: form.strength || null,

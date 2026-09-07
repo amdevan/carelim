@@ -515,8 +515,7 @@ interface CreateTenantWizardProps {
 
 const WIZARD_STEPS = [
   { label: "Clinic Info", description: "Basic clinic details" },
-  { label: "Modules", description: "Select platform modules" },
-  { label: "Plan & Status", description: "Subscription setup" },
+  { label: "Payment", description: "Plan & subscription" },
 ];
 
 function CreateTenantWizard({ open, onClose, plans, onCreated }: CreateTenantWizardProps) {
@@ -525,64 +524,26 @@ function CreateTenantWizard({ open, onClose, plans, onCreated }: CreateTenantWiz
   const [form, setForm] = useState({
     name: "", ownerName: "", ownerEmail: "", ownerPhone: "",
     address: "", city: "", country: "Nepal", registrationNo: "",
+    clinicType: "General",
     planId: "", status: "trial", trialDays: 14,
   });
-  const [selectedModules, setSelectedModules] = useState<string[]>(
-    PLATFORM_MODULES.map((m) => m.key)
-  );
-  const [moduleSearch, setModuleSearch] = useState("");
-  const [activeModuleCategory, setActiveModuleCategory] = useState<string>("all");
 
   const updateForm = (patch: Partial<typeof form>) => setForm((prev) => ({ ...prev, ...patch }));
 
-  const toggleModule = (key: string) => {
-    setSelectedModules((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
-  };
-
-  const filteredWizardModules = useMemo(() => {
-    let mods = PLATFORM_MODULES;
-    if (moduleSearch) {
-      const q = moduleSearch.toLowerCase();
-      mods = mods.filter((m) => m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q));
-    } else if (activeModuleCategory !== "all") {
-      mods = mods.filter((m) => m.category === activeModuleCategory);
-    }
-    return mods;
-  }, [moduleSearch, activeModuleCategory]);
-
-  const wizardModuleGroups = useMemo(() => {
-    const groups: Record<string, typeof PLATFORM_MODULES> = {};
-    filteredWizardModules.forEach((m) => {
-      if (!groups[m.category]) groups[m.category] = [];
-      groups[m.category].push(m);
-    });
-    return groups;
-  }, [filteredWizardModules]);
-
   const canProceedStep1 = form.name.trim() && form.ownerName.trim() && form.ownerEmail.trim() && form.ownerPhone.trim();
-  const canProceedStep2 = selectedModules.length > 0;
-  const canSubmit = canProceedStep1 && canProceedStep2;
+  const canSubmit = canProceedStep1;
 
   const handleBack = () => setStep((s) => Math.max(1, s - 1));
-  const handleNext = () => setStep((s) => Math.min(3, s + 1));
+  const handleNext = () => setStep((s) => Math.min(2, s + 1));
 
   const handleCreate = async () => {
     if (!canSubmit) return;
     setCreating(true);
     try {
-      const body = {
-        ...form,
-        modules: selectedModules.map((key) => {
-          const mod = PLATFORM_MODULES.find((m) => m.key === key);
-          return { key, name: mod?.name || key, category: mod?.category || "general" };
-        }),
-      };
       const res = await fetchAPI("/api/tenants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(form),
       });
       if (res.ok) {
         toast.success("Clinic created successfully");
@@ -604,11 +565,9 @@ function CreateTenantWizard({ open, onClose, plans, onCreated }: CreateTenantWiz
     setForm({
       name: "", ownerName: "", ownerEmail: "", ownerPhone: "",
       address: "", city: "", country: "Nepal", registrationNo: "",
+      clinicType: "General",
       planId: "", status: "trial", trialDays: 14,
     });
-    setSelectedModules(PLATFORM_MODULES.map((m) => m.key));
-    setModuleSearch("");
-    setActiveModuleCategory("all");
   };
 
   const handleClose = () => {
@@ -621,7 +580,7 @@ function CreateTenantWizard({ open, onClose, plans, onCreated }: CreateTenantWiz
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Clinic</DialogTitle>
-          <DialogDescription>Register a new clinic on the platform in 3 steps.</DialogDescription>
+          <DialogDescription>Register a new clinic on the platform in 2 steps.</DialogDescription>
         </DialogHeader>
 
         {/* Step Indicator */}
@@ -707,9 +666,20 @@ function CreateTenantWizard({ open, onClose, plans, onCreated }: CreateTenantWiz
                     <Input value={form.country} onChange={(e) => updateForm({ country: e.target.value })} />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Registration No</Label>
-                  <Input value={form.registrationNo} onChange={(e) => updateForm({ registrationNo: e.target.value })} placeholder="Official registration number" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Clinic Type</Label>
+                    <Select value={form.clinicType} onValueChange={(v) => updateForm({ clinicType: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CLINIC_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Registration No</Label>
+                    <Input value={form.registrationNo} onChange={(e) => updateForm({ registrationNo: e.target.value })} placeholder="Official registration number" />
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -723,113 +693,7 @@ function CreateTenantWizard({ open, onClose, plans, onCreated }: CreateTenantWiz
                 transition={{ duration: 0.2 }}
                 className="space-y-4"
               >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-muted-foreground">Step 2 — Module Selection</p>
-                  <Badge className="bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300 text-[10px]">
-                    {selectedModules.length} of {PLATFORM_MODULES.length} selected
-                  </Badge>
-                </div>
-
-                {/* Module search & category filter */}
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      value={moduleSearch}
-                      onChange={(e) => setModuleSearch(e.target.value)}
-                      placeholder="Search modules…"
-                      className="pl-9"
-                    />
-                  </div>
-                  <div className="flex items-center gap-1 overflow-x-auto">
-                    <button
-                      onClick={() => setActiveModuleCategory("all")}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
-                        activeModuleCategory === "all"
-                          ? "bg-teal-600 text-white"
-                          : "bg-muted/60 text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      All
-                    </button>
-                    {MODULE_CATEGORIES.map((cat) => (
-                      <button
-                        key={cat.id}
-                        onClick={() => setActiveModuleCategory(cat.id)}
-                        className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
-                          activeModuleCategory === cat.id
-                            ? "bg-teal-600 text-white"
-                            : "bg-muted/60 text-muted-foreground hover:bg-muted"
-                        }`}
-                      >
-                        {cat.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Module grid by category */}
-                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                  {Object.entries(wizardModuleGroups).map(([category, mods]) => (
-                    <div key={category}>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{category}</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {mods.map((mod) => {
-                          const IconComp = getModuleIcon(mod.icon);
-                          const isSelected = selectedModules.includes(mod.key);
-                          return (
-                            <div
-                              key={mod.key}
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => toggleModule(mod.key)}
-                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleModule(mod.key); } }}
-                              className={`flex items-center gap-3 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
-                                isSelected
-                                  ? "border-teal-500 bg-teal-50/50 dark:bg-teal-950/20"
-                                  : "border-border hover:border-muted-foreground/30 bg-background"
-                              }`}
-                            >
-                              <div className={`p-1.5 rounded-md ${isSelected ? "bg-teal-100 dark:bg-teal-900/40" : "bg-muted"}`}>
-                                <IconComp className={`w-4 h-4 ${isSelected ? "text-teal-600 dark:text-teal-400" : "text-muted-foreground"}`} />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium truncate">{mod.name}</p>
-                              </div>
-                              <Checkbox checked={isSelected} className="pointer-events-none" />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                  {Object.keys(wizardModuleGroups).length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-8">No modules match your search</p>
-                  )}
-                </div>
-
-                {/* Quick actions */}
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSelectedModules(PLATFORM_MODULES.map((m) => m.key))}>
-                    Select All
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSelectedModules([])}>
-                    Clear All
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 3 && (
-              <motion.div
-                key="step3"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-4"
-              >
-                <p className="text-sm font-semibold text-muted-foreground mb-1">Step 3 — Plan & Status</p>
+                <p className="text-sm font-semibold text-muted-foreground mb-1">Step 2 — Payment & Subscription</p>
 
                 {/* Summary */}
                 <div className="p-3 rounded-lg bg-muted/40 border">
@@ -844,8 +708,8 @@ function CreateTenantWizard({ open, onClose, plans, onCreated }: CreateTenantWiz
                       <span className="font-medium">{form.ownerName || "—"}</span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Modules: </span>
-                      <span className="font-medium">{selectedModules.length} selected</span>
+                      <span className="text-muted-foreground">Type: </span>
+                      <span className="font-medium">{form.clinicType}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Email: </span>
@@ -910,12 +774,12 @@ function CreateTenantWizard({ open, onClose, plans, onCreated }: CreateTenantWiz
             <Button variant="ghost" size="sm" onClick={handleClose}>
               Cancel
             </Button>
-            {step < 3 ? (
+            {step < 2 ? (
               <Button
                 size="sm"
                 className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5"
                 onClick={handleNext}
-                disabled={step === 1 ? !canProceedStep1 : !canProceedStep2}
+                disabled={!canProceedStep1}
               >
                 Next <ChevronRight className="w-4 h-4" />
               </Button>

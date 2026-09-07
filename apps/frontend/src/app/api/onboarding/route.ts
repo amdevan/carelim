@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { rawDb } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { nanoid } from "nanoid";
 
-// POST /api/onboarding — Complete onboarding: create organization, admin, modules, subscription
+function makeId(len = 8) {
+  return Math.random().toString(36).substring(2, 2 + len);
+}
+
+// POST /api/onboarding — Complete onboarding: create tenant, organization, admin, modules, subscription
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -35,8 +39,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if email already exists
-    const existingUser = await db.user.findUnique({
+    // Check if email already exists (rawDb — no tenant context during onboarding)
+    const existingUser = await rawDb.user.findUnique({
       where: { email: basicInfo.adminEmailAddress },
     });
     if (existingUser) {
@@ -46,7 +50,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate Clinic ID and subdomain
+    // ─── 1. Create Tenant ────────────────────────────────────────
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
+    const tenant = await rawDb.tenant.create({
+      data: {
+        name: basicInfo.clinicName,
+        ownerName: basicInfo.adminFullName,
+        ownerEmail: basicInfo.adminEmailAddress,
+        ownerPhone: basicInfo.adminMobileNumber,
+        status: "trial",
+        trialEndsAt,
+      },
+    });
+
+    // ─── 2. Create Organization (linked to tenant) ───────────────
     const clinicId = `CLINIC-${nanoid(8).toUpperCase()}`;
     const baseSubdomain = basicInfo.clinicName
       .toLowerCase()
@@ -55,23 +74,23 @@ export async function POST(req: NextRequest) {
     let subdomain = baseSubdomain || `clinic-${nanoid(4)}`;
 
     // Ensure subdomain is unique
-    let subdomainExists = await db.organization.findUnique({
+    let subdomainExists = await rawDb.organization.findUnique({
       where: { subdomain },
     });
     let counter = 1;
     while (subdomainExists) {
       subdomain = `${baseSubdomain}-${counter}`;
-      subdomainExists = await db.organization.findUnique({
+      subdomainExists = await rawDb.organization.findUnique({
         where: { subdomain },
       });
       counter++;
     }
 
-    // Create organization
-    const organization = await db.organization.create({
+    const organization = await rawDb.organization.create({
       data: {
         name: basicInfo.clinicName,
         clinicType: basicInfo.clinicType,
+        tenantId: tenant.id,
         registrationNo: basicInfo.registrationNumber || null,
         panVatNo: basicInfo.panVatNumber || null,
         country: basicInfo.country || null,
@@ -85,43 +104,56 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Create super admin role if it doesn't exist
-    let superAdminRole = await db.role.findUnique({
+    // ─── 3. Create Default Branch (linked to tenant) ─────────────
+    const branch = await rawDb.branch.create({
+      data: {
+        name: "Main Branch",
+        code: `MAIN-${makeId(6).toUpperCase()}`,
+        clinicType: basicInfo.clinicType,
+        tenantId: tenant.id,
+        phone: basicInfo.adminMobileNumber,
+        email: basicInfo.adminEmailAddress,
+        country: basicInfo.country || "Nepal",
+      },
+    });
+
+    // ─── 4. Create Admin Role (if not exists) ────────────────────
+    let superAdminRole = await rawDb.role.findUnique({
       where: { name: "Super Admin" },
     });
     if (!superAdminRole) {
-      superAdminRole = await db.role.create({
+      superAdminRole = await rawDb.role.create({
         data: {
           name: "Super Admin",
           description: "Full access to all modules and settings",
-          isSystem: true,
         },
       });
     }
 
-    // Create super admin user with hashed password
+    // ─── 5. Create Admin User (linked to branch) ─────────────────
     const hashedPassword = await hashPassword(basicInfo.adminPassword);
-    const adminUser = await db.user.create({
+    const adminUser = await rawDb.user.create({
       data: {
         name: basicInfo.adminFullName,
         email: basicInfo.adminEmailAddress,
         password: hashedPassword,
         phone: basicInfo.adminMobileNumber,
         roleId: superAdminRole.id,
+        branchId: branch.id,
         status: "active",
         lastLogin: new Date(),
       },
     });
 
-    // Update organization with admin user ID
-    await db.organization.update({
+    // ─── 6. Link Organization to Admin User ──────────────────────
+    await rawDb.organization.update({
       where: { id: organization.id },
       data: { adminUserId: adminUser.id },
     });
 
-    // Create organization modules
+    // ─── 7. Create Organization Modules ──────────────────────────
     if (selectedModules && selectedModules.length > 0) {
-      await db.organizationModule.createMany({
+      await rawDb.organizationModule.createMany({
         data: selectedModules.map((modKey: string) => {
           const mod = require("@/components/onboarding/module-data").MODULES.find(
             (m: any) => m.key === modKey
@@ -137,10 +169,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Create subscription
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 14);
-
+    // ─── 8. Create Subscription ──────────────────────────────────
     let planName = "free_trial";
     let planLabel = "Free Trial";
     let price = 0;
@@ -153,7 +182,7 @@ export async function POST(req: NextRequest) {
       billingCycle = selectedPlan.billingCycle || "monthly";
     }
 
-    const subscription = await db.subscription.create({
+    const subscription = await rawDb.subscription.create({
       data: {
         organizationId: organization.id,
         planName,
@@ -170,7 +199,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Create default organization settings
+    // ─── 9. Create Default Organization Settings ─────────────────
     const defaultSettings = [
       { key: "timezone", value: "Asia/Kathmandu", category: "general" },
       { key: "currency", value: "NPR", category: "general" },
@@ -181,34 +210,43 @@ export async function POST(req: NextRequest) {
       { key: "email_notifications", value: "true", category: "notifications" },
     ];
 
-    await db.organizationSetting.createMany({
+    await rawDb.organizationSetting.createMany({
       data: defaultSettings.map((s) => ({
         organizationId: organization.id,
         ...s,
       })),
     });
 
-    // Create audit log
-    await db.auditLog.create({
+    // ─── 10. Create Audit Log ────────────────────────────────────
+    await rawDb.auditLog.create({
       data: {
         user: basicInfo.adminEmailAddress,
         action: "ONBOARDING_COMPLETE",
         module: "Organization",
-        detail: `Created organization: ${basicInfo.clinicName} with ${selectedModules?.length || 0} modules and ${planLabel} plan`,
+        detail: `Created tenant: ${basicInfo.clinicName} (${tenant.id}) with ${selectedModules?.length || 0} modules and ${planLabel} plan`,
         ip: req.headers.get("x-forwarded-for") || "127.0.0.1",
       },
     });
 
-    // Return success response
+    // ─── Return success ──────────────────────────────────────────
     return NextResponse.json(
       {
         success: true,
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+        },
         organization: {
           id: organization.id,
           name: organization.name,
           clinicId: organization.clinicId,
           subdomain: organization.subdomain,
           clinicUrl: `${organization.subdomain}.carelim.com`,
+        },
+        branch: {
+          id: branch.id,
+          name: branch.name,
+          code: branch.code,
         },
         adminUser: {
           id: adminUser.id,
@@ -250,7 +288,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const session = await db.onboardingSession.findUnique({
+    const session = await rawDb.onboardingSession.findUnique({
       where: { sessionId },
     });
 
@@ -291,7 +329,7 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const session = await db.onboardingSession.upsert({
+    const session = await rawDb.onboardingSession.upsert({
       where: { sessionId },
       update: {
         organizationData: organizationData || undefined,

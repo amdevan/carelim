@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const stage = searchParams.get("stage");
   const source = searchParams.get("source");
@@ -22,13 +24,13 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json(deals);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const count = await db.cRMDeal.count();
   const deal = await db.cRMDeal.create({
-    data: { ...body, dealNo: `DEAL-${String(count + 1).padStart(5, "0")}` },
+    data: { ...body, dealNo: `DEAL-${nanoid(8).toUpperCase()}` },
   });
   await db.auditLog.create({
     data: { user: "system", action: "CREATE", module: "CRM", detail: `Created deal ${deal.dealNo} - ${deal.title}` },
@@ -42,4 +44,4 @@ export async function POST(req: NextRequest) {
     },
   });
   return NextResponse.json(deal, { status: 201 });
-}
+});

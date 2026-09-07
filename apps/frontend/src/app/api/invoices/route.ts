@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
+import { requirePermission } from "@/lib/api-guard";
+import { nanoid } from "nanoid";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
+    const branchId = searchParams.get("branchId");
     const where: Record<string, unknown> = {};
     if (status) where.status = status;
+    if (branchId) where.branchId = branchId;
     const invoices = await db.invoice.findMany({
       where,
       include: { patient: true, items: true },
@@ -18,9 +23,11 @@ export async function GET(req: NextRequest) {
     console.error("Error fetching invoices:", error);
     return NextResponse.json({ error: "Failed to fetch invoices" }, { status: 500 });
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
+  const denied = await requirePermission(req, "Billing", "create");
+  if (denied) return denied;
   try {
     const body = await req.json();
     const count = await db.invoice.count();
@@ -29,7 +36,7 @@ export async function POST(req: NextRequest) {
       data: {
         ...data,
         date: new Date(),
-        invoiceNo: `INV-${String(count + 1).padStart(5, "0")}`,
+        invoiceNo: `INV-${nanoid(8).toUpperCase()}`,
         items: { create: items || [] },
       },
       include: { items: true, patient: true },
@@ -40,4 +47,4 @@ export async function POST(req: NextRequest) {
     console.error("Error creating invoice:", error);
     return NextResponse.json({ error: "Failed to create invoice" }, { status: 500 });
   }
-}
+});

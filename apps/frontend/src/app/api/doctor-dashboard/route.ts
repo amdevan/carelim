@@ -1,17 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const branchId = searchParams.get("branchId");
+  const branchFilter = branchId ? { branchId } : {};
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 
   const [doctors, departments, branches, todayAppts, todayInvoices] = await Promise.all([
-    db.doctor.findMany({ include: { department: true, appointments: { where: { date: { gte: startOfDay, lt: endOfDay } } } } }),
-    db.department.findMany(),
+    db.doctor.findMany({ where: branchFilter, include: { department: true, appointments: { where: { date: { gte: startOfDay, lt: endOfDay } } } } }),
+    db.department.findMany({ where: branchFilter }),
     db.branch.findMany(),
-    db.appointment.findMany({ where: { date: { gte: startOfDay, lt: endOfDay } } }),
-    db.invoice.findMany({ where: { date: { gte: startOfDay, lt: endOfDay } } }),
+    db.appointment.findMany({ where: { ...branchFilter, date: { gte: startOfDay, lt: endOfDay } } }),
+    db.invoice.findMany({ where: { ...branchFilter, date: { gte: startOfDay, lt: endOfDay } } }),
   ]);
 
   const totalDoctors = doctors.length;
@@ -67,4 +71,4 @@ export async function GET() {
     topPerformers,
     statusDist,
   });
-}
+});

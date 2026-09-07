@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(req: NextRequest) {
+export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const medicineId = searchParams.get("medicineId");
   const where: Record<string, unknown> = {};
@@ -12,9 +13,9 @@ export async function GET(req: NextRequest) {
     orderBy: { expiryDate: "asc" },
   });
   return NextResponse.json(batches);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const batch = await db.medicineBatch.create({
     data: {
@@ -24,4 +25,4 @@ export async function POST(req: NextRequest) {
     },
   });
   return NextResponse.json(batch, { status: 201 });
-}
+});

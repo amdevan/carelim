@@ -24,6 +24,7 @@ import {
 import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
 import { exportToCSV } from "@/lib/export-utils";
 import { EmptyState } from "@/components/cms/empty-state";
+import { PatientSearch } from "@/components/ui/patient-search";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
@@ -283,8 +284,12 @@ function CreateClaimDialog({
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label>Patient Name *</Label>
-            <Input value={form.patientName} onChange={(e) => set("patientName", e.target.value)} placeholder="Patient full name" />
+            <PatientSearch
+              value={form.patientName}
+              onValueChange={(v) => set("patientName", v)}
+              label="Patient Name"
+              required
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Insurance Provider *</Label>

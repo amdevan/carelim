@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
+import { withTenant } from "@/lib/with-tenant";
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const order = await db.labOrder.findUnique({
     where: { id },
@@ -15,9 +16,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(order);
-}
+});
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withTenant(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const body = await req.json();
   const data: Record<string, unknown> = { ...body };
@@ -30,10 +31,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const order = await db.labOrder.update({ where: { id }, data });
   await db.auditLog.create({ data: { user: getAuthEmail(req), action: "UPDATE", module: "LabOrder", detail: `Updated lab order ${order.orderNo}` } });
   return NextResponse.json(order);
-}
+});
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   await db.labOrder.delete({ where: { id } });
   return NextResponse.json({ ok: true });
-}
+});
