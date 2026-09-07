@@ -50,7 +50,7 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 RUN npm install -g prisma@7.10.0
 
 # Copy entrypoint
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
+COPY apps/frontend/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000

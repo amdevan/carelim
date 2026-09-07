@@ -19,8 +19,8 @@ services:
 
   carelim:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: apps/frontend/Dockerfile
     container_name: carelim-app
     depends_on:
       db:
