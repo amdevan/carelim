@@ -43,6 +43,10 @@ COPY --from=builder /app/apps/frontend/public ./public
 # Copy generated Prisma client (output dir from schema)
 COPY --from=builder /app/apps/frontend/generated ./generated
 
+# Copy @prisma runtime packages (needed by standalone server)
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
 # Copy entrypoint
 COPY apps/frontend/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
