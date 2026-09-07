@@ -1,6 +1,7 @@
 # ---- Build Stage ----
 FROM node:22-alpine AS builder
 
+ARG DATABASE_URL
 WORKDIR /app
 
 # Copy workspace root and all apps/packages
@@ -14,6 +15,10 @@ RUN npm install --include=dev
 # Generate Prisma client from the frontend's own schema
 WORKDIR /app/apps/frontend
 RUN npx prisma generate
+
+# Push schema to database (requires DATABASE_URL build arg)
+RUN npx prisma db push --accept-data-loss --skip-generate 2>&1 || echo "Warning: prisma db push failed (database may not be reachable at build time)"
+
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
@@ -37,17 +42,6 @@ COPY --from=builder /app/apps/frontend/public ./public
 
 # Copy generated Prisma client (output dir from schema)
 COPY --from=builder /app/apps/frontend/generated ./generated
-
-# Copy Prisma config and schema for CLI
-COPY --from=builder /app/apps/frontend/prisma.config.ts ./prisma.config.ts
-COPY --from=builder /app/apps/frontend/prisma ./prisma
-
-# Copy @prisma packages (adapter-pg, etc.)
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-
-# Copy prisma CLI and config from builder (avoids npm install in runner)
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Copy entrypoint
 COPY apps/frontend/docker-entrypoint.sh ./docker-entrypoint.sh

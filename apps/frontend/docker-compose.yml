@@ -21,6 +21,8 @@ services:
     build:
       context: ../..
       dockerfile: apps/frontend/Dockerfile
+      args:
+        DATABASE_URL: postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
     container_name: carelim-app
     depends_on:
       db:
