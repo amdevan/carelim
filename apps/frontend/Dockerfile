@@ -46,13 +46,8 @@ COPY --from=builder /app/apps/frontend/prisma ./prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# Install prisma CLI for runtime migrations
-RUN cd /tmp && mkdir prisma-install && cd prisma-install && \
-    npm init -y > /dev/null 2>&1 && \
-    npm install prisma@$(node -e "console.log(require('/app/node_modules/@prisma/client/package.json').version)") && \
-    cp -rn node_modules/* /app/node_modules/ && \
-    cp -r node_modules/.bin /app/node_modules/ && \
-    rm -rf /tmp/prisma-install
+# Install prisma CLI for runtime migrations (must match dev version)
+RUN npm install -g prisma@7.10.0
 
 # Copy entrypoint
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
