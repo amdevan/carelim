@@ -14,12 +14,9 @@ COPY packages/ packages/
 # Install all workspace dependencies
 RUN npm install --include=dev
 
-# Generate Prisma client
-RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
-
-# Build the frontend app
+# Generate Prisma client from the frontend's own schema (matches what the app imports)
 WORKDIR /app/apps/frontend
-RUN npx prisma generate --schema=../../packages/database/prisma/schema.prisma
+RUN npx prisma generate --schema=prisma/schema.prisma
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
@@ -41,8 +38,8 @@ COPY --from=builder /app/apps/frontend/.next/static ./.next/static
 # Copy public assets (images, favicon, etc.)
 COPY --from=builder /app/apps/frontend/public ./public
 
-# Copy Prisma schema and client
-COPY --from=builder /app/packages/database/prisma ./prisma
+# Copy Prisma schema (from frontend's own schema) and generated client
+COPY --from=builder /app/apps/frontend/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
