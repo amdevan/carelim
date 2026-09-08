@@ -2316,7 +2316,7 @@ model Organization {
   city          String?
   fullAddress   String?
   googleMapUrl  String?
-  logoUrl       String?
+  logoUrl       String?  @db.Text
   clinicId      String   @unique
   subdomain     String   @unique
   status        String   @default("active") // active | suspended | inactive
