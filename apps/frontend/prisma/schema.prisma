@@ -1352,6 +1352,7 @@ model Tenant {
   supportTickets SupportTicket[]
   auditLogs SaaSAuditLog[]
   users User[]
+  organizations Organization[]
 }
 model Plan {
   id String @id @default(cuid())
@@ -2020,6 +2021,8 @@ model CommissionSettlement {
 
 model Organization {
   id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
   name          String
   clinicType    String
   registrationNo String?
@@ -2029,7 +2032,7 @@ model Organization {
   city          String?
   fullAddress   String?
   googleMapUrl  String?
-  logoUrl       String?
+  logoUrl       String?  @db.Text
   clinicId      String   @unique
   subdomain     String   @unique
   status        String   @default("active") // active | suspended | inactive
