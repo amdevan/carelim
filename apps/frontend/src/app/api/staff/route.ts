@@ -21,13 +21,19 @@ export const POST = withTenant(async (req: NextRequest) => {
   const password = body.password
     ? await hashPassword(body.password)
     : await hashPassword("medcore123");
-  const staff = await db.staff.create({
-    data: {
-      ...body,
-      password,
-      joinDate: body.joinDate ? new Date(body.joinDate) : new Date(),
-    },
-  });
+  // Clean empty strings to null for nullable fields
+  const data: Record<string, unknown> = {
+    name: body.name,
+    email: body.email,
+    phone: body.phone || "",
+    role: body.role || "receptionist",
+    department: body.department || null,
+    designation: body.designation || null,
+    branchId: body.branchId || null,
+    password,
+    joinDate: body.joinDate ? new Date(body.joinDate) : new Date(),
+  };
+  const staff = await db.staff.create({ data });
   await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Staff", detail: `Added employee ${staff.name}` } });
   // Don't return password in response
   const { password: _, ...staffWithoutPassword } = staff as any;
