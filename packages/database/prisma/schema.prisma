@@ -24,6 +24,9 @@ model Department {
   createdAt   DateTime @default(now())
   doctors     Doctor[]
   appointments Appointment[]
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 model Doctor {
@@ -56,6 +59,9 @@ model Doctor {
   appointments   Appointment[]
   prescriptions  Prescription[]
   scheduleSlots  DoctorScheduleSlot[]
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 model DoctorScheduleSlot {
@@ -111,6 +117,9 @@ model Patient {
   radiologyStudies RadiologyStudy[]
   clinicalNotes   ClinicalNote[]
   labOrders       LabOrder[]
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 model Appointment {
@@ -134,6 +143,7 @@ model Appointment {
   fee         Float    @default(0)
   notes       String?
   createdAt   DateTime @default(now())
+  @@index([branchId])
 }
 
 model Prescription {
@@ -154,6 +164,7 @@ model Prescription {
   createdAt   DateTime @default(now())
   items       PrescriptionItem[]
   clinicalData String?
+  @@index([branchId])
 }
 
 model PrescriptionItem {
@@ -224,6 +235,9 @@ model Medicine {
   batches         MedicineBatch[]
   purchaseReturns PurchaseReturn[]
   salesReturns    SalesReturn[]
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 model MedicineBatch {
@@ -258,6 +272,7 @@ model Supplier {
   purchases Purchase[]
   medicines Medicine[]
   purchaseOrders PurchaseOrder[]
+  @@index([tenantId])
 }
 
 model Purchase {
@@ -347,6 +362,7 @@ model PharmacySale {
   status      String   @default("completed") // completed | returned | cancelled
   saleDate    DateTime @default(now())
   items       PharmacySaleItem[]
+  @@index([branchId])
 }
 
 model PharmacySaleItem {
@@ -408,6 +424,7 @@ model Invoice {
   paymentMethod String?
   date        DateTime @default(now())
   items       InvoiceItem[]
+  @@index([branchId])
 }
 
 model InvoiceItem {
@@ -437,6 +454,7 @@ model LabTest {
   fee         Float    @default(0)
   orderedAt   DateTime @default(now())
   completedAt DateTime?
+  @@index([branchId])
 }
 
 model Staff {
@@ -457,6 +475,9 @@ model Staff {
   attendance   StaffAttendance[]
   payrolls     Payroll[]
   leaveRequests LeaveRequest[]
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 model StaffAttendance {
@@ -479,6 +500,7 @@ model AuditLog {
   detail    String?
   ip        String?
   createdAt DateTime @default(now())
+  @@index([tenantId])
 }
 
 model Setting {
@@ -487,6 +509,7 @@ model Setting {
   tenant   Tenant? @relation(fields: [tenantId], references: [id])
   key      String @unique
   value    String
+  @@index([tenantId])
 }
 
 // ===== Multi-Tenant & RBAC =====
@@ -526,6 +549,7 @@ model Branch {
   pharmacySales   PharmacySale[]
   patientPayments PatientPayment[]
   clinicalNotes   ClinicalNote[]
+  @@index([tenantId])
 }
 
 model ClinicSettings {
@@ -608,6 +632,9 @@ model User {
   status        String   @default("active")
   lastLogin     DateTime?
   createdAt     DateTime @default(now())
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 // ===== Radiology =====
@@ -651,6 +678,9 @@ model RadiologyTest {
   // Audit
   createdBy     String?
   createdAt     DateTime @default(now())
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 model RadiologyModality {
@@ -717,6 +747,7 @@ model RadiologyStudy {
   createdAt       DateTime @default(now())
   images          DicomImage[]
   report          RadiologyReport?
+  @@index([tenantId])
 }
 
 model DicomImage {
@@ -764,6 +795,7 @@ model RadiologyTemplate {
   defaultImpression String?
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
+  @@index([tenantId])
 }
 
 model RadiologyAlert {
@@ -785,6 +817,7 @@ model RadiologyAlert {
   acknowledgedBy  String?
   acknowledgedAt  DateTime?
   createdAt       DateTime @default(now())
+  @@index([tenantId])
 }
 
 model RadiologySchedule {
@@ -802,6 +835,7 @@ model RadiologySchedule {
   doctorName  String?
   notes       String?
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
 // ===== Accounting & Finance =====
@@ -822,6 +856,9 @@ model Expense {
   createdBy   String?
   attachment  String?
   @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 model Payroll {
@@ -852,6 +889,7 @@ model Account {
   createdAt DateTime @default(now())
   journalItems JournalItem[]
   @@unique([tenantId, code])
+  @@index([tenantId])
 }
 
 model JournalEntry {
@@ -870,6 +908,7 @@ model JournalEntry {
   createdAt   DateTime @default(now())
   items       JournalItem[]
   @@unique([tenantId, entryNo])
+  @@index([tenantId])
 }
 
 model JournalItem {
@@ -900,6 +939,9 @@ model PatientPayment {
   notes         String?
   collectedBy   String?
   @@unique([tenantId, receiptNo])
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 model SupplierPayment {
@@ -915,6 +957,7 @@ model SupplierPayment {
   notes         String?
   paidBy        String?
   @@unique([tenantId, paymentNo])
+  @@index([tenantId])
 }
 
 model DoctorCommission {
@@ -933,6 +976,7 @@ model DoctorCommission {
   status      String   @default("pending") // pending | settled
   settledAt   DateTime?
   @@unique([tenantId, doctorId, month])
+  @@index([tenantId])
 }
 
 model InsuranceClaim {
@@ -950,6 +994,7 @@ model InsuranceClaim {
   approvedAt    DateTime?
   paidAt        DateTime?
   notes         String?
+  @@index([tenantId])
 }
 
 model CashTransaction {
@@ -963,6 +1008,7 @@ model CashTransaction {
   balanceAfter Float  @default(0)
   date        DateTime @default(now())
   performedBy String?
+  @@index([tenantId])
 }
 
 model BankTransaction {
@@ -978,6 +1024,7 @@ model BankTransaction {
   balanceAfter Float  @default(0)
   date        DateTime @default(now())
   performedBy String?
+  @@index([tenantId])
 }
 
 // ===== Clinical Extensions =====
@@ -993,6 +1040,9 @@ model ClinicalNote {
   type      String   @default("general") // general | soap | followup | nursing
   content   String
   createdAt DateTime @default(now())
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 model LeaveRequest {
@@ -1007,6 +1057,7 @@ model LeaveRequest {
   reason    String?
   status    String   @default("pending") // pending | approved | rejected
   createdAt DateTime @default(now())
+  @@index([tenantId])
 }
 
 // ============================================================
@@ -1028,6 +1079,7 @@ model LabDepartment {
   equipment   LabEquipment[]
   @@unique([tenantId, name])
   @@unique([tenantId, code])
+  @@index([tenantId])
 }
 
 model LabTestMaster {
@@ -1055,6 +1107,7 @@ model LabTestMaster {
   packageTests    LabPackageTest[]
   qcRecords       LabQualityControl[]
   @@unique([tenantId, code])
+  @@index([tenantId])
 }
 
 model LabTestParameter {
@@ -1097,6 +1150,7 @@ model LabPackage {
   createdAt   DateTime @default(now())
   tests       LabPackageTest[]
   @@unique([tenantId, code])
+  @@index([tenantId])
 }
 
 model LabPackageTest {
@@ -1132,6 +1186,7 @@ model LabOrder {
   items         LabOrderItem[]
   samples       LabSample[]
   results       LabResult[]
+  @@index([tenantId])
 }
 
 model LabOrderItem {
@@ -1233,6 +1288,7 @@ model LabQualityControl {
   performedAt DateTime @default(now())
   comments    String?
   @@unique([tenantId, code])
+  @@index([tenantId])
 }
 
 model LabEquipment {
@@ -1254,6 +1310,7 @@ model LabEquipment {
   status          String   @default("operational") // operational | maintenance | breakdown
   createdAt       DateTime @default(now())
   @@unique([tenantId, serialNumber])
+  @@index([tenantId])
 }
 
 model LabInventory {
@@ -1274,6 +1331,7 @@ model LabInventory {
   location    String?
   status      String   @default("active")
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
 model LabSupplier {
@@ -1287,6 +1345,7 @@ model LabSupplier {
   address   String?
   createdAt DateTime @default(now())
   inventory LabInventory[]
+  @@index([tenantId])
 }
 
 // ============================================================
@@ -1311,6 +1370,7 @@ model InventoryLocation {
   audits    StockAudit[]
   @@unique([tenantId, name])
   @@unique([tenantId, code])
+  @@index([tenantId])
 }
 
 model InventoryItem {
@@ -1356,6 +1416,7 @@ model InventoryItem {
   batches         InventoryBatch[]
   movements       InventoryMovement[]
   transferItems   StockTransferItem[]
+  @@index([tenantId])
 }
 
 model InventoryBatch {
@@ -1373,6 +1434,7 @@ model InventoryBatch {
   supplierName  String?
   receivedDate  DateTime @default(now())
   status        String   @default("active") // active | expired | quarantined
+  @@index([tenantId])
 }
 
 model InventoryStock {
@@ -1403,6 +1465,7 @@ model InventoryMovement {
   department  String?
   performedBy String?
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
 model StockTransfer {
@@ -1423,6 +1486,7 @@ model StockTransfer {
   approvedAt  DateTime?
   receivedAt  DateTime?
   items       StockTransferItem[]
+  @@index([tenantId])
 }
 
 model StockTransferItem {
@@ -1447,6 +1511,7 @@ model StockAudit {
   performedBy String?
   notes       String?
   items       StockAuditItem[]
+  @@index([tenantId])
 }
 
 model StockAuditItem {

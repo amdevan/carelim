@@ -24,6 +24,8 @@ model Department {
 
 model Doctor {
   id             String   @id @default(cuid())
+  branchId       String?
+  branch         Branch?  @relation(fields: [branchId], references: [id])
   name           String
   email          String   @unique
   password       String   @default("carelim123")
@@ -48,6 +50,7 @@ model Doctor {
   appointments   Appointment[]
   prescriptions  Prescription[]
   scheduleSlots  DoctorScheduleSlot[]
+  @@index([branchId])
 }
 
 model DoctorScheduleSlot {
@@ -373,6 +376,8 @@ model SalesReturn {
 
 model Invoice {
   id          String   @id @default(cuid())
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   invoiceNo   String   @unique
   patientId   String
   patient     Patient @relation(fields: [patientId], references: [id])
@@ -387,6 +392,7 @@ model Invoice {
   paymentMethod String?
   date        DateTime @default(now())
   items       InvoiceItem[]
+  @@index([branchId])
 }
 
 model InvoiceItem {
@@ -481,7 +487,10 @@ model Branch {
   status          String   @default("active")
   createdAt       DateTime @default(now())
   users           User[]
+  doctors         Doctor[]
+  invoices        Invoice[]
   prescriptions   Prescription[]
+  @@index([tenantId])
 }
 
 model ClinicSettings {
@@ -564,6 +573,9 @@ model User {
   status        String   @default("active")
   lastLogin     DateTime?
   createdAt     DateTime @default(now())
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([tenantId, branchId])
 }
 
 // ===== Radiology =====
@@ -2043,6 +2055,7 @@ model Organization {
   subscriptions Subscription[]
   modules       OrganizationModule[]
   settings      OrganizationSetting[]
+  @@index([tenantId])
 }
 
 model OrganizationModule {
