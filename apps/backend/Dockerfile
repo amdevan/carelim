@@ -11,8 +11,10 @@ COPY apps/backend/ apps/backend/
 # Install dependencies
 RUN npm install --include=dev
 
-# Generate Prisma client
-RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
+# Generate Prisma client from database schema (Prisma 7 — url is in prisma.config.ts)
+WORKDIR /app/packages/database
+RUN npx prisma generate
+WORKDIR /app
 
 # Build the backend
 WORKDIR /app/apps/backend
