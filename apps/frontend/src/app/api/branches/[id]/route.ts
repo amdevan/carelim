@@ -9,6 +9,7 @@ export const PUT = withTenant(async (req: NextRequest, { params }: { params: Pro
   return NextResponse.json(branch);
 });
 
+export const PATCH = PUT;
 export const DELETE = withTenant(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   await db.branch.delete({ where: { id } });
