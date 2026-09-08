@@ -42,6 +42,10 @@ export const POST = withTenant(async (req: NextRequest) => {
     return NextResponse.json(staffWithoutPassword, { status: 201 });
   } catch (error: any) {
     console.error("Staff create error:", error?.name, error?.message, error?.code);
+    if (error?.code === "P2002") {
+      const field = error?.meta?.target?.[0] || "field";
+      return NextResponse.json({ error: `A staff member with this ${field} already exists` }, { status: 409 });
+    }
     return NextResponse.json({ error: error?.message || "Failed to create staff" }, { status: 500 });
   }
 });
