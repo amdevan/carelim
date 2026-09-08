@@ -192,7 +192,7 @@ function RadiologyEquipment() {
                   <TableRow key={eq.id} className="table-row-hover">
                     <TableCell className="text-sm font-medium">{eq.name}</TableCell>
                     <TableCell>
-                      <Badge className="text-[9px] bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300">{eq.modality}</Badge>
+                      <Badge className="text-[9px] bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300">{eq.modality?.name || eq.modality}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge className={cn("text-[9px] capitalize", statusBadge(eq.status))}>{eq.status}</Badge>
