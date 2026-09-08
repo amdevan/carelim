@@ -338,6 +338,7 @@ function StaffFormDialog({
     department: staff?.department ?? "",
     designation: staff?.designation ?? "",
     branchId: (staff as any)?.branchId ?? defaultBranchId ?? "",
+    password: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -352,6 +353,7 @@ function StaffFormDialog({
       department: staff?.department ?? "",
       designation: staff?.designation ?? "",
       branchId: (staff as any)?.branchId ?? defaultBranchId ?? "",
+      password: "",
     });
   }
 
@@ -362,14 +364,29 @@ function StaffFormDialog({
       toast.error("Name and email are required");
       return;
     }
+    if (!isEdit && !form.password) {
+      toast.error("Password is required for new staff");
+      return;
+    }
+    if (!isEdit && form.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
     setSaving(true);
     try {
-      const payload = {
-        ...form,
+      const payload: Record<string, unknown> = {
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        role: form.role,
         department: form.department || null,
         designation: form.designation || null,
         branchId: form.branchId || defaultBranchId || null,
       };
+      // Only send password if provided
+      if (form.password) {
+        payload.password = form.password;
+      }
       const res = isEdit
         ? await fetchAPI(`/api/staff/${staff!.id}`, {
             method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -402,8 +419,12 @@ function StaffFormDialog({
             <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Jane Doe" />
           </div>
           <div className="space-y-1.5">
-            <Label>Email *</Label>
+            <Label>Email * (Login ID)</Label>
             <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="jane@your-clinic.com" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Password {isEdit ? "(leave blank to keep current)" : "*"}</Label>
+            <Input type="password" value={form.password} onChange={(e) => set("password", e.target.value)} placeholder={isEdit ? "••••••••" : "min 6 characters"} />
           </div>
           <div className="space-y-1.5">
             <Label>Phone</Label>
