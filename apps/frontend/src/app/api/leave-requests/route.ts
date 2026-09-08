@@ -5,7 +5,7 @@ import { withTenant } from "@/lib/with-tenant";
 export const GET = withTenant(async (req: NextRequest) => {
   try {
     const requests = await db.leaveRequest.findMany({
-      include: { staff: { select: { id: true, firstName: true, lastName: true, department: true } } },
+      include: { staff: { select: { id: true, name: true, email: true, department: true } } },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(requests);
