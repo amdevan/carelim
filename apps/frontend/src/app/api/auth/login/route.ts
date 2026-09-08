@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     // User model is NOT in TENANT_MODELS, so this query is unfiltered
-    const user = await rawDb.user.findUnique({
+    let user = await rawDb.user.findUnique({
       where: { email },
       include: {
         role: { include: { permissions: { include: { permission: true } } } },
@@ -30,14 +30,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // If not found as a User, try Staff table
+    let isStaff = false;
+    let staffRecord: any = null;
     if (!user) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
+      staffRecord = await rawDb.staff.findUnique({
+        where: { email },
+        include: { branch: { select: { tenantId: true } } },
+      });
+      if (!staffRecord) {
+        return NextResponse.json(
+          { error: "Invalid credentials" },
+          { status: 401 }
+        );
+      }
+      isStaff = true;
     }
 
-    const valid = await verifyPassword(password, user.password);
+    // Verify password
+    const targetUser = user || staffRecord;
+    const valid = await verifyPassword(password, targetUser.password);
     if (!valid) {
       return NextResponse.json(
         { error: "Invalid credentials" },
@@ -45,19 +57,74 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (user.status !== "active") {
+    if (targetUser.status !== "active") {
       return NextResponse.json(
         { error: "Account disabled" },
         { status: 403 }
       );
     }
 
-    // Resolve tenantId: first from branch, then from user's own tenantId, then from organization admin
-    let tenantId = user.branch?.tenantId || user.tenantId || null;
+    // Resolve tenantId and generate response based on User vs Staff
+    if (isStaff && staffRecord) {
+      // Staff login — simpler path, no auto-provisioning
+      const tenantId = staffRecord.branch?.tenantId || staffRecord.tenantId || null;
+
+      const token = signToken({
+        userId: staffRecord.id,
+        email: staffRecord.email,
+        role: staffRecord.role || "Staff",
+        type: "staff",
+        tenantId: tenantId || undefined,
+      });
+
+      await rawDb.staff.update({
+        where: { id: staffRecord.id },
+        data: { lastLogin: new Date() },
+      });
+
+      await rawDb.auditLog.create({
+        data: {
+          user: staffRecord.email,
+          action: "LOGIN",
+          module: "Auth",
+          detail: `Staff member ${staffRecord.name} logged in`,
+          ip: req.headers.get("x-forwarded-for") || "127.0.0.1",
+        },
+      });
+
+      const response = NextResponse.json({
+        token,
+        user: {
+          id: staffRecord.id,
+          name: staffRecord.name,
+          email: staffRecord.email,
+          role: staffRecord.role || "Staff",
+          branchId: staffRecord.branchId,
+          tenantId,
+          clinicName: null,
+          logoUrl: null,
+          primaryColor: null,
+          permissions: [],
+        },
+      });
+
+      response.cookies.set("carelim_token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60,
+        path: "/",
+      });
+
+      return response;
+    }
+
+    // User login — full path with auto-provisioning
+    let tenantId = user!.branch?.tenantId || user!.tenantId || null;
     if (!tenantId) {
       // Organization IS in TENANT_MODELS, but no tenant context → filtering skipped
       const org = await rawDb.organization.findFirst({
-        where: { adminUserId: user.id },
+        where: { adminUserId: user!.id },
         select: { tenantId: true, id: true, name: true },
       });
       tenantId = org?.tenantId || null;
@@ -70,9 +137,9 @@ export async function POST(req: NextRequest) {
         const tenant = await rawDb.tenant.create({
           data: {
             name: org.name,
-            ownerName: user.name,
-            ownerEmail: user.email,
-            ownerPhone: user.phone || "N/A",
+            ownerName: user!.name,
+            ownerEmail: user!.email,
+            ownerPhone: user!.phone || "N/A",
             status: "trial",
             trialEndsAt,
           },
@@ -89,12 +156,12 @@ export async function POST(req: NextRequest) {
             code: `MAIN-${makeId(6).toUpperCase()}`,
             tenantId: tenant.id,
             phone: null,
-            email: user.email,
+            email: user!.email,
           },
         });
 
         await rawDb.user.update({
-          where: { id: user.id },
+          where: { id: user!.id },
           data: { branchId: branch.id },
         });
 
@@ -108,10 +175,10 @@ export async function POST(req: NextRequest) {
 
         const tenant = await rawDb.tenant.create({
           data: {
-            name: user.name + "'s Clinic",
-            ownerName: user.name,
-            ownerEmail: user.email,
-            ownerPhone: user.phone || "N/A",
+            name: user!.name + "'s Clinic",
+            ownerName: user!.name,
+            ownerEmail: user!.email,
+            ownerPhone: user!.phone || "N/A",
             status: "trial",
             trialEndsAt,
           },
@@ -120,12 +187,12 @@ export async function POST(req: NextRequest) {
         const orgId = `CLINIC-${makeId(8).toUpperCase()}`;
         const org = await rawDb.organization.create({
           data: {
-            name: user.name + "'s Clinic",
+            name: user!.name + "'s Clinic",
             clinicType: "General",
             clinicId: orgId,
             subdomain: orgId.toLowerCase(),
             tenantId: tenant.id,
-            adminUserId: user.id,
+            adminUserId: user!.id,
           },
         });
 
@@ -134,12 +201,12 @@ export async function POST(req: NextRequest) {
             name: "Main Branch",
             code: `MAIN-${makeId(6).toUpperCase()}`,
             tenantId: tenant.id,
-            email: user.email,
+            email: user!.email,
           },
         });
 
         await rawDb.user.update({
-          where: { id: user.id },
+          where: { id: user!.id },
           data: { branchId: branch.id },
         });
 
@@ -149,21 +216,21 @@ export async function POST(req: NextRequest) {
 
     // Generate JWT with tenant context
     const token = signToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role?.name || "Administrator",
+      userId: user!.id,
+      email: user!.email,
+      role: user!.role?.name || "Administrator",
       type: "user",
       tenantId: tenantId || undefined,
     });
 
     await rawDb.user.update({
-      where: { id: user.id },
+      where: { id: user!.id },
       data: { lastLogin: new Date() },
     });
 
     await rawDb.auditLog.create({
       data: {
-        user: user.email,
+        user: user!.email,
         action: "LOGIN",
         module: "Auth",
         detail: "User logged in",
@@ -173,15 +240,15 @@ export async function POST(req: NextRequest) {
 
     // Re-fetch user to get updated branchId
     const updatedUser = await rawDb.user.findUnique({
-      where: { id: user.id },
+      where: { id: user!.id },
       select: { branchId: true },
     });
 
     // Fetch branch clinicType if user has a branch
     let branchClinicType: string | null = null;
-    if (updatedUser?.branchId || user.branchId) {
-      const branchId = updatedUser?.branchId || user.branchId;
-      const branchRec = await rawDb.branch.findUnique({ where: { id: branchId }, select: { clinicType: true } });
+    const resolvedBranchId = updatedUser?.branchId || user!.branchId;
+    if (resolvedBranchId) {
+      const branchRec = await rawDb.branch.findUnique({ where: { id: resolvedBranchId }, select: { clinicType: true } });
       branchClinicType = branchRec?.clinicType || "General";
     }
 
@@ -204,19 +271,19 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({
       token,
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role?.name || "Administrator",
-        roleId: user.roleId,
-        branchId: updatedUser?.branchId || user.branchId,
+        id: user!.id,
+        name: user!.name,
+        email: user!.email,
+        role: user!.role?.name || "Administrator",
+        roleId: user!.roleId,
+        branchId: updatedUser?.branchId || user!.branchId,
         branchClinicType,
         tenantId: tenantId || null,
         clinicName,
         logoUrl,
         primaryColor,
         permissions:
-          user.role?.permissions.map(
+          user!.role?.permissions.map(
             (rp) => `${rp.permission.module}.${rp.permission.action}`
           ) || [],
       },
