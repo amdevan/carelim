@@ -3,6 +3,85 @@ import { rawDb } from "@/lib/db";
 import { verifyPassword, signToken } from "@/lib/auth";
 import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
+// Role-to-permissions mapping for staff members
+function getStaffPermissions(role: string | null): string[] {
+  const r = (role || "").toLowerCase();
+
+  // Modules: Dashboard, Patient, Doctor, Appointment, Prescription, EMR,
+  // Pharmacy, Laboratory, Radiology, Billing, Inventory, Reports, HR, Settings, Audit
+
+  const all = [
+    "Dashboard.view", "Patient.view", "Patient.create", "Patient.edit",
+    "Doctor.view", "Doctor.create", "Appointment.view", "Appointment.create",
+    "Prescription.view", "Prescription.create", "EMR.view", "EMR.create",
+    "Pharmacy.view", "Pharmacy.create", "Laboratory.view", "Laboratory.create",
+    "Radiology.view", "Radiology.create", "Billing.view", "Billing.create",
+    "Inventory.view", "Inventory.create", "Reports.view", "HR.view", "HR.create",
+    "Settings.view", "Settings.create", "Settings.edit", "Audit.view",
+  ];
+
+  switch (r) {
+    case "admin":
+    case "manager":
+      return all; // Full access
+
+    case "doctor":
+      return [
+        "Dashboard.view", "Patient.view", "Patient.create", "Patient.edit",
+        "Doctor.view", "Appointment.view", "Appointment.create",
+        "Prescription.view", "Prescription.create",
+        "EMR.view", "EMR.create",
+        "Laboratory.view", "Radiology.view",
+        "Billing.view", "Reports.view",
+      ];
+
+    case "nurse":
+      return [
+        "Dashboard.view", "Patient.view", "Patient.create", "Patient.edit",
+        "Doctor.view", "Appointment.view", "Appointment.create",
+        "Prescription.view", "EMR.view", "EMR.create",
+        "Laboratory.view", "Radiology.view",
+      ];
+
+    case "receptionist":
+      return [
+        "Dashboard.view", "Patient.view", "Patient.create", "Patient.edit",
+        "Doctor.view", "Appointment.view", "Appointment.create",
+        "Billing.view", "Billing.create",
+        "Prescription.view",
+      ];
+
+    case "pharmacist":
+      return [
+        "Dashboard.view", "Patient.view", "Doctor.view",
+        "Pharmacy.view", "Pharmacy.create",
+        "Inventory.view", "Inventory.create",
+        "Billing.view", "Billing.create",
+        "Prescription.view",
+      ];
+
+    case "accountant":
+      return [
+        "Dashboard.view",
+        "Billing.view", "Billing.create",
+        "Inventory.view",
+        "Reports.view", "Reports.view",
+      ];
+
+    case "lab":
+      return [
+        "Dashboard.view", "Patient.view", "Doctor.view",
+        "Laboratory.view", "Laboratory.create",
+        "Radiology.view", "Radiology.create",
+        "EMR.view",
+      ];
+
+    default:
+      // Unknown role — dashboard only
+      return ["Dashboard.view"];
+  }
+}
+
 function makeId(len = 8) {
   return Math.random().toString(36).substring(2, 2 + len);
 }
@@ -92,6 +171,9 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Generate permissions based on staff role
+      const permissions = getStaffPermissions(staffRecord.role);
+
       const response = NextResponse.json({
         token,
         user: {
@@ -104,7 +186,7 @@ export async function POST(req: NextRequest) {
           clinicName: null,
           logoUrl: null,
           primaryColor: null,
-          permissions: [],
+          permissions,
         },
       });
 
