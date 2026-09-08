@@ -52,6 +52,16 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── 1. Create Tenant ────────────────────────────────────────
+    const existingTenant = await rawDb.tenant.findUnique({
+      where: { ownerEmail: basicInfo.adminEmailAddress },
+    });
+    if (existingTenant) {
+      return NextResponse.json(
+        { error: "An organization already exists for this email address." },
+        { status: 400 }
+      );
+    }
+
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
@@ -265,8 +275,15 @@ export async function POST(req: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Onboarding error:", error);
+    if (error?.code === "P2002") {
+      const target = error?.meta?.target?.join(", ") || "unique field";
+      return NextResponse.json(
+        { error: `A record with the same ${target} already exists.` },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: "Failed to complete onboarding. Please try again." },
       { status: 500 }
