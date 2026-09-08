@@ -8,7 +8,7 @@ export const GET = withTenant(async (req: NextRequest) => {
   const branchId = searchParams.get("branchId");
   const branchFilter = branchId ? { branchId } : {};
   const [staff, departments, prescriptions] = await Promise.all([
-    db.staff.findMany({ where: branchFilter, select: { id: true, tenantId: true, branchId: true, name: true, email: true, phone: true, role: true, department: true, designation: true, salary: true, joinDate: true, status: true, lastLogin: true, attendance: { orderBy: { date: "desc" }, take: 7 }, leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 } }, orderBy: { name: "asc" } }),
+    db.staff.findMany({ where: branchFilter, select: { id: true, tenantId: true, branchId: true, name: true, email: true, phone: true, role: true, department: true, designation: true, salary: true, joinDate: true, status: true, lastLogin: true, staffBranches: { select: { branchId: true, branch: { select: { id: true, name: true } } } }, attendance: { orderBy: { date: "desc" }, take: 7 }, leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 } }, orderBy: { name: "asc" } }),
     db.department.findMany({ where: branchFilter, include: { _count: { select: { doctors: true } } } }),
     db.prescription.findMany({ where: branchFilter, include: { patient: true, doctor: { include: { department: true } }, items: true }, orderBy: { createdAt: "desc" }, take: 50 }),
   ]);
@@ -23,6 +23,10 @@ export const POST = withTenant(async (req: NextRequest) => {
       ? await hashPassword(body.password)
       : await hashPassword("medcore123");
     // Clean empty strings to null for nullable fields
+    const branchIds: string[] = body.branchIds || (body.branchId ? [body.branchId] : []);
+    const primaryBranchId = branchIds[0] || body.branchId || null;
+
+    // Create staff member (without nested creates to allow branchId scalar)
     const staff = await db.staff.create({
       data: {
         name: body.name,
@@ -31,14 +35,27 @@ export const POST = withTenant(async (req: NextRequest) => {
         role: body.role || "receptionist",
         department: body.department || null,
         designation: body.designation || null,
-        branchId: body.branchId || null,
+        branchId: primaryBranchId,
         password: hashedPassword,
         joinDate: body.joinDate ? new Date(body.joinDate) : new Date(),
       },
     });
+
+    // Create multi-branch assignments separately
+    if (branchIds.length > 0) {
+      await db.staffBranch.createMany({
+        data: branchIds.map((bid: string) => ({ staffId: staff.id, branchId: bid })),
+      });
+    }
+
+    // Fetch with branches for response
+    const staffWithBranches = await db.staff.findUnique({
+      where: { id: staff.id },
+      include: { staffBranches: { select: { branchId: true, branch: { select: { id: true, name: true } } } } },
+    });
     await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Staff", detail: `Added employee ${staff.name}` } });
     // Don't return password in response
-    const { password: _, ...staffWithoutPassword } = staff as any;
+    const { password: _, ...staffWithoutPassword } = staffWithBranches as any;
     return NextResponse.json(staffWithoutPassword, { status: 201 });
   } catch (error: any) {
     console.error("Staff create error:", error?.name, error?.message, error?.code);
