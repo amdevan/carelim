@@ -95,6 +95,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     currency: "NPR",
     billingCycle: "custom",
     duration: "custom pricing",
+    customPrice: true,
     features: [
       { text: "Unlimited Everything", included: true },
       { text: "Dedicated Server", included: true },
