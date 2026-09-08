@@ -16,7 +16,7 @@ export interface TokenPayload {
   userId: string;
   email: string;
   role: string;
-  type: "user" | "admin" | "doctor" | "patient";
+  type: "user" | "admin" | "doctor" | "patient" | "staff";
   tenantId?: string;
 }
 

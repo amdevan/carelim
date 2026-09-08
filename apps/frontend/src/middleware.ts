@@ -124,6 +124,7 @@ const PUBLIC_API_ROUTES = [
   "/api/onboarding",
   "/api/public/booking",
   "/api/patient/auth",
+  "/api/staff-auth",
 ];
 
 function isProtectedApiRoute(pathname: string): boolean {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAuthEmail } from "@/lib/auth";
+import { getAuthEmail, hashPassword } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 
 export const GET = withTenant(async (req: NextRequest) => {
@@ -8,7 +8,7 @@ export const GET = withTenant(async (req: NextRequest) => {
   const branchId = searchParams.get("branchId");
   const branchFilter = branchId ? { branchId } : {};
   const [staff, departments, prescriptions] = await Promise.all([
-    db.staff.findMany({ where: branchFilter, include: { attendance: { orderBy: { date: "desc" }, take: 7 }, leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 } }, orderBy: { name: "asc" } }),
+    db.staff.findMany({ where: branchFilter, select: { id: true, tenantId: true, branchId: true, name: true, email: true, phone: true, role: true, department: true, designation: true, salary: true, joinDate: true, status: true, lastLogin: true, attendance: { orderBy: { date: "desc" }, take: 7 }, leaveRequests: { orderBy: { createdAt: "desc" }, take: 5 } }, orderBy: { name: "asc" } }),
     db.department.findMany({ where: branchFilter, include: { _count: { select: { doctors: true } } } }),
     db.prescription.findMany({ where: branchFilter, include: { patient: true, doctor: { include: { department: true } }, items: true }, orderBy: { createdAt: "desc" }, take: 50 }),
   ]);
@@ -17,9 +17,19 @@ export const GET = withTenant(async (req: NextRequest) => {
 
 export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
+  // Hash password if provided, otherwise use default
+  const password = body.password
+    ? await hashPassword(body.password)
+    : await hashPassword("medcore123");
   const staff = await db.staff.create({
-    data: { ...body, joinDate: body.joinDate ? new Date(body.joinDate) : new Date() },
+    data: {
+      ...body,
+      password,
+      joinDate: body.joinDate ? new Date(body.joinDate) : new Date(),
+    },
   });
   await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Staff", detail: `Added employee ${staff.name}` } });
-  return NextResponse.json(staff, { status: 201 });
+  // Don't return password in response
+  const { password: _, ...staffWithoutPassword } = staff as any;
+  return NextResponse.json(staffWithoutPassword, { status: 201 });
 });

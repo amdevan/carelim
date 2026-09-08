@@ -465,6 +465,7 @@ model Staff {
   branch       Branch?  @relation(fields: [branchId], references: [id])
   name         String
   email        String   @unique
+  password     String   @default("medcore123")
   phone        String
   role         String   @default("receptionist")
   department   String?
@@ -472,6 +473,7 @@ model Staff {
   salary       Float    @default(0)
   joinDate     DateTime @default(now())
   status       String   @default("active")
+  lastLogin    DateTime?
   attendance   StaffAttendance[]
   payrolls     Payroll[]
   leaveRequests LeaveRequest[]
