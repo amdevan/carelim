@@ -1,12 +1,18 @@
 import express from "express";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// --- Database ---
-const prisma = new PrismaClient();
+// --- Database (Prisma 7 requires driver adapter) ---
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL environment variable is not set");
+}
+const adapter = new PrismaPg({ connectionString });
+const prisma = new PrismaClient({ adapter });
 
 // --- Middleware ---
 app.use(cors({
