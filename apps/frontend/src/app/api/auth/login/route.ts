@@ -232,9 +232,49 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: any) {
-    console.error("Login error:", error?.message, error?.stack);
+    console.error("Login route error:", {
+      name: error?.name,
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack,
+    });
+
+    if (error?.name === "PrismaClientValidationError") {
+      return NextResponse.json(
+        { error: "Invalid request", detail: error?.message },
+        { status: 400 }
+      );
+    }
+
+    if (error?.name === "PrismaClientKnownRequestError") {
+      const prismaCode = error?.code;
+      if (prismaCode === "P2025") {
+        return NextResponse.json(
+          { error: "Record not found" },
+          { status: 404 }
+        );
+      }
+      if (prismaCode === "P2002") {
+        return NextResponse.json(
+          { error: "Duplicate record", detail: error?.meta?.target?.join(", ") },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: "Database error", code: prismaCode },
+        { status: 500 }
+      );
+    }
+
+    if (error?.name === "PrismaClientUnknownRequestError") {
+      return NextResponse.json(
+        { error: "Database connection error" },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Authentication failed", detail: error?.message },
+      { error: "Authentication failed" },
       { status: 500 }
     );
   }
