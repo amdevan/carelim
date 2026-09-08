@@ -16,26 +16,32 @@ export const GET = withTenant(async (req: NextRequest) => {
 });
 
 export const POST = withTenant(async (req: NextRequest) => {
-  const body = await req.json();
-  // Hash password if provided, otherwise use default
-  const password = body.password
-    ? await hashPassword(body.password)
-    : await hashPassword("medcore123");
-  // Clean empty strings to null for nullable fields
-  const data: Record<string, unknown> = {
-    name: body.name,
-    email: body.email,
-    phone: body.phone || "",
-    role: body.role || "receptionist",
-    department: body.department || null,
-    designation: body.designation || null,
-    branchId: body.branchId || null,
-    password,
-    joinDate: body.joinDate ? new Date(body.joinDate) : new Date(),
-  };
-  const staff = await db.staff.create({ data });
-  await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Staff", detail: `Added employee ${staff.name}` } });
-  // Don't return password in response
-  const { password: _, ...staffWithoutPassword } = staff as any;
-  return NextResponse.json(staffWithoutPassword, { status: 201 });
+  try {
+    const body = await req.json();
+    // Hash password if provided, otherwise use default
+    const hashedPassword = body.password
+      ? await hashPassword(body.password)
+      : await hashPassword("medcore123");
+    // Clean empty strings to null for nullable fields
+    const staff = await db.staff.create({
+      data: {
+        name: body.name,
+        email: body.email,
+        phone: body.phone || "",
+        role: body.role || "receptionist",
+        department: body.department || null,
+        designation: body.designation || null,
+        branchId: body.branchId || null,
+        password: hashedPassword,
+        joinDate: body.joinDate ? new Date(body.joinDate) : new Date(),
+      },
+    });
+    await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Staff", detail: `Added employee ${staff.name}` } });
+    // Don't return password in response
+    const { password: _, ...staffWithoutPassword } = staff as any;
+    return NextResponse.json(staffWithoutPassword, { status: 201 });
+  } catch (error: any) {
+    console.error("Staff create error:", error?.name, error?.message, error?.code);
+    return NextResponse.json({ error: error?.message || "Failed to create staff" }, { status: 500 });
+  }
 });

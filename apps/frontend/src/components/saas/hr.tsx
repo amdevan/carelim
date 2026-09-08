@@ -81,7 +81,8 @@ export function HRStaff(_props: { filter?: string }) {
       resetForm();
       refreshFn();
     } else {
-      toast.error("Failed to save staff");
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Failed to save staff");
     }
   };
 

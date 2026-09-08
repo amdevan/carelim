@@ -377,11 +377,14 @@ function StaffFormDialog({
         : await fetchAPI("/api/staff", {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
           });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed");
+      }
       toast.success(isEdit ? "Staff member updated" : "Staff member added");
       onSaved();
-    } catch {
-      toast.error(isEdit ? "Failed to update staff" : "Failed to add staff");
+    } catch (e: any) {
+      toast.error(e?.message || (isEdit ? "Failed to update staff" : "Failed to add staff"));
     } finally {
       setSaving(false);
     }
