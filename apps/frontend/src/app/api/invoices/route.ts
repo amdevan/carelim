@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import { getAuthEmail } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/api-guard";
-import { nanoid } from "nanoid";
 
 export const GET = withTenant(async (req: NextRequest) => {
   try {
@@ -31,12 +30,13 @@ export const POST = withTenant(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const count = await db.invoice.count();
+    const nextNum = (count + 1).toString().padStart(5, "0");
     const { items, ...data } = body;
     const invoice = await db.invoice.create({
       data: {
         ...data,
         date: new Date(),
-        invoiceNo: `INV-${nanoid(8).toUpperCase()}`,
+        invoiceNo: `INV-${nextNum}`,
         items: { create: items || [] },
       },
       include: { items: true, patient: true },
