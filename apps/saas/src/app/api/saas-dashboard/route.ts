@@ -86,6 +86,22 @@ export async function GET() {
     const churnRate = totalTenants > 0 ? Math.round((suspendedTenants / totalTenants) * 100 * 10) / 10 : 0;
     const monthlyRevenue = revenueResult._sum.total ?? 0;
 
+    // Aggregate tickets into summary
+    const ticketSummary = {
+      open: tickets.filter((t: any) => t.status === "open").length,
+      assigned: tickets.filter((t: any) => t.status === "assigned").length,
+      resolved: tickets.filter((t: any) => t.status === "resolved").length,
+      total: tickets.length,
+    };
+
+    // Aggregate leads into summary
+    const leadSummary = {
+      total: leads.length,
+      converted: leads.filter((l: any) => l.status === "converted").length,
+      trial: leads.filter((l: any) => l.status === "trial").length,
+      demo: leads.filter((l: any) => l.status === "demo").length,
+    };
+
     return NextResponse.json({
       kpis: {
         totalClinics: totalTenants,
@@ -105,8 +121,8 @@ export async function GET() {
       tenantGrowth,
       recentActivity,
       tenants: recentTenants,
-      tickets,
-      leads,
+      tickets: ticketSummary,
+      leads: leadSummary,
     });
   } catch (error) {
     console.error("saas-dashboard error:", error);
