@@ -199,16 +199,25 @@ export function PublicBookingView() {
   /* Create link */
   const handleCreateLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!linkForm.doctorName && !linkForm.department) {
-      toast.error("Provide a doctor name or department");
+    if (!linkForm.generateAllBranches && !linkForm.doctorName && !linkForm.doctorId && !linkForm.department) {
+      toast.error("Provide a doctor name, select a doctor, or enter a department");
       return;
     }
     setSavingLink(true);
     try {
+      // Build clean payload — only include non-empty values
+      const payload: any = {};
+      if (linkForm.generateAllBranches) payload.generateAllBranches = true;
+      if (linkForm.branchId) payload.branchId = linkForm.branchId;
+      if (linkForm.doctorId) payload.doctorId = linkForm.doctorId;
+      if (linkForm.doctorName) payload.doctorName = linkForm.doctorName;
+      if (linkForm.department) payload.department = linkForm.department;
+      if (linkForm.label) payload.label = linkForm.label;
+
       const res = await fetchAPI("/api/public-bookings/links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(linkForm),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Failed to create link");
       toast.success("Booking link created");

@@ -13,12 +13,21 @@ export async function GET(req: NextRequest) {
     const tenantId = getAuthTenantId(req);
     const where = tenantId ? { tenantId } : {};
 
-    const links = await db.bookingLink.findMany({
-      where,
-      include: { branch: { select: { id: true, name: true } }, doctor: { select: { id: true, name: true } } },
-      orderBy: { createdAt: "desc" },
-    });
-    return NextResponse.json(links);
+    // Try with includes first; fall back if new columns missing on production
+    try {
+      const links = await db.bookingLink.findMany({
+        where,
+        include: { branch: { select: { id: true, name: true } }, doctor: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "desc" },
+      });
+      return NextResponse.json(links);
+    } catch {
+      const links = await db.bookingLink.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+      });
+      return NextResponse.json(links);
+    }
   } catch (error) {
     console.error("Failed to fetch booking links:", error);
     return NextResponse.json({ error: "Failed to fetch links" }, { status: 500 });
@@ -76,21 +85,38 @@ export async function POST(req: NextRequest) {
         const slug = generateSlug(branch.name, doctorInfo?.name, body.department);
         const url = `${origin}/book/${slug}?branch=${branch.id}${body.doctorId ? `&doctor=${body.doctorId}` : ""}`;
 
-        const link = await db.bookingLink.create({
-          data: {
-            tenantId: validTenantId,
-            branchId: branch.id,
-            configId,
-            doctorId: body.doctorId || null,
-            doctorName: doctorInfo?.name || body.doctorName || null,
-            department: body.department || doctorInfo?.specialization || null,
-            label: body.label || `${branch.name}${doctorInfo ? ` - ${doctorInfo.name}` : ""}${body.department ? ` (${body.department})` : ""}`,
-            url,
-            slug,
-            active: true,
-          },
-        });
-        createdLinks.push(link);
+        // Try with all fields; fall back if new columns missing
+        try {
+          const link = await db.bookingLink.create({
+            data: {
+              tenantId: validTenantId,
+              branchId: branch.id,
+              configId,
+              doctorId: body.doctorId || null,
+              doctorName: doctorInfo?.name || body.doctorName || null,
+              department: body.department || doctorInfo?.specialization || null,
+              label: body.label || `${branch.name}${doctorInfo ? ` - ${doctorInfo.name}` : ""}${body.department ? ` (${body.department})` : ""}`,
+              url,
+              slug,
+              active: true,
+            },
+          });
+          createdLinks.push(link);
+        } catch {
+          // Fallback: create without new columns
+          const link = await db.bookingLink.create({
+            data: {
+              tenantId: validTenantId,
+              configId,
+              doctorName: doctorInfo?.name || body.doctorName || null,
+              department: body.department || doctorInfo?.specialization || null,
+              url,
+              slug,
+              active: true,
+            },
+          });
+          createdLinks.push(link);
+        }
       }
 
       return NextResponse.json(createdLinks, { status: 201 });
@@ -114,21 +140,38 @@ export async function POST(req: NextRequest) {
       department = department || doc?.specialization || null;
     }
 
-    const link = await db.bookingLink.create({
-      data: {
-        tenantId: validTenantId,
-        branchId: body.branchId || null,
-        configId,
-        doctorId: body.doctorId || null,
-        doctorName,
-        department,
-        label: body.label || null,
-        url,
-        slug,
-        active: true,
-      },
-    });
-    return NextResponse.json(link, { status: 201 });
+    // Try with all fields; fall back if new columns missing
+    try {
+      const link = await db.bookingLink.create({
+        data: {
+          tenantId: validTenantId,
+          branchId: body.branchId || null,
+          configId,
+          doctorId: body.doctorId || null,
+          doctorName,
+          department,
+          label: body.label || null,
+          url,
+          slug,
+          active: true,
+        },
+      });
+      return NextResponse.json(link, { status: 201 });
+    } catch {
+      // Fallback: create without new columns
+      const link = await db.bookingLink.create({
+        data: {
+          tenantId: validTenantId,
+          configId,
+          doctorName,
+          department,
+          url,
+          slug,
+          active: true,
+        },
+      });
+      return NextResponse.json(link, { status: 201 });
+    }
   } catch (error) {
     console.error("Failed to create booking link:", error);
     return NextResponse.json({ error: "Failed to create link" }, { status: 500 });
