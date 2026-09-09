@@ -5,26 +5,43 @@ import { rawDb as db } from "@/lib/db";
  * GET /api/public/booking
  *
  * Query params:
- *   ?slug=xxx             → resolve tenant from booking link slug
- *   ?action=departments   → list active departments (scoped to tenant if slug provided)
+ *   ?slug=xxx             → resolve tenant/branch/doctor from booking link slug
+ *   ?branch=branchId      → override branch filter
+ *   ?doctor=doctorId      → pre-select a doctor
+ *   ?action=departments   → list active departments
  *   ?action=doctors&departmentId=X → doctors in a department
  *   ?action=slots&doctorId=X&date=YYYY-MM-DD → available time slots
  */
 
-/** Resolve tenantId from a booking link slug */
-async function resolveTenantFromSlug(slug: string | null): Promise<{ tenantId: string | null; branchId: string | null }> {
-  if (!slug) return { tenantId: null, branchId: null };
+interface LinkContext {
+  tenantId: string | null;
+  branchId: string | null;
+  doctorId: string | null;
+}
+
+/** Resolve tenant, branch, and doctor from a booking link slug */
+async function resolveContext(slug: string | null): Promise<LinkContext> {
+  const result: LinkContext = { tenantId: null, branchId: null, doctorId: null };
+  if (!slug) return result;
   try {
     const link = await db.bookingLink.findUnique({
       where: { slug },
-      select: { tenantId: true, config: { select: { tenantId: true } } },
+      select: {
+        tenantId: true,
+        branchId: true,
+        doctorId: true,
+        config: { select: { tenantId: true } },
+      },
     });
-    if (link?.tenantId) return { tenantId: link.tenantId, branchId: null };
-    if (link?.config?.tenantId) return { tenantId: link.config.tenantId, branchId: null };
+    if (link) {
+      result.tenantId = link.tenantId || link.config?.tenantId || null;
+      result.branchId = link.branchId || null;
+      result.doctorId = link.doctorId || null;
+    }
   } catch {
     // BookingLink table might not exist yet
   }
-  return { tenantId: null, branchId: null };
+  return result;
 }
 
 export async function GET(req: NextRequest) {
@@ -32,12 +49,17 @@ export async function GET(req: NextRequest) {
   const action = searchParams.get("action") || "departments";
   const slug = searchParams.get("slug");
 
-  try {
-    const { tenantId } = await resolveTenantFromSlug(slug);
+  // Resolve context from slug, allow query param overrides
+  const linkCtx = await resolveContext(slug);
+  const branchId = searchParams.get("branch") || linkCtx.branchId;
+  const preselectedDoctorId = searchParams.get("doctor") || linkCtx.doctorId;
+  const tenantId = linkCtx.tenantId;
 
+  try {
     if (action === "departments") {
       const where: any = { isActive: true };
       if (tenantId) where.tenantId = tenantId;
+      if (branchId) where.branchId = branchId;
 
       const departments = await db.department.findMany({
         where,
@@ -58,11 +80,10 @@ export async function GET(req: NextRequest) {
 
     if (action === "doctors") {
       const departmentId = searchParams.get("departmentId");
-      if (!departmentId) {
-        return NextResponse.json({ error: "departmentId is required" }, { status: 400 });
-      }
-      const where: any = { departmentId, status: "active" };
+      const where: any = { status: "active" };
       if (tenantId) where.tenantId = tenantId;
+      if (branchId) where.branchId = branchId;
+      if (departmentId) where.departmentId = departmentId;
 
       const doctors = await db.doctor.findMany({
         where,
@@ -88,7 +109,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === "slots") {
-      const doctorId = searchParams.get("doctorId");
+      const doctorId = searchParams.get("doctorId") || preselectedDoctorId;
       const dateStr = searchParams.get("date");
       if (!doctorId || !dateStr) {
         return NextResponse.json({ error: "doctorId and date are required" }, { status: 400 });
@@ -147,6 +168,27 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ slots: slotsWithAvailability, dayName });
     }
 
+    // Default: return context info for the booking page
+    if (slug) {
+      // Return link context so the booking page knows what to pre-select
+      let preselectedDoctor = null;
+      if (preselectedDoctorId) {
+        try {
+          preselectedDoctor = await db.doctor.findUnique({
+            where: { id: preselectedDoctorId },
+            select: { id: true, name: true, specialization: true, consultationFee: true, departmentId: true },
+          });
+        } catch {
+          // Doctor might not exist
+        }
+      }
+      return NextResponse.json({
+        tenantId,
+        branchId,
+        preselectedDoctor,
+      });
+    }
+
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (error) {
     console.error("Public booking API error:", error);
@@ -157,7 +199,7 @@ export async function GET(req: NextRequest) {
 /**
  * POST /api/public/booking
  * Creates a patient (if needed) and books an appointment.
- * Accepts optional linkSlug in body to resolve tenant context.
+ * Accepts optional linkSlug, branchId, doctorId in body.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -171,8 +213,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve tenant from link slug
-    const { tenantId } = await resolveTenantFromSlug(linkSlug || null);
+    // Resolve tenant/branch from link slug
+    const linkCtx = await resolveContext(linkSlug || null);
+    const tenantId = linkCtx.tenantId;
 
     // Find or create patient (scope by phone + tenant)
     const patientWhere: any = { phone: patientPhone };
@@ -217,8 +260,10 @@ export async function POST(req: NextRequest) {
       status: "scheduled",
       tokenNo: count + 1,
     };
-    // Scope appointment to doctor's branch if available
-    if (doctor?.branchId) {
+    // Use link branch if available, otherwise doctor's branch
+    if (linkCtx.branchId) {
+      appointmentData.branchId = linkCtx.branchId;
+    } else if (doctor?.branchId) {
       appointmentData.branchId = doctor.branchId;
     }
 

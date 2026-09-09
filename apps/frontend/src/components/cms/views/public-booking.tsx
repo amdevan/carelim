@@ -24,10 +24,9 @@ import {
 } from "@/components/ui/select";
 import {
   Globe, Copy, ExternalLink, Settings, Eye, Link, Calendar, Check,
-  Trash2, Plus,
+  Trash2, Plus, MapPin, User, Building2, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
-import { DoctorSearch } from "@/components/ui/doctor-search";
 
 /* ---------- Types ---------- */
 
@@ -46,12 +45,17 @@ interface BookingConfig {
 interface BookingLink {
   id: string;
   configId: string;
+  branchId: string | null;
+  doctorId: string | null;
   doctorName: string | null;
   department: string | null;
+  label: string | null;
   url: string;
   slug: string;
   active: boolean;
   createdAt: string;
+  branch?: { id: string; name: string } | null;
+  doctor?: { id: string; name: string } | null;
 }
 
 interface PublicBooking {
@@ -119,6 +123,12 @@ export function PublicBookingView() {
   const { data: bookings } = useFetch<PublicBooking[]>(
     refresh ? `/api/public-bookings?_r=${refresh}` : "/api/public-bookings"
   );
+  const { data: branches } = useFetch<{ id: string; name: string }[]>(
+    "/api/branches"
+  );
+  const { data: doctors } = useFetch<{ id: string; name: string; specialization: string }[]>(
+    "/api/doctors"
+  );
 
   const [tab, setTab] = useState("settings");
   const [configForm, setConfigForm] = useState({
@@ -130,7 +140,14 @@ export function PublicBookingView() {
   });
   const [savingConfig, setSavingConfig] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [linkForm, setLinkForm] = useState({ doctorName: "", department: "" });
+  const [linkForm, setLinkForm] = useState({
+    doctorName: "",
+    department: "",
+    branchId: "",
+    doctorId: "",
+    label: "",
+    generateAllBranches: false,
+  });
   const [savingLink, setSavingLink] = useState(false);
   const [deleteLink, setDeleteLink] = useState<BookingLink | null>(null);
 
@@ -196,7 +213,7 @@ export function PublicBookingView() {
       if (!res.ok) throw new Error("Failed to create link");
       toast.success("Booking link created");
       setLinkDialogOpen(false);
-      setLinkForm({ doctorName: "", department: "" });
+      setLinkForm({ doctorName: "", department: "", branchId: "", doctorId: "", label: "", generateAllBranches: false });
       doRefresh();
     } catch {
       toast.error("Failed to create booking link");
@@ -456,10 +473,17 @@ export function PublicBookingView() {
                     {(links || []).map((link) => (
                       <TableRow key={link.id}>
                         <TableCell>
-                          <div className="text-sm font-medium">{link.doctorName || "—"}</div>
-                          {link.department && (
-                            <div className="text-[11px] text-muted-foreground">{link.department}</div>
-                          )}
+                          <div className="text-sm font-medium">{link.label || link.doctorName || "—"}</div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {link.branch && (
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                <MapPin className="w-2.5 h-2.5" /> {link.branch.name}
+                              </span>
+                            )}
+                            {link.department && (
+                              <span className="text-[10px] text-muted-foreground">{link.department}</span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           <div className="flex items-center gap-1.5">
@@ -581,33 +605,117 @@ export function PublicBookingView() {
 
       {/* Create Link Dialog */}
       <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Link className="w-4 h-4 text-violet-600" /> Create Booking Link
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreateLink} className="space-y-3">
+            {/* Generate All Branches Toggle */}
+            {(branches || []).length > 1 && (
+              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-violet-600" />
+                  <div>
+                    <p className="text-sm font-medium">Generate for All Branches</p>
+                    <p className="text-[10px] text-muted-foreground">Create one link per branch automatically</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={linkForm.generateAllBranches}
+                  onCheckedChange={(v) => setLinkForm((f) => ({ ...f, generateAllBranches: v, branchId: "" }))}
+                />
+              </div>
+            )}
+
+            {/* Branch Selector (single mode only) */}
+            {!linkForm.generateAllBranches && (branches || []).length > 0 && (
+              <div>
+                <Label className="text-xs mb-1 block flex items-center gap-1">
+                  <Building2 className="w-3 h-3" /> Branch <span className="text-muted-foreground">(optional)</span>
+                </Label>
+                <Select
+                  value={linkForm.branchId}
+                  onValueChange={(v) => setLinkForm((f) => ({ ...f, branchId: v === "all" ? "" : v }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All branches" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {(branches || []).map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Doctor Selector */}
             <div>
-              <DoctorSearch
-                label="Doctor Name"
-                value={linkForm.doctorName}
-                onValueChange={(val) => setLinkForm((f) => ({ ...f, doctorName: val }))}
-                required
-              />
+              <Label className="text-xs mb-1 block flex items-center gap-1">
+                <User className="w-3 h-3" /> Doctor <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Select
+                value={linkForm.doctorId}
+                onValueChange={(v) => {
+                  if (v === "all") {
+                    setLinkForm((f) => ({ ...f, doctorId: "", doctorName: "" }));
+                  } else {
+                    const doc = (doctors || []).find((d) => d.id === v);
+                    setLinkForm((f) => ({ ...f, doctorId: v, doctorName: doc?.name || "" }));
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Any doctor (browse all)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any Doctor</SelectItem>
+                  {(doctors || []).map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name} — {d.specialization}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Manual Doctor Name (if no doctor selected) */}
+            {!linkForm.doctorId && (
+              <div>
+                <Label className="text-xs mb-1 block">Doctor Name <span className="text-muted-foreground">(text label, optional)</span></Label>
+                <Input
+                  value={linkForm.doctorName}
+                  onChange={(e) => setLinkForm((f) => ({ ...f, doctorName: e.target.value }))}
+                  placeholder="e.g. Dr. Smith"
+                />
+              </div>
+            )}
+
             <div>
-              <Label className="text-xs mb-1 block">Department</Label>
+              <Label className="text-xs mb-1 block">Department <span className="text-muted-foreground">(optional)</span></Label>
               <Input
                 value={linkForm.department}
                 onChange={(e) => setLinkForm((f) => ({ ...f, department: e.target.value }))}
                 placeholder="e.g. Cardiology"
               />
             </div>
+
+            <div>
+              <Label className="text-xs mb-1 block">Link Label <span className="text-muted-foreground">(optional)</span></Label>
+              <Input
+                value={linkForm.label}
+                onChange={(e) => setLinkForm((f) => ({ ...f, label: e.target.value }))}
+                placeholder="e.g. Main Branch - Dr. Smith"
+              />
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={savingLink} className="bg-violet-600 hover:bg-violet-700 text-white">
-                {savingLink ? "Creating…" : "Create Link"}
+              <Button type="submit" disabled={savingLink} className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+                {savingLink ? "Creating…" : (
+                  linkForm.generateAllBranches ? <><Layers className="w-3.5 h-3.5" /> Generate All Branches</> : <><Plus className="w-3.5 h-3.5" /> Create Link</>
+                )}
               </Button>
             </DialogFooter>
           </form>

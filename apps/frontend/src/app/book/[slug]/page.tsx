@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo, use } from "react";
+import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import {
   Calendar, Check, Loader2, Stethoscope, ArrowLeft, User, Phone, Mail,
-  FileText, Shield, Clock, Sparkles, ChevronRight, Star, BadgeCheck,
+  FileText, Shield, Clock, Sparkles, ChevronRight, Star, BadgeCheck, MapPin,
 } from "lucide-react";
 
 interface Doctor {
@@ -47,6 +47,10 @@ function getAccent(id: string) {
 
 export default function BookPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const searchParams = useSearchParams();
+  const branchParam = searchParams.get("branch");
+  const doctorParam = searchParams.get("doctor");
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -57,6 +61,8 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
   const [deptFilter, setDeptFilter] = useState("all");
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [step, setStep] = useState<"browse" | "book">("browse");
+  const [branchLabel, setBranchLabel] = useState<string | null>(null);
+  const [isDirectLink, setIsDirectLink] = useState(false);
 
   const [form, setForm] = useState({
     patientName: "",
@@ -70,10 +76,43 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/public-booking?slug=${encodeURIComponent(slug)}`);
+        // Build URL with slug and optional branch/doctor params
+        let url = `/api/public-booking?slug=${encodeURIComponent(slug)}`;
+        if (branchParam) url += `&branch=${branchParam}`;
+        if (doctorParam) url += `&doctor=${doctorParam}`;
+
+        const res = await fetch(url);
         const data = await res.json();
         setDoctors(data.doctors || []);
         setDepartments(data.departments || []);
+
+        // If a doctor is pre-selected (direct booking link), auto-select them
+        if (doctorParam && data.doctors?.length === 1) {
+          setSelectedDoctor(data.doctors[0]);
+          setStep("book");
+          setIsDirectLink(true);
+        } else if (doctorParam && data.doctors?.length > 0) {
+          // Find the exact doctor match
+          const matched = data.doctors.find((d: Doctor) => d.id === doctorParam);
+          if (matched) {
+            setSelectedDoctor(matched);
+            setStep("book");
+            setIsDirectLink(true);
+          }
+        }
+
+        // Fetch branch label if branch param provided
+        if (branchParam) {
+          try {
+            const branchRes = await fetch(`/api/branches/${branchParam}`);
+            if (branchRes.ok) {
+              const branchData = await branchRes.json();
+              setBranchLabel(branchData.name);
+            }
+          } catch {
+            // Branch label is cosmetic; don't block
+          }
+        }
       } catch {
         setError("Failed to load booking form");
       } finally {
@@ -81,7 +120,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
       }
     }
     load();
-  }, [slug]);
+  }, [slug, branchParam, doctorParam]);
 
   const filteredDoctors = useMemo(() => {
     if (deptFilter === "all") return doctors;
@@ -100,6 +139,10 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
   };
 
   const handleBack = () => {
+    // If this is a direct doctor link, don't go back to browse
+    if (isDirectLink) {
+      return;
+    }
     setStep("browse");
     setSelectedDoctor(null);
     setForm({ patientName: "", patientPhone: "", patientEmail: "", date: "", time: "", reason: "" });
@@ -193,12 +236,14 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
               <Shield className="w-3.5 h-3.5" />
               <span>We&apos;ll contact you shortly to confirm</span>
             </div>
-            <button
-              onClick={handleBack}
-              className="w-full py-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white text-sm font-medium transition-all"
-            >
-              Book Another Appointment
-            </button>
+            {!isDirectLink && (
+              <button
+                onClick={handleBack}
+                className="w-full py-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white text-sm font-medium transition-all"
+              >
+                Book Another Appointment
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -228,6 +273,12 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
             <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2 tracking-tight">
               Book an <span className="bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">Appointment</span>
             </h1>
+            {branchLabel && (
+              <div className="flex items-center justify-center gap-1.5 text-violet-400 text-sm mb-2">
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{branchLabel}</span>
+              </div>
+            )}
             <p className="text-white/50 text-sm max-w-md mx-auto">
               Choose your preferred doctor and schedule a visit in seconds
             </p>
@@ -360,13 +411,15 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
 
       <div className="relative max-w-lg mx-auto px-4 py-8">
         {/* Back button */}
-        <button
-          onClick={handleBack}
-          className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/70 transition-colors mb-6 group"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          Back to doctors
-        </button>
+        {!isDirectLink && (
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/70 transition-colors mb-6 group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+            Back to doctors
+          </button>
+        )}
 
         {/* Selected Doctor */}
         <div className="relative mb-6">
@@ -379,6 +432,12 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
               <div>
                 <h2 className="font-bold text-white text-lg">{selectedDoctor?.name}</h2>
                 <p className="text-sm text-white/40">{selectedDoctor?.specialization}</p>
+                {branchLabel && (
+                  <div className="flex items-center gap-1 text-xs text-violet-400 mt-0.5">
+                    <MapPin className="w-3 h-3" />
+                    <span>{branchLabel}</span>
+                  </div>
+                )}
                 {selectedDoctor?.consultationFee != null && (
                   <p className="text-xs font-medium text-violet-400 mt-0.5">
                     Consultation Fee: Rs. {selectedDoctor.consultationFee.toLocaleString()}

@@ -59,6 +59,7 @@ model Doctor {
   appointments   Appointment[]
   prescriptions  Prescription[]
   scheduleSlots  DoctorScheduleSlot[]
+  bookingLinks   BookingLink[]
   @@index([tenantId])
   @@index([branchId])
   @@index([tenantId, branchId])
@@ -566,6 +567,7 @@ model Branch {
   pharmacySales   PharmacySale[]
   patientPayments PatientPayment[]
   clinicalNotes   ClinicalNote[]
+  bookingLinks    BookingLink[]
   @@index([tenantId])
 }
 
@@ -2682,10 +2684,15 @@ model BookingLink {
   id          String   @id @default(cuid())
   tenantId    String?
   tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   configId    String?
   config      BookingConfig? @relation(fields: [configId], references: [id], onDelete: Cascade)
+  doctorId    String?
+  doctor      Doctor?  @relation(fields: [doctorId], references: [id])
   doctorName  String?
   department  String?
+  label       String?
   url         String
   slug        String   @unique
   active      Boolean  @default(true)
