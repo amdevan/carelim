@@ -35,8 +35,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder /app/apps/saas/.next/standalone/apps/saas/ ./
 COPY --from=builder /app/apps/saas/.next/standalone/node_modules ./node_modules
 
-# Copy static assets
+# Copy static assets and public directory
 COPY --from=builder /app/apps/saas/.next/static ./.next/static
+COPY --from=builder /app/apps/saas/public ./public
 
 # Copy Prisma schema and client
 COPY --from=builder /app/packages/database/prisma ./prisma
