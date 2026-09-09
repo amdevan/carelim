@@ -21,7 +21,8 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
       });
       return NextResponse.json(links);
-    } catch {
+    } catch (includeErr) {
+      console.warn("BookingLink include failed, falling back:", includeErr);
       const links = await db.bookingLink.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
 
 // POST — create booking link(s)
 // Supports:
-//   - Single link: { doctorName, department, branchId, doctorId, label }
+//   - Single link: { doctorName, department, branchId?, doctorId?, label? }
 //   - Generate all branches: { generateAllBranches: true, doctorId?, department? }
 export async function POST(req: NextRequest) {
   try {
@@ -47,18 +48,27 @@ export async function POST(req: NextRequest) {
     // Verify tenant exists if provided
     let validTenantId: string | null = null;
     if (tenantId) {
-      const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
-      if (tenant) validTenantId = tenant.id;
+      try {
+        const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+        if (tenant) validTenantId = tenant.id;
+      } catch {
+        // Tenant lookup might fail
+      }
     }
 
-    // Get or create config (only if tenant exists)
+    // Get or create config (only if tenant exists) — wrapped in try/catch
     let configId: string | null = null;
     if (validTenantId) {
-      let config = await db.bookingConfig.findUnique({ where: { tenantId: validTenantId } });
-      if (!config) {
-        config = await db.bookingConfig.create({ data: { tenantId: validTenantId } });
+      try {
+        let config = await db.bookingConfig.findUnique({ where: { tenantId: validTenantId } });
+        if (!config) {
+          config = await db.bookingConfig.create({ data: { tenantId: validTenantId } });
+        }
+        configId = config.id;
+      } catch (configErr) {
+        console.warn("BookingConfig lookup/create failed:", configErr);
+        // Continue without configId — it's optional
       }
-      configId = config.id;
     }
 
     // Generate links for all branches
@@ -74,49 +84,43 @@ export async function POST(req: NextRequest) {
       // Get doctor info if doctorId provided
       let doctorInfo = null;
       if (body.doctorId) {
-        doctorInfo = await db.doctor.findUnique({
-          where: { id: body.doctorId },
-          select: { id: true, name: true, specialization: true },
-        });
+        try {
+          doctorInfo = await db.doctor.findUnique({
+            where: { id: body.doctorId },
+            select: { id: true, name: true, specialization: true },
+          });
+        } catch {
+          // Doctor lookup might fail
+        }
       }
 
       const createdLinks = [];
+      const errors: string[] = [];
+
       for (const branch of branches) {
         const slug = generateSlug(branch.name, doctorInfo?.name, body.department);
         const url = `${origin}/book/${slug}?branch=${branch.id}${body.doctorId ? `&doctor=${body.doctorId}` : ""}`;
 
-        // Try with all fields; fall back if new columns missing
         try {
-          const link = await db.bookingLink.create({
-            data: {
-              tenantId: validTenantId,
-              branchId: branch.id,
-              configId,
-              doctorId: body.doctorId || null,
-              doctorName: doctorInfo?.name || body.doctorName || null,
-              department: body.department || doctorInfo?.specialization || null,
-              label: body.label || `${branch.name}${doctorInfo ? ` - ${doctorInfo.name}` : ""}${body.department ? ` (${body.department})` : ""}`,
-              url,
-              slug,
-              active: true,
-            },
+          const link = await createBookingLink({
+            tenantId: validTenantId,
+            branchId: branch.id,
+            configId,
+            doctorId: body.doctorId || null,
+            doctorName: doctorInfo?.name || body.doctorName || null,
+            department: body.department || doctorInfo?.specialization || null,
+            label: body.label || `${branch.name}${doctorInfo ? ` - ${doctorInfo.name}` : ""}${body.department ? ` (${body.department})` : ""}`,
+            url,
+            slug,
           });
           createdLinks.push(link);
-        } catch {
-          // Fallback: create without new columns
-          const link = await db.bookingLink.create({
-            data: {
-              tenantId: validTenantId,
-              configId,
-              doctorName: doctorInfo?.name || body.doctorName || null,
-              department: body.department || doctorInfo?.specialization || null,
-              url,
-              slug,
-              active: true,
-            },
-          });
-          createdLinks.push(link);
+        } catch (err: any) {
+          errors.push(`Failed for branch ${branch.name}: ${err.message}`);
         }
+      }
+
+      if (createdLinks.length === 0 && errors.length > 0) {
+        return NextResponse.json({ error: "Failed to create links", details: errors }, { status: 500 });
       }
 
       return NextResponse.json(createdLinks, { status: 201 });
@@ -132,48 +136,86 @@ export async function POST(req: NextRequest) {
     let doctorName = body.doctorName || null;
     let department = body.department || null;
     if (body.doctorId && !doctorName) {
-      const doc = await db.doctor.findUnique({
-        where: { id: body.doctorId },
-        select: { name: true, specialization: true },
-      });
-      doctorName = doc?.name || null;
-      department = department || doc?.specialization || null;
+      try {
+        const doc = await db.doctor.findUnique({
+          where: { id: body.doctorId },
+          select: { name: true, specialization: true },
+        });
+        doctorName = doc?.name || null;
+        department = department || doc?.specialization || null;
+      } catch {
+        // Doctor lookup might fail
+      }
     }
 
-    // Try with all fields; fall back if new columns missing
     try {
-      const link = await db.bookingLink.create({
-        data: {
-          tenantId: validTenantId,
-          branchId: body.branchId || null,
-          configId,
-          doctorId: body.doctorId || null,
-          doctorName,
-          department,
-          label: body.label || null,
-          url,
-          slug,
-          active: true,
-        },
+      const link = await createBookingLink({
+        tenantId: validTenantId,
+        branchId: body.branchId || null,
+        configId,
+        doctorId: body.doctorId || null,
+        doctorName,
+        department,
+        label: body.label || null,
+        url,
+        slug,
       });
       return NextResponse.json(link, { status: 201 });
-    } catch {
-      // Fallback: create without new columns
-      const link = await db.bookingLink.create({
-        data: {
-          tenantId: validTenantId,
-          configId,
-          doctorName,
-          department,
-          url,
-          slug,
-          active: true,
-        },
-      });
-      return NextResponse.json(link, { status: 201 });
+    } catch (err: any) {
+      console.error("Failed to create single booking link:", err);
+      return NextResponse.json({ error: `Failed to create link: ${err.message}` }, { status: 500 });
     }
   } catch (error) {
     console.error("Failed to create booking link:", error);
     return NextResponse.json({ error: "Failed to create link" }, { status: 500 });
+  }
+}
+
+interface LinkData {
+  tenantId: string | null;
+  branchId?: string | null;
+  configId?: string | null;
+  doctorId?: string | null;
+  doctorName?: string | null;
+  department?: string | null;
+  label?: string | null;
+  url: string;
+  slug: string;
+}
+
+/** Try creating with all fields first; fall back if new columns are missing */
+async function createBookingLink(data: LinkData) {
+  try {
+    return await db.bookingLink.create({
+      data: {
+        tenantId: data.tenantId,
+        branchId: data.branchId || null,
+        configId: data.configId,
+        doctorId: data.doctorId || null,
+        doctorName: data.doctorName || null,
+        department: data.department || null,
+        label: data.label || null,
+        url: data.url,
+        slug: data.slug,
+        active: true,
+      },
+    });
+  } catch (fullErr: any) {
+    // If it fails due to missing columns, try with only original fields
+    if (fullErr?.message?.includes("branchId") || fullErr?.message?.includes("doctorId") || fullErr?.message?.includes("label")) {
+      console.warn("Falling back to basic BookingLink fields:", fullErr.message);
+      return await db.bookingLink.create({
+        data: {
+          tenantId: data.tenantId,
+          configId: data.configId,
+          doctorName: data.doctorName || null,
+          department: data.department || null,
+          url: data.url,
+          slug: data.slug,
+          active: true,
+        },
+      });
+    }
+    throw fullErr;
   }
 }

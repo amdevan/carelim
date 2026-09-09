@@ -18,6 +18,12 @@ async function resolveTenantFromSlug(slug: string | null): Promise<string | null
   return null;
 }
 
+/** Parse a date string (YYYY-MM-DD) as a local date, not UTC */
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
 // GET — fetch booking config + doctors + departments for the booking page
 export async function GET(req: NextRequest) {
   try {
@@ -97,6 +103,9 @@ export async function POST(req: NextRequest) {
       const doctor = body.doctorId ? await db.doctor.findUnique({ where: { id: body.doctorId }, select: { name: true } }) : null;
       const department = body.departmentId ? await db.department.findUnique({ where: { id: body.departmentId }, select: { name: true } }) : null;
 
+      // Store the time as-is (keep original format from frontend)
+      const timeStr = body.time || "";
+
       // Create PublicBooking - handle missing tenantId column on production
       const bookingData: any = {
         patientName: body.patientName,
@@ -104,8 +113,8 @@ export async function POST(req: NextRequest) {
         email: body.patientEmail || null,
         doctorName: doctor?.name || body.doctorName || "Any",
         department: department?.name || body.department || null,
-        date: body.date ? new Date(body.date) : new Date(),
-        time: body.time || "",
+        date: body.date ? parseLocalDate(body.date) : new Date(),
+        time: timeStr,
         status: "pending",
         notes: body.reason || null,
       };
