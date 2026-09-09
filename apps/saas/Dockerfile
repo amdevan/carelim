@@ -39,6 +39,9 @@ COPY --from=builder /app/apps/saas/.next/standalone/node_modules ./node_modules
 COPY --from=builder /app/apps/saas/.next/static ./.next/static
 COPY --from=builder /app/apps/saas/public ./public
 
+# Ensure uploads directory exists and is writable
+RUN mkdir -p ./public/uploads/logos && chmod 777 ./public/uploads/logos
+
 # Copy Prisma schema and client
 COPY --from=builder /app/packages/database/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma

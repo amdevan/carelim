@@ -40,6 +40,9 @@ COPY --from=builder /app/apps/frontend/.next/static ./.next/static
 # Copy public assets (images, favicon, etc.)
 COPY --from=builder /app/apps/frontend/public ./public
 
+# Ensure uploads directory exists and is writable
+RUN mkdir -p ./public/uploads/logos && chmod 777 ./public/uploads/logos
+
 # Copy entrypoint
 COPY apps/frontend/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
