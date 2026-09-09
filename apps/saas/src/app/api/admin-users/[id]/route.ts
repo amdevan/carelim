@@ -28,6 +28,11 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
+    // Hash password if being updated
+    if (body.password) {
+      const bcrypt = await import("bcryptjs");
+      body.password = await bcrypt.hash(body.password, 10);
+    }
     const user = await db.adminUser.update({
       where: { id },
       data: body,

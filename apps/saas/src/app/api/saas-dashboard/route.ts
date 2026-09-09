@@ -13,7 +13,7 @@ export async function GET() {
       totalDoctors,
       totalPatients,
       revenueResult,
-      plans,
+      plansRaw,
       recentTenants,
       tickets,
       leads,
@@ -31,7 +31,10 @@ export async function GET() {
           date: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
         },
       }),
-      db.plan.findMany({ orderBy: { priceMonthly: "asc" } }),
+      db.plan.findMany({
+        orderBy: { priceMonthly: "asc" },
+        include: { _count: { select: { tenants: true } } },
+      }),
       db.tenant.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
       db.supportTicket.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
       db.lead.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
@@ -49,26 +52,39 @@ export async function GET() {
       tenantGrowth.push({ month: monthStr, count });
     }
 
-    // Revenue trend (last 6 months)
-    const revenueTrend: { month: string; revenue: number }[] = [];
-    const invoices = await db.saaSInvoice.findMany({ select: { total: true, date: true } });
+    // Revenue trend (last 6 months) with breakdown
+    const invoices = await db.saaSInvoice.findMany({ select: { total: true, date: true, description: true } });
+    const revenueTrend: { month: string; subscription: number; addOn: number; commission: number }[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
       const monthStr = d.toLocaleString("en-US", { month: "short" });
-      const revenue = invoices.filter(inv => inv.date >= d && inv.date < nextMonth).reduce((s, inv) => s + (inv.total || 0), 0);
-      revenueTrend.push({ month: monthStr, revenue });
+      const monthInvoices = invoices.filter(inv => inv.date >= d && inv.date < nextMonth);
+      const subscription = monthInvoices.filter(inv => !inv.description?.toLowerCase().includes("add-on") && !inv.description?.toLowerCase().includes("commission")).reduce((s, inv) => s + (inv.total || 0), 0);
+      const addOn = monthInvoices.filter(inv => inv.description?.toLowerCase().includes("add-on")).reduce((s, inv) => s + (inv.total || 0), 0);
+      const commission = monthInvoices.filter(inv => inv.description?.toLowerCase().includes("commission")).reduce((s, inv) => s + (inv.total || 0), 0);
+      revenueTrend.push({ month: monthStr, subscription, addOn, commission });
     }
+
+    // Plans with tenant count
+    const plans = plansRaw.map(p => ({
+      ...p,
+      tenantCount: p._count.tenants,
+    }));
 
     // Recent activity
     const auditLogs = await db.saaSAuditLog.findMany({ orderBy: { createdAt: "desc" }, take: 10 });
     const recentActivity = auditLogs.map(a => ({
-      id: a.id,
+      adminEmail: a.adminEmail,
       action: a.action,
-      tenant: allTenants.length > 0 ? "Tenant" : "System",
-      admin: a.adminEmail,
-      time: a.createdAt,
+      module: a.module,
+      detail: a.detail,
+      createdAt: a.createdAt,
     }));
+
+    // Churn rate: suspended / total (as percentage)
+    const churnRate = totalTenants > 0 ? Math.round((suspendedTenants / totalTenants) * 100 * 10) / 10 : 0;
+    const monthlyRevenue = revenueResult._sum.total ?? 0;
 
     return NextResponse.json({
       kpis: {
@@ -78,8 +94,10 @@ export async function GET() {
         suspendedTenants,
         totalDoctors,
         totalPatients,
-        mrr: revenueResult._sum.total ?? 0,
-        annualRevenue: (revenueResult._sum.total ?? 0) * 12,
+        mrr: monthlyRevenue,
+        annualRevenue: monthlyRevenue * 12,
+        monthlyRevenue,
+        churnRate,
         subscriptionGrowth: activeSubscriptions,
       },
       plans,
@@ -93,7 +111,7 @@ export async function GET() {
   } catch (error) {
     console.error("saas-dashboard error:", error);
     return NextResponse.json({
-      kpis: { totalClinics: 0, activeTenants: 0, trialTenants: 0, suspendedTenants: 0, totalDoctors: 0, totalPatients: 0, mrr: 0, annualRevenue: 0, subscriptionGrowth: 0 },
+      kpis: { totalClinics: 0, activeTenants: 0, trialTenants: 0, suspendedTenants: 0, totalDoctors: 0, totalPatients: 0, mrr: 0, annualRevenue: 0, monthlyRevenue: 0, churnRate: 0, subscriptionGrowth: 0 },
       plans: [],
       revenueTrend: [],
       tenantGrowth: [],

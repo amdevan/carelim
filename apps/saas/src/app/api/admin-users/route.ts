@@ -14,6 +14,11 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    // Hash password if provided
+    if (body.password) {
+      const bcrypt = await import("bcryptjs");
+      body.password = await bcrypt.hash(body.password, 10);
+    }
     const user = await db.adminUser.create({ data: body });
     return NextResponse.json(user, { status: 201 });
   } catch (error) {

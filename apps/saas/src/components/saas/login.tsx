@@ -15,7 +15,6 @@ import {
   Layers,
   Globe2,
   Cpu,
-  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -215,22 +214,7 @@ export function SaasLogin({ onLogin }: SaasLoginProps) {
               {loading ? "Signing in…" : <>Sign In <ArrowRight className="w-4 h-4" /></>}
             </Button>
 
-            <div className="text-center">
-              <Button
-                type="button"
-                variant="link"
-                className="text-sm text-teal-600 hover:text-teal-700 p-0"
-                onClick={() => window.location.href = "/onboarding"}
-              >
-                Don't have an account? Create your organization
-              </Button>
-            </div>
           </form>
-
-          <div className="mt-4 rounded-lg border border-dashed border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20 px-3 py-2.5 text-[11px] text-muted-foreground flex items-start gap-2">
-            <Info className="w-3.5 h-3.5 mt-0.5 text-teal-600 shrink-0" />
-            <span>Create an <strong className="text-foreground">AdminUser</strong> record in the database to log in. Default password is <code className="text-[10px] bg-muted px-1 py-0.5 rounded">carelim123</code>.</span>
-          </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             Protected by enterprise-grade encryption. By signing in you agree to our{" "}

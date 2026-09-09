@@ -37,9 +37,20 @@ export const statusColors: Record<string, string> = {
   paid: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
   refunded: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
   active: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  trial: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+  suspended: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
   "on_leave": "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
   inactive: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
   "out-of-stock": "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+  open: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+  assigned: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+  resolved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  closed: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+  urgent: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+  "new": "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+  demo: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+  converted: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  lead: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
 };
 
 export const statusLabel = (s: string) =>
