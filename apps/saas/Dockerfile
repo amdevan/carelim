@@ -43,6 +43,8 @@ COPY --from=builder /app/apps/saas/public ./public
 COPY --from=builder /app/packages/database/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 EXPOSE 3001
 
