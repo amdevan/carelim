@@ -1,13 +1,24 @@
 "use client";
 
-import { useState, useEffect, useMemo, use } from "react";
+import { useState, useEffect, useMemo, useRef, use } from "react";
 import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Calendar, Check, Loader2, Stethoscope, ArrowLeft, User,
-  Shield, Clock, ChevronRight, Star, BadgeCheck, MapPin,
+  Shield, Clock, ChevronRight, Star, BadgeCheck, MapPin, Phone,
 } from "lucide-react";
+
+const COUNTRY_CODES = [
+  { code: "+977", label: "NP", name: "Nepal" },
+  { code: "+91", label: "IN", name: "India" },
+  { code: "+1", label: "US", name: "USA" },
+  { code: "+44", label: "UK", name: "UK" },
+  { code: "+61", label: "AU", name: "Australia" },
+  { code: "+971", label: "AE", name: "UAE" },
+  { code: "+974", label: "QA", name: "Qatar" },
+  { code: "+966", label: "SA", name: "Saudi Arabia" },
+];
 
 interface Doctor {
   id: string;
@@ -88,12 +99,48 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
     time: "",
     reason: "",
   });
+  const [countryCode, setCountryCode] = useState("+977");
+  const [patientLookup, setPatientLookup] = useState<{
+    status: "idle" | "checking" | "found" | "not_found";
+    name?: string;
+    email?: string;
+  }>({ status: "idle" });
+  const phoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Local today string (avoids UTC timezone issues)
   const todayStr = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   })();
+
+  // Look up existing patient by phone number (debounced)
+  const lookupPatient = (phone: string) => {
+    if (phoneTimerRef.current) clearTimeout(phoneTimerRef.current);
+    const fullPhone = `${countryCode}${phone}`;
+    if (fullPhone.length < 8) {
+      setPatientLookup({ status: "idle" });
+      return;
+    }
+    setPatientLookup((prev) => ({ ...prev, status: "checking" }));
+    phoneTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/public/patient-lookup?phone=${encodeURIComponent(fullPhone)}`);
+        const data = await res.json();
+        if (data.found && data.patient) {
+          setPatientLookup({ status: "found", name: data.patient.name, email: data.patient.email || "" });
+          setForm((f) => ({
+            ...f,
+            patientName: data.patient.name || f.patientName,
+            patientEmail: data.patient.email || f.patientEmail,
+          }));
+        } else {
+          setPatientLookup({ status: "not_found" });
+        }
+      } catch {
+        setPatientLookup({ status: "idle" });
+      }
+    }, 600);
+  };
 
   useEffect(() => {
     async function load() {
@@ -601,6 +648,61 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
               </Label>
 
               <div className="space-y-2.5">
+                {/* Phone with Country Code */}
+                <div className="space-y-1">
+                  <div className="flex gap-2">
+                    <select
+                      value={countryCode}
+                      onChange={(e) => {
+                        setCountryCode(e.target.value);
+                        if (form.patientPhone.length >= 5) {
+                          lookupPatient(form.patientPhone);
+                        }
+                      }}
+                      className="h-11 w-20 shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] text-white text-sm px-1 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 focus:outline-none"
+                    >
+                      {COUNTRY_CODES.map((c) => (
+                        <option key={c.code} value={c.code} className="bg-gray-900 text-white">
+                          {c.label} {c.code}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="relative flex-1">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                      <Input
+                        required
+                        value={form.patientPhone}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, "");
+                          setForm({ ...form, patientPhone: val });
+                          lookupPatient(val);
+                        }}
+                        placeholder="Phone Number"
+                        className="pl-10 bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
+                      />
+                      {patientLookup.status === "checking" && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-violet-400 animate-spin" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Patient found badge */}
+                  {patientLookup.status === "found" && patientLookup.name && (
+                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span className="text-xs text-emerald-300">
+                        Welcome back, <strong>{patientLookup.name}</strong>! Your info has been filled.
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Patient not found — show manual entry hint */}
+                  {patientLookup.status === "not_found" && form.patientPhone.length >= 8 && (
+                    <p className="text-[11px] text-white/30 px-1">New patient — please fill in your details below</p>
+                  )}
+                </div>
+
+                {/* Full Name */}
                 <Input
                   required
                   value={form.patientName}
@@ -609,14 +711,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                   className="bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
                 />
 
-                <Input
-                  required
-                  value={form.patientPhone}
-                  onChange={(e) => setForm({ ...form, patientPhone: e.target.value })}
-                  placeholder="Phone Number"
-                  className="bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
-                />
-
+                {/* Email */}
                 <Input
                   type="email"
                   value={form.patientEmail}
@@ -625,6 +720,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                   className="bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
                 />
 
+                {/* Reason */}
                 <textarea
                   value={form.reason}
                   onChange={(e) => setForm({ ...form, reason: e.target.value })}
