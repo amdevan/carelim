@@ -758,11 +758,15 @@ function DoctorFormDialog({ open, onOpenChange, doctor, departments, onSaved }: 
           body: JSON.stringify(body),
         }
       );
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to save doctor" }));
+        throw new Error(err.error || "Failed to save doctor");
+      }
       toast.success(doctor ? "Doctor updated" : "Doctor added");
       onSaved();
-    } catch {
-      toast.error("Failed to save doctor");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to save doctor";
+      toast.error(msg);
     } finally {
       setSaving(false);
     }

@@ -21,11 +21,23 @@ export const PUT = withTenant(async (req: NextRequest, { params }: { params: Pro
   try {
     const { id } = await params;
     const body = await req.json();
-    const doctor = await db.doctor.update({ where: { id }, data: body });
+    const validFields = [
+      "name", "email", "phone", "gender", "qualification", "specialization",
+      "departmentId", "licenseNumber", "branchId",
+      "experience", "consultationFee", "commissionPct", "rating",
+      "workingDays", "startTime", "endTime", "status",
+      "avatar", "signature", "password",
+    ];
+    const data: Record<string, unknown> = {};
+    for (const key of validFields) {
+      if (body[key] !== undefined) data[key] = body[key];
+    }
+    const doctor = await db.doctor.update({ where: { id }, data: data as never });
     return NextResponse.json(doctor);
   } catch (error) {
     console.error("Error updating doctor:", error);
-    return NextResponse.json({ error: "Failed to update doctor" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : "Failed to update doctor";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 });
 

@@ -31,11 +31,29 @@ export const POST = withTenant(async (req: NextRequest) => {
   if (denied) return denied;
   try {
     const body = await req.json();
-    const doctor = await db.doctor.create({ data: body });
+    // Only pick valid Doctor fields to avoid Prisma validation errors
+    const data: Record<string, unknown> = {};
+    const validFields = [
+      "name", "email", "phone", "gender", "qualification", "specialization",
+      "departmentId", "licenseNumber", "branchId",
+      "experience", "consultationFee", "commissionPct", "rating",
+      "workingDays", "startTime", "endTime", "status",
+      "avatar", "signature", "password",
+    ];
+    for (const key of validFields) {
+      if (body[key] !== undefined && body[key] !== null && body[key] !== "") {
+        data[key] = body[key];
+      }
+    }
+    const doctor = await db.doctor.create({ data: data as never });
     await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Doctor", detail: `Added doctor ${doctor.name}` } });
     return NextResponse.json(doctor, { status: 201 });
   } catch (error) {
     console.error("Error creating doctor:", error);
-    return NextResponse.json({ error: "Failed to create doctor" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : "Failed to create doctor";
+    if (msg.includes("Unique constraint")) {
+      return NextResponse.json({ error: "A doctor with this email already exists" }, { status: 400 });
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 });
