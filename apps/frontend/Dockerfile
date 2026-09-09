@@ -47,6 +47,9 @@ RUN mkdir -p ./public/uploads/logos && chmod 777 ./public/uploads/logos
 COPY --from=builder /app/node_modules/@prisma/adapter-pg ./node_modules/@prisma/adapter-pg
 COPY --from=builder /app/node_modules/pg ./node_modules/pg
 
+# Copy Prisma schema for runtime use
+COPY --from=builder /app/apps/frontend/prisma ./prisma
+
 # Copy entrypoint
 COPY apps/frontend/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
