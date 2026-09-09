@@ -46,4 +46,8 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 EXPOSE 3001
 
-CMD ["node", "server.js"]
+# Copy startup script
+COPY --from=builder /app/apps/saas/start.sh ./start.sh
+RUN chmod +x ./start.sh
+
+CMD ["./start.sh"]
