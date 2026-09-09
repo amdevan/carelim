@@ -15,8 +15,35 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useOnboardingStore } from "./onboarding-store";
-import { PRICING_PLANS, PAYMENT_METHODS, formatPrice } from "./pricing-data";
+import { PRICING_PLANS, PAYMENT_METHODS, formatPrice, type PricingPlan } from "./pricing-data";
 import { markAsSaved } from "./onboarding-store";
+
+// Map DB plan to PricingPlan format
+function mapDbPlanToPricingPlan(plan: any): PricingPlan {
+  const features: { text: string; included: boolean }[] = [
+    { text: `${plan.maxDoctors} Doctors`, included: true },
+    { text: `${plan.maxUsers} Users`, included: true },
+    { text: `${plan.maxBranches} Branch${plan.maxBranches > 1 ? "es" : ""}`, included: true },
+    { text: `${plan.maxStorage}GB Storage`, included: true },
+    { text: "Telemedicine", included: plan.hasTelemedicine },
+    { text: "AI Features", included: plan.hasAI },
+    { text: "API Access", included: plan.hasApi },
+    { text: "White Label", included: plan.hasWhiteLabel },
+  ];
+
+  return {
+    id: plan.id,
+    name: plan.name.toUpperCase(),
+    label: plan.name,
+    subtitle: plan.description || `${plan.maxDoctors} doctors, ${plan.maxUsers} users`,
+    price: plan.priceMonthly,
+    currency: "NPR",
+    billingCycle: "monthly",
+    duration: "per month",
+    features,
+    buttonText: plan.priceMonthly === 0 ? "Start Free Trial" : "Get Started",
+  };
+}
 
 export function Step3Pricing() {
   const { packageSelection, setPackageSelection } = useOnboardingStore();
@@ -26,6 +53,22 @@ export function Step3Pricing() {
   const [couponError, setCouponError] = useState<string | null>(null);
   const [referralApplied, setReferralApplied] = useState(false);
   const [referralError, setReferralError] = useState<string | null>(null);
+  const [plans, setPlans] = useState<PricingPlan[]>(PRICING_PLANS);
+
+  // Fetch plans from database
+  useEffect(() => {
+    fetch("/api/plans")
+      .then((r) => r.json())
+      .then((dbPlans) => {
+        if (Array.isArray(dbPlans) && dbPlans.length > 0) {
+          const mapped = dbPlans.map(mapDbPlanToPricingPlan);
+          // Add free trial as first option
+          const freeTrial = PRICING_PLANS.find((p) => p.id === "free_trial");
+          setPlans(freeTrial ? [freeTrial, ...mapped] : mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Auto-save
   useEffect(() => {
@@ -67,7 +110,7 @@ export function Step3Pricing() {
     }
   };
 
-  const selectedPlan = PRICING_PLANS.find((p) => p.id === selectedPlanId) || PRICING_PLANS[0];
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[0];
 
   return (
     <div className="space-y-8">
@@ -93,7 +136,7 @@ export function Step3Pricing() {
       {/* Pricing Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 items-start">
         <AnimatePresence>
-          {PRICING_PLANS.map((plan, index) => {
+          {plans.map((plan, index) => {
             const isSelected = selectedPlanId === plan.id;
             const isPopular = plan.popular;
 
