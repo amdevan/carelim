@@ -43,6 +43,10 @@ COPY --from=builder /app/apps/frontend/public ./public
 # Ensure uploads directory exists and is writable
 RUN mkdir -p ./public/uploads/logos && chmod 777 ./public/uploads/logos
 
+# Copy Prisma adapter for runtime migrations
+COPY --from=builder /app/node_modules/@prisma/adapter-pg ./node_modules/@prisma/adapter-pg
+COPY --from=builder /app/node_modules/pg ./node_modules/pg
+
 # Copy entrypoint
 COPY apps/frontend/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
