@@ -17,21 +17,19 @@ export async function POST(req: NextRequest) {
     let userName = envName;
     let userRole = "super_admin";
 
-    console.log("Auth debug:", { hasEnvEmail: !!envEmail, hasEnvPassword: !!envPassword, emailMatch: email === envEmail });
-
     if (envEmail && envPassword && email === envEmail && password === envPassword) {
       userId = "env-admin";
     } else {
       // Fall back to database lookup
       const user = await db.adminUser.findUnique({ where: { email } });
       if (!user) {
-        return NextResponse.json({ error: "Invalid credentials", debug: { hasEnvEmail: !!envEmail, hasEnvPassword: !!envPassword, emailMatch: email === envEmail } }, { status: 401 });
+        return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
       }
 
       const bcrypt = await import("bcryptjs");
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) {
-        return NextResponse.json({ error: "Invalid credentials", debug: { hasEnvEmail: !!envEmail, hasEnvPassword: !!envPassword, emailMatch: email === envEmail } }, { status: 401 });
+        return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
       }
       userId = user.id;
       userName = user.name;
