@@ -6,18 +6,61 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Calendar, Check, Loader2, Stethoscope, ArrowLeft, User,
-  Shield, Clock, ChevronRight, Star, BadgeCheck, MapPin, Phone,
+  Shield, Clock, ChevronRight, Star, BadgeCheck, MapPin, Phone, Search,
 } from "lucide-react";
 
 const COUNTRY_CODES = [
   { code: "+977", label: "NP", name: "Nepal" },
   { code: "+91", label: "IN", name: "India" },
-  { code: "+1", label: "US", name: "USA" },
-  { code: "+44", label: "UK", name: "UK" },
+  { code: "+1", label: "US", name: "United States" },
+  { code: "+44", label: "GB", name: "United Kingdom" },
   { code: "+61", label: "AU", name: "Australia" },
-  { code: "+971", label: "AE", name: "UAE" },
+  { code: "+971", label: "AE", name: "United Arab Emirates" },
   { code: "+974", label: "QA", name: "Qatar" },
   { code: "+966", label: "SA", name: "Saudi Arabia" },
+  { code: "+975", label: "BT", name: "Bhutan" },
+  { code: "+880", label: "BD", name: "Bangladesh" },
+  { code: "+94", label: "LK", name: "Sri Lanka" },
+  { code: "+92", label: "PK", name: "Pakistan" },
+  { code: "+86", label: "CN", name: "China" },
+  { code: "+81", label: "JP", name: "Japan" },
+  { code: "+82", label: "KR", name: "South Korea" },
+  { code: "+65", label: "SG", name: "Singapore" },
+  { code: "+60", label: "MY", name: "Malaysia" },
+  { code: "+66", label: "TH", name: "Thailand" },
+  { code: "+84", label: "VN", name: "Vietnam" },
+  { code: "+63", label: "PH", name: "Philippines" },
+  { code: "+62", label: "ID", name: "Indonesia" },
+  { code: "+95", label: "MM", name: "Myanmar" },
+  { code: "+855", label: "KH", name: "Cambodia" },
+  { code: "+856", label: "LA", name: "Laos" },
+  { code: "+976", label: "MN", name: "Mongolia" },
+  { code: "+20", label: "EG", name: "Egypt" },
+  { code: "+254", label: "KE", name: "Kenya" },
+  { code: "+234", label: "NG", name: "Nigeria" },
+  { code: "+27", label: "ZA", name: "South Africa" },
+  { code: "+255", label: "TZ", name: "Tanzania" },
+  { code: "+256", label: "UG", name: "Uganda" },
+  { code: "+33", label: "FR", name: "France" },
+  { code: "+49", label: "DE", name: "Germany" },
+  { code: "+39", label: "IT", name: "Italy" },
+  { code: "+34", label: "ES", name: "Spain" },
+  { code: "+31", label: "NL", name: "Netherlands" },
+  { code: "+41", label: "CH", name: "Switzerland" },
+  { code: "+46", label: "SE", name: "Sweden" },
+  { code: "+47", label: "NO", name: "Norway" },
+  { code: "+48", label: "PL", name: "Poland" },
+  { code: "+380", label: "UA", name: "Ukraine" },
+  { code: "+7", label: "RU", name: "Russia" },
+  { code: "+55", label: "BR", name: "Brazil" },
+  { code: "+52", label: "MX", name: "Mexico" },
+  { code: "+54", label: "AR", name: "Argentina" },
+  { code: "+56", label: "CL", name: "Chile" },
+  { code: "+57", label: "CO", name: "Colombia" },
+  { code: "+51", label: "PE", name: "Peru" },
+  { code: "+64", label: "NZ", name: "New Zealand" },
+  { code: "+852", label: "HK", name: "Hong Kong" },
+  { code: "+886", label: "TW", name: "Taiwan" },
 ];
 
 interface Doctor {
@@ -70,6 +113,84 @@ function getAccent(id: string) {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
   return ACCENT_COLORS[Math.abs(hash) % ACCENT_COLORS.length];
+}
+
+/* ---- Searchable Country Code Picker ---- */
+function CountryCodePicker({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = COUNTRY_CODES.find((c) => c.code === value) || COUNTRY_CODES[0];
+  const filtered = COUNTRY_CODES.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.code.includes(search) ||
+      c.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative w-28 shrink-0">
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setSearch(""); }}
+        className="h-11 w-full flex items-center justify-between gap-1 rounded-xl border border-white/[0.08] bg-white/[0.03] px-2.5 text-white text-sm hover:bg-white/[0.06] focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 focus:outline-none transition-all"
+      >
+        <span className="flex items-center gap-1.5 truncate">
+          <span className="text-base leading-none">{String.fromCodePoint(...[...selected.label.toUpperCase()].map((c) => 0x1F1E6 + c.charCodeAt(0) - 65))}</span>
+          <span className="text-xs text-white/60">{selected.code}</span>
+        </span>
+        <svg className={`w-3 h-3 text-white/30 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-64 max-h-64 rounded-xl border border-white/[0.1] bg-[#1a1a2e] shadow-2xl shadow-black/50 z-50 overflow-hidden">
+          {/* Search */}
+          <div className="p-2 border-b border-white/[0.06]">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+              <input
+                autoFocus
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search country..."
+                className="w-full pl-8 pr-2 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-white text-xs placeholder:text-white/25 focus:outline-none focus:border-violet-500/50"
+              />
+            </div>
+          </div>
+          {/* List */}
+          <div className="overflow-y-auto max-h-52 scrollbar-thin">
+            {filtered.map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => { onChange(c.code); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors ${c.code === value ? "bg-violet-500/10" : ""}`}
+              >
+                <span className="text-base leading-none">{String.fromCodePoint(...[...c.label.toUpperCase()].map((ch) => 0x1F1E6 + ch.charCodeAt(0) - 65))}</span>
+                <span className="text-xs text-white/50 w-10">{c.code}</span>
+                <span className="text-xs text-white/80 truncate">{c.name}</span>
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-3 py-4 text-xs text-white/30 text-center">No countries found</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function BookPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -651,22 +772,13 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                 {/* Phone with Country Code */}
                 <div className="space-y-1">
                   <div className="flex gap-2">
-                    <select
+                    <CountryCodePicker
                       value={countryCode}
-                      onChange={(e) => {
-                        setCountryCode(e.target.value);
-                        if (form.patientPhone.length >= 5) {
-                          lookupPatient(form.patientPhone);
-                        }
+                      onChange={(code) => {
+                        setCountryCode(code);
+                        if (form.patientPhone.length >= 5) lookupPatient(form.patientPhone);
                       }}
-                      className="h-11 w-20 shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] text-white text-sm px-1 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 focus:outline-none"
-                    >
-                      {COUNTRY_CODES.map((c) => (
-                        <option key={c.code} value={c.code} className="bg-gray-900 text-white">
-                          {c.label} {c.code}
-                        </option>
-                      ))}
-                    </select>
+                    />
                     <div className="relative flex-1">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
                       <Input
