@@ -662,8 +662,8 @@ function CreateInvoiceDialog({
   ]);
 
   // Lab-specific
-  const [labItems, setLabItems] = useState<{ testName: string; sampleType: string; rate: number; }[]>([
-    { testName: "", sampleType: "", rate: 0 },
+  const [labItems, setLabItems] = useState<{ testId: string; testName: string; sampleType: string; rate: number; }[]>([
+    { testId: "", testName: "", sampleType: "", rate: 0 },
   ]);
 
   // Package-specific
@@ -733,7 +733,7 @@ function CreateInvoiceDialog({
   const updateLabItem = (idx: number, patch: Partial<typeof labItems[0]>) => {
     setLabItems((prev) => prev.map((l, i) => i === idx ? { ...l, ...patch } : l));
   };
-  const addLabItem = () => setLabItems((p) => [...p, { testName: "", sampleType: "", rate: 0 }]);
+  const addLabItem = () => setLabItems((p) => [...p, { testId: "", testName: "", sampleType: "", rate: 0 }]);
   const removeLabItem = (idx: number) => setLabItems((p) => p.filter((_, i) => i !== idx));
 
   // IPD helpers
@@ -792,7 +792,7 @@ function CreateInvoiceDialog({
     setConsultationFee(0);
     setDoctorName("");
     setMedItems([{ medicineName: "", qty: 1, unitPrice: 0, batchNo: "", expiry: "" }]);
-    setLabItems([{ testName: "", sampleType: "", rate: 0 }]);
+    setLabItems([{ testId: "", testName: "", sampleType: "", rate: 0 }]);
     setPackageName("");
     setPackagePrice(0);
     setIpdItems([{ description: "", qty: 1, rate: 0, amount: 0 }]);
@@ -810,7 +810,7 @@ function CreateInvoiceDialog({
     }
     setSaving(true);
     try {
-      const body = {
+      const body: any = {
         branchId,
         patientId,
         type,
@@ -829,6 +829,10 @@ function CreateInvoiceDialog({
           amount: (Number(i.qty) || 0) * (Number(i.rate) || 0),
         })),
       };
+      // Include testIds for lab invoices to create lab orders
+      if (type === "lab") {
+        body.testIds = labItems.filter((l) => l.testId && l.testName).map((l) => l.testId);
+      }
       const res = await fetchAPI("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -952,7 +956,7 @@ function CreateInvoiceDialog({
                     if (test) {
                       setLabItems((prev) => {
                         const empty = prev.findIndex((l) => !l.testName);
-                        const newItem = { testName: test.name, sampleType: test.sampleType, rate: test.price };
+                        const newItem = { testId: test.id, testName: test.name, sampleType: test.sampleType, rate: test.price };
                         if (empty >= 0) {
                           const next = [...prev];
                           next[empty] = newItem;
@@ -977,7 +981,7 @@ function CreateInvoiceDialog({
                     if (pkg) {
                       setLabItems((prev) => {
                         const empty = prev.findIndex((l) => !l.testName);
-                        const newItem = { testName: pkg.name, sampleType: "Multiple", rate: pkg.price };
+                        const newItem = { testId: pkg.id, testName: pkg.name, sampleType: "Multiple", rate: pkg.price };
                         if (empty >= 0) {
                           const next = [...prev];
                           next[empty] = newItem;
