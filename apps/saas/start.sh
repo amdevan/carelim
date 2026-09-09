@@ -12,6 +12,7 @@ async function migrate() {
   const prisma = new PrismaClient({ adapter });
   const columns = [
     'ALTER TABLE \"Tenant\" ADD COLUMN IF NOT EXISTS \"logoUrl\" TEXT;',
+    'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"password\" TEXT DEFAULT \"medcore123\";',
   ];
   for (const sql of columns) {
     try { await prisma.\$executeRawUnsafe(sql); } catch(e) {}
