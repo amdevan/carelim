@@ -5,8 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Calendar, Check, Loader2, Stethoscope, ArrowLeft, User, Phone, Mail,
-  FileText, Shield, Clock, Sparkles, ChevronRight, Star, BadgeCheck, MapPin,
+  Calendar, Check, Loader2, Stethoscope, ArrowLeft, User,
+  Shield, Clock, ChevronRight, Star, BadgeCheck, MapPin,
 } from "lucide-react";
 
 interface Doctor {
@@ -434,209 +434,204 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
         <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-purple-500/8 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative max-w-lg mx-auto px-4 py-8">
+      <div className="relative max-w-lg mx-auto px-4 py-6">
         {/* Back button */}
         {!isDirectLink && (
           <button
             onClick={handleBack}
-            className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/70 transition-colors mb-6 group"
+            className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/70 transition-colors mb-4 group"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             Back to doctors
           </button>
         )}
 
-        {/* Selected Doctor */}
-        <div className="relative mb-6">
-          <div className="absolute -inset-px rounded-2xl bg-gradient-to-r from-violet-500/20 to-purple-500/20 blur" />
-          <div className="relative rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl p-5">
-            <div className="flex items-center gap-4">
-              <div className={`relative w-14 h-14 rounded-2xl bg-gradient-to-br ${selectedDoctor ? getAccent(selectedDoctor.id) : ""} flex items-center justify-center shadow-lg`}>
-                <Stethoscope className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <h2 className="font-bold text-white text-lg">{selectedDoctor?.name}</h2>
-                <p className="text-sm text-white/40">{selectedDoctor?.specialization}</p>
+        {/* Doctor Info Card */}
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl p-5 mb-5">
+          <div className="flex items-center gap-4">
+            <div className={`relative w-16 h-16 rounded-2xl bg-gradient-to-br ${selectedDoctor ? getAccent(selectedDoctor.id) : ""} flex items-center justify-center shadow-lg`}>
+              <Stethoscope className="w-8 h-8 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="font-bold text-white text-lg">{selectedDoctor?.name}</h2>
+              <p className="text-sm text-white/50">{selectedDoctor?.specialization}</p>
+              <div className="flex items-center gap-3 mt-1.5">
                 {branchLabel && (
-                  <div className="flex items-center gap-1 text-xs text-violet-400 mt-0.5">
-                    <MapPin className="w-3 h-3" />
-                    <span>{branchLabel}</span>
-                  </div>
+                  <span className="inline-flex items-center gap-1 text-xs text-violet-400">
+                    <MapPin className="w-3 h-3" /> {branchLabel}
+                  </span>
                 )}
                 {selectedDoctor?.consultationFee != null && (
-                  <p className="text-xs font-medium text-violet-400 mt-0.5">
-                    Consultation Fee: Rs. {selectedDoctor.consultationFee.toLocaleString()}
-                  </p>
+                  <span className="text-xs font-semibold text-emerald-400">
+                    Rs. {selectedDoctor.consultationFee.toLocaleString()}
+                  </span>
                 )}
               </div>
             </div>
           </div>
+
+          {/* Doctor Schedule Bar */}
+          {selectedDoctor?.workingDays && (
+            <div className="mt-4 pt-3 border-t border-white/[0.06]">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Clock className="w-3.5 h-3.5 text-violet-400" />
+                <span className="text-xs text-white/50">Schedule:</span>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {selectedDoctor.workingDays.split(",").map((d) => {
+                    const trimmed = d.trim();
+                    const shortDay = trimmed.slice(0, 3);
+                    return (
+                      <span
+                        key={trimmed}
+                        className="px-2 py-0.5 rounded-md bg-violet-500/10 border border-violet-500/20 text-[10px] font-medium text-violet-300"
+                      >
+                        {shortDay}
+                      </span>
+                    );
+                  })}
+                </div>
+                {selectedDoctor.startTime && selectedDoctor.endTime && (
+                  <span className="text-xs text-white/40 ml-1">
+                    {selectedDoctor.startTime} — {selectedDoctor.endTime}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Form */}
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm p-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm p-5">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Date & Time Section */}
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                  <Calendar className="w-4 h-4 text-violet-400" />
-                </div>
-                <span className="text-sm font-semibold text-white">Select Date & Time</span>
-              </div>
-
               {/* Date */}
               <div className="space-y-1.5">
-                <Label className="text-xs text-white/50 uppercase tracking-wider">Date</Label>
-                <div className="relative">
-                  <Input
-                    type="date"
-                    required
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    min={todayStr}
-                    className="bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
-                  />
-                </div>
+                <Label className="text-xs text-white/50 uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-violet-400" /> Select Date
+                </Label>
+                <Input
+                  type="date"
+                  required
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value, time: "" })}
+                  min={todayStr}
+                  className="bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
+                />
               </div>
 
               {/* Time Slots */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-white/50 uppercase tracking-wider">Time Slot</Label>
-                  {selectedDoctor?.startTime && selectedDoctor?.endTime && (
-                    <span className="text-[10px] text-white/30">
-                      {selectedDoctor.startTime} - {selectedDoctor.endTime}
-                    </span>
-                  )}
-                </div>
-                {(() => {
-                  // Check if doctor works on selected day
-                  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                  // Parse date using local time (not UTC)
-                  let selectedDate: Date | null = null;
-                  if (form.date) {
-                    const [y, m, d] = form.date.split("-").map(Number);
-                    selectedDate = new Date(y, m - 1, d);
-                  }
-                  const dayName = selectedDate ? dayNames[selectedDate.getDay()] : null;
-                  const workingDaysList = selectedDoctor?.workingDays?.split(",").map((d) => d.trim()) || [];
-                  const isWorkingDay = !dayName || workingDaysList.length === 0 || workingDaysList.includes(dayName);
+              {form.date && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-white/50 uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-violet-400" /> Select Time
+                  </Label>
+                  {(() => {
+                    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                    const fullDayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                    let selectedDate: Date | null = null;
+                    if (form.date) {
+                      const [y, m, d] = form.date.split("-").map(Number);
+                      selectedDate = new Date(y, m - 1, d);
+                    }
+                    const dayName = selectedDate ? dayNames[selectedDate.getDay()] : null;
+                    const fullDayName = selectedDate ? fullDayNames[selectedDate.getDay()] : "";
+                    const workingDaysList = selectedDoctor?.workingDays?.split(",").map((d) => d.trim()) || [];
+                    const isWorkingDay = !dayName || workingDaysList.length === 0 || workingDaysList.includes(dayName);
 
-                  // Generate slots from doctor's schedule
-                  const docStart = selectedDoctor?.startTime || "09:00";
-                  const docEnd = selectedDoctor?.endTime || "17:00";
-                  const slots = isWorkingDay ? generateTimeSlots(docStart, docEnd) : [];
+                    const docStart = selectedDoctor?.startTime || "09:00";
+                    const docEnd = selectedDoctor?.endTime || "17:00";
+                    const slots = isWorkingDay ? generateTimeSlots(docStart, docEnd) : [];
 
-                  if (form.date && !isWorkingDay) {
+                    if (!isWorkingDay) {
+                      return (
+                        <div className="text-center py-8 rounded-xl border border-rose-500/20 bg-rose-500/5">
+                          <Clock className="w-8 h-8 mx-auto mb-2 text-rose-400/50" />
+                          <p className="text-sm font-medium text-rose-300/80">Not Available</p>
+                          <p className="text-xs text-rose-300/50 mt-1">
+                            {selectedDoctor?.name} doesn&apos;t work on {fullDayName}s
+                          </p>
+                          <div className="flex items-center justify-center gap-1 mt-2">
+                            <span className="text-[10px] text-white/30">Available:</span>
+                            {workingDaysList.map((d) => (
+                              <span key={d} className="px-1.5 py-0.5 rounded bg-white/[0.05] text-[10px] text-white/40">{d.slice(0, 3)}</span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
-                      <div className="text-center py-6 text-white/30 text-sm">
-                        <Clock className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                        Dr. {selectedDoctor?.name} is not available on {dayName}
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {slots.map((slot) => (
+                            <button
+                              key={slot}
+                              type="button"
+                              onClick={() => setForm({ ...form, time: slot })}
+                              className={`relative px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                                form.time === slot
+                                  ? "bg-violet-600 text-white shadow-lg shadow-violet-500/25 border border-violet-500 scale-[1.02]"
+                                  : "border border-white/[0.08] bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/70 hover:border-white/[0.12]"
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          ))}
+                        </div>
+                        {!form.time && (
+                          <p className="text-[11px] text-white/25 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Pick a time slot above
+                          </p>
+                        )}
                       </div>
                     );
-                  }
-
-                  return (
-                    <>
-                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                        {slots.map((slot) => (
-                          <button
-                            key={slot}
-                            type="button"
-                            onClick={() => setForm({ ...form, time: slot })}
-                            className={`relative px-2 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${
-                              form.time === slot
-                                ? "bg-violet-600 text-white shadow-lg shadow-violet-500/25 border border-violet-500"
-                                : "border border-white/[0.06] bg-white/[0.02] text-white/40 hover:bg-white/[0.05] hover:text-white/60 hover:border-white/[0.1]"
-                            }`}
-                          >
-                            {form.time === slot && (
-                              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20" />
-                            )}
-                            <span className="relative">{slot}</span>
-                          </button>
-                        ))}
-                      </div>
-                      {!form.time && slots.length > 0 && (
-                        <p className="text-[10px] text-white/20 flex items-center gap-1 mt-1">
-                          <Clock className="w-3 h-3" /> Select a time slot
-                        </p>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
+                  })()}
+                </div>
+              )}
             </div>
 
             {/* Divider */}
             <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
 
             {/* Patient Info Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                  <User className="w-4 h-4 text-violet-400" />
-                </div>
-                <span className="text-sm font-semibold text-white">Your Information</span>
-              </div>
+            <div className="space-y-3">
+              <Label className="text-xs text-white/50 uppercase tracking-wider flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-violet-400" /> Your Information
+              </Label>
 
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-white/50 uppercase tracking-wider">Full Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                    <Input
-                      required
-                      value={form.patientName}
-                      onChange={(e) => setForm({ ...form, patientName: e.target.value })}
-                      placeholder="e.g. Sita Sharma"
-                      className="pl-10 bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
-                    />
-                  </div>
-                </div>
+              <div className="space-y-2.5">
+                <Input
+                  required
+                  value={form.patientName}
+                  onChange={(e) => setForm({ ...form, patientName: e.target.value })}
+                  placeholder="Full Name"
+                  className="bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
+                />
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-white/50 uppercase tracking-wider">Phone Number</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                    <Input
-                      required
-                      value={form.patientPhone}
-                      onChange={(e) => setForm({ ...form, patientPhone: e.target.value })}
-                      placeholder="98XXXXXXXX"
-                      className="pl-10 bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
-                    />
-                  </div>
-                </div>
+                <Input
+                  required
+                  value={form.patientPhone}
+                  onChange={(e) => setForm({ ...form, patientPhone: e.target.value })}
+                  placeholder="Phone Number"
+                  className="bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
+                />
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-white/50 uppercase tracking-wider">Email <span className="opacity-50">(optional)</span></Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                    <Input
-                      type="email"
-                      value={form.patientEmail}
-                      onChange={(e) => setForm({ ...form, patientEmail: e.target.value })}
-                      placeholder="sita@mail.com"
-                      className="pl-10 bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
-                    />
-                  </div>
-                </div>
+                <Input
+                  type="email"
+                  value={form.patientEmail}
+                  onChange={(e) => setForm({ ...form, patientEmail: e.target.value })}
+                  placeholder="Email (optional)"
+                  className="bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
+                />
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-white/50 uppercase tracking-wider">Reason for Visit</Label>
-                  <div className="relative">
-                    <FileText className="absolute left-3 top-3 w-4 h-4 text-white/20" />
-                    <textarea
-                      value={form.reason}
-                      onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                      placeholder="Describe your symptoms or reason..."
-                      rows={3}
-                      className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-white text-sm placeholder:text-white/20 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 focus:outline-none resize-none"
-                    />
-                  </div>
-                </div>
+                <textarea
+                  value={form.reason}
+                  onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                  placeholder="Reason for visit (optional)"
+                  rows={2}
+                  className="w-full px-3 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-white text-sm placeholder:text-white/20 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 focus:outline-none resize-none"
+                />
               </div>
             </div>
 
@@ -650,11 +645,10 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
             {/* Submit */}
             <button
               type="submit"
-              disabled={submitting || !form.date || !form.time}
+              disabled={submitting || !form.date || !form.time || !form.patientName || !form.patientPhone}
               className="relative w-full py-3.5 rounded-xl font-semibold text-sm text-white transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed group overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-purple-600 group-hover:from-violet-500 group-hover:to-purple-500 transition-all" />
-              <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-purple-600 opacity-0 group-hover:opacity-100 blur-xl transition-opacity" />
               <span className="relative flex items-center justify-center gap-2">
                 {submitting ? (
                   <>
@@ -663,23 +657,21 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
+                    <Check className="w-4 h-4" />
                     Confirm Booking
                   </>
                 )}
               </span>
             </button>
 
-            {/* Security note */}
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-white/20">
-              <Shield className="w-3 h-3" />
-              <span>Your information is secure and encrypted</span>
-            </div>
+            <p className="text-center text-[11px] text-white/20">
+              Your information is secure and encrypted
+            </p>
           </form>
         </div>
 
         {/* Footer */}
-        <div className="mt-8 text-center">
+        <div className="mt-6 text-center">
           <p className="text-[11px] text-white/20">Powered by Carelim Health</p>
         </div>
       </div>
