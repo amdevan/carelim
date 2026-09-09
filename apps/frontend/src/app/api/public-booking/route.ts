@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
       showDoctors
         ? db.doctor.findMany({
             where: doctorWhere,
-            select: { id: true, name: true, specialization: true, consultationFee: true },
+            select: { id: true, name: true, specialization: true, consultationFee: true, workingDays: true, startTime: true, endTime: true },
             orderBy: { name: "asc" },
           })
         : [],

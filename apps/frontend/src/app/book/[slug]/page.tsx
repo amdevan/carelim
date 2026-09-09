@@ -14,6 +14,9 @@ interface Doctor {
   name: string;
   specialization: string;
   consultationFee: number | null;
+  workingDays?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 interface Department {
@@ -21,12 +24,25 @@ interface Department {
   name: string;
 }
 
-const TIME_SLOTS = [
-  "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
-  "11:00 AM", "11:30 AM", "12:00 PM", "12:30 PM",
-  "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM",
-  "04:00 PM", "04:30 PM", "05:00 PM",
-];
+/** Generate time slots from a doctor's schedule (24h start/end) with 30-min intervals */
+function generateTimeSlots(startTime: string, endTime: string): string[] {
+  const slots: string[] = [];
+  const [startH, startM] = startTime.split(":").map(Number);
+  const [endH, endM] = endTime.split(":").map(Number);
+  let current = startH * 60 + startM;
+  const end = endH * 60 + endM;
+
+  while (current < end) {
+    const h = Math.floor(current / 60);
+    const m = current % 60;
+    // Convert to 12-hour format with AM/PM
+    const period = h >= 12 ? "PM" : "AM";
+    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    slots.push(`${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`);
+    current += 30;
+  }
+  return slots;
+}
 
 const ACCENT_COLORS = [
   "from-violet-500 to-purple-600",
@@ -478,30 +494,57 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
               {/* Time Slots */}
               <div className="space-y-2">
                 <Label className="text-xs text-white/50 uppercase tracking-wider">Time Slot</Label>
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                  {TIME_SLOTS.map((slot) => (
-                    <button
-                      key={slot}
-                      type="button"
-                      onClick={() => setForm({ ...form, time: slot })}
-                      className={`relative px-2 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${
-                        form.time === slot
-                          ? "bg-violet-600 text-white shadow-lg shadow-violet-500/25 border border-violet-500"
-                          : "border border-white/[0.06] bg-white/[0.02] text-white/40 hover:bg-white/[0.05] hover:text-white/60 hover:border-white/[0.1]"
-                      }`}
-                    >
-                      {form.time === slot && (
-                        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20" />
+                {(() => {
+                  // Check if doctor works on selected day
+                  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                  const selectedDate = form.date ? new Date(form.date + "T00:00:00") : null;
+                  const dayName = selectedDate ? dayNames[selectedDate.getDay()] : null;
+                  const workingDaysList = selectedDoctor?.workingDays?.split(",").map((d) => d.trim()) || [];
+                  const isWorkingDay = !dayName || workingDaysList.length === 0 || workingDaysList.includes(dayName);
+
+                  // Generate slots from doctor's schedule
+                  const docStart = selectedDoctor?.startTime || "09:00";
+                  const docEnd = selectedDoctor?.endTime || "17:00";
+                  const slots = isWorkingDay ? generateTimeSlots(docStart, docEnd) : [];
+
+                  if (form.date && !isWorkingDay) {
+                    return (
+                      <div className="text-center py-6 text-white/30 text-sm">
+                        <Clock className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                        Dr. {selectedDoctor?.name} is not available on {dayName}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                        {slots.map((slot) => (
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() => setForm({ ...form, time: slot })}
+                            className={`relative px-2 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${
+                              form.time === slot
+                                ? "bg-violet-600 text-white shadow-lg shadow-violet-500/25 border border-violet-500"
+                                : "border border-white/[0.06] bg-white/[0.02] text-white/40 hover:bg-white/[0.05] hover:text-white/60 hover:border-white/[0.1]"
+                            }`}
+                          >
+                            {form.time === slot && (
+                              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20" />
+                            )}
+                            <span className="relative">{slot}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {!form.time && slots.length > 0 && (
+                        <p className="text-[10px] text-white/20 flex items-center gap-1 mt-1">
+                          <Clock className="w-3 h-3" /> Select a time slot
+                        </p>
                       )}
-                      <span className="relative">{slot}</span>
-                    </button>
-                  ))}
-                </div>
-                {!form.time && (
-                  <p className="text-[10px] text-white/20 flex items-center gap-1 mt-1">
-                    <Clock className="w-3 h-3" /> Select a time slot
-                  </p>
-                )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
