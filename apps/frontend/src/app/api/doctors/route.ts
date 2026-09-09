@@ -45,6 +45,10 @@ export const POST = withTenant(async (req: NextRequest) => {
         data[key] = body[key];
       }
     }
+    // Required fields with defaults
+    if (!data.specialization) data.specialization = "General";
+    if (!data.licenseNumber) data.licenseNumber = "";
+    if (!data.phone) data.phone = "";
     const doctor = await db.doctor.create({ data: data as never });
     await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Doctor", detail: `Added doctor ${doctor.name}` } });
     return NextResponse.json(doctor, { status: 201 });
