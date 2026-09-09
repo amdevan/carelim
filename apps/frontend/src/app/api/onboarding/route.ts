@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
         ownerName: basicInfo.adminFullName,
         ownerEmail: basicInfo.adminEmailAddress,
         ownerPhone: basicInfo.adminMobileNumber,
+        logoUrl: basicInfo.clinicLogoPreview || null,
         status: "trial",
         trialEndsAt,
       },
