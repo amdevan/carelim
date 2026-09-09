@@ -99,6 +99,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
 
         const res = await fetch(url);
         const data = await res.json();
+        console.log("Booking API response:", JSON.stringify(data.doctors?.slice(0, 2), null, 2));
         setDoctors(data.doctors || []);
         setDepartments(data.departments || []);
 
@@ -149,6 +150,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
   }, [doctors]);
 
   const handleSelectDoctor = (doctor: Doctor) => {
+    console.log("Selected doctor:", doctor.name, "schedule:", doctor.workingDays, doctor.startTime, "-", doctor.endTime);
     setSelectedDoctor(doctor);
     setStep("book");
     setError("");
@@ -493,7 +495,14 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
 
               {/* Time Slots */}
               <div className="space-y-2">
-                <Label className="text-xs text-white/50 uppercase tracking-wider">Time Slot</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-white/50 uppercase tracking-wider">Time Slot</Label>
+                  {selectedDoctor?.startTime && selectedDoctor?.endTime && (
+                    <span className="text-[10px] text-white/30">
+                      {selectedDoctor.startTime} - {selectedDoctor.endTime}
+                    </span>
+                  )}
+                </div>
                 {(() => {
                   // Check if doctor works on selected day
                   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -506,6 +515,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                   const docStart = selectedDoctor?.startTime || "09:00";
                   const docEnd = selectedDoctor?.endTime || "17:00";
                   const slots = isWorkingDay ? generateTimeSlots(docStart, docEnd) : [];
+                  console.log("Time slots:", { date: form.date, dayName, isWorkingDay, docStart, docEnd, slotsCount: slots.length, slots: slots.slice(0, 5) });
 
                   if (form.date && !isWorkingDay) {
                     return (
