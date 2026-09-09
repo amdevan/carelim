@@ -477,9 +477,22 @@ model Staff {
   attendance   StaffAttendance[]
   payrolls     Payroll[]
   leaveRequests LeaveRequest[]
+  staffBranches StaffBranch[]
   @@index([tenantId])
   @@index([branchId])
   @@index([tenantId, branchId])
+}
+
+model StaffBranch {
+  id        String   @id @default(cuid())
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([staffId, branchId])
+  @@index([staffId])
+  @@index([branchId])
 }
 
 model StaffAttendance {
@@ -539,6 +552,7 @@ model Branch {
   users           User[]
   doctors         Doctor[]
   staff           Staff[]
+  staffBranches   StaffBranch[]
   patients        Patient[]
   departments     Department[]
   appointments    Appointment[]
@@ -1547,6 +1561,7 @@ model Tenant {
   registrationNo String?
   planId String?
   plan Plan? @relation(fields: [planId], references: [id])
+  logoUrl String? @db.Text
   status String @default("trial")
   trialEndsAt DateTime?
   createdAt DateTime @default(now())
