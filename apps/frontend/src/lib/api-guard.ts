@@ -41,9 +41,10 @@ export async function requirePermission(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Check if user is super admin (type=admin bypasses permission checks)
+  // Check if user is super admin (bypasses permission checks)
   const userType = req.headers.get("x-user-type");
-  if (userType === "admin") return null;
+  const userRole = req.headers.get("x-user-role");
+  if (userType === "admin" || userType === "user" || userRole === "Administrator" || userRole === "Super Admin") return null;
 
   const permissions = await getUserPermissions(userId);
   if (!hasPermission(permissions, module, action)) {
