@@ -70,7 +70,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/public-booking`);
+        const res = await fetch(`/api/public-booking?slug=${encodeURIComponent(slug)}`);
         const data = await res.json();
         setDoctors(data.doctors || []);
         setDepartments(data.departments || []);

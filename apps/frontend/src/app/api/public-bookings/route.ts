@@ -6,14 +6,27 @@ import { getAuthTenantId } from "@/lib/auth";
 export async function GET(req: NextRequest) {
   try {
     const tenantId = getAuthTenantId(req);
-    const where = tenantId ? { tenantId } : {};
 
-    const bookings = await db.publicBooking.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    });
-    return NextResponse.json(bookings);
+    // Try with tenantId filter first; fall back if column missing on production
+    try {
+      const where = tenantId ? { tenantId } : {};
+      const bookings = await db.publicBooking.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      });
+      return NextResponse.json(bookings);
+    } catch (innerError: any) {
+      // If tenantId column doesn't exist on production DB, query without it
+      if (innerError?.message?.includes("tenantId")) {
+        const bookings = await db.publicBooking.findMany({
+          orderBy: { createdAt: "desc" },
+          take: 100,
+        });
+        return NextResponse.json(bookings);
+      }
+      throw innerError;
+    }
   } catch (error) {
     console.error("Failed to fetch public bookings:", error);
     return NextResponse.json({ error: "Failed to fetch bookings" }, { status: 500 });

@@ -5,18 +5,42 @@ import { rawDb as db } from "@/lib/db";
  * GET /api/public/booking
  *
  * Query params:
- *   ?action=departments        → list active departments
+ *   ?slug=xxx             → resolve tenant from booking link slug
+ *   ?action=departments   → list active departments (scoped to tenant if slug provided)
  *   ?action=doctors&departmentId=X → doctors in a department
  *   ?action=slots&doctorId=X&date=YYYY-MM-DD → available time slots
  */
+
+/** Resolve tenantId from a booking link slug */
+async function resolveTenantFromSlug(slug: string | null): Promise<{ tenantId: string | null; branchId: string | null }> {
+  if (!slug) return { tenantId: null, branchId: null };
+  try {
+    const link = await db.bookingLink.findUnique({
+      where: { slug },
+      select: { tenantId: true, config: { select: { tenantId: true } } },
+    });
+    if (link?.tenantId) return { tenantId: link.tenantId, branchId: null };
+    if (link?.config?.tenantId) return { tenantId: link.config.tenantId, branchId: null };
+  } catch {
+    // BookingLink table might not exist yet
+  }
+  return { tenantId: null, branchId: null };
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const action = searchParams.get("action") || "departments";
+  const slug = searchParams.get("slug");
 
   try {
+    const { tenantId } = await resolveTenantFromSlug(slug);
+
     if (action === "departments") {
+      const where: any = { isActive: true };
+      if (tenantId) where.tenantId = tenantId;
+
       const departments = await db.department.findMany({
-        where: { isActive: true },
+        where,
         orderBy: { name: "asc" },
         include: { _count: { select: { doctors: { where: { status: "active" } } } } },
       });
@@ -37,8 +61,11 @@ export async function GET(req: NextRequest) {
       if (!departmentId) {
         return NextResponse.json({ error: "departmentId is required" }, { status: 400 });
       }
+      const where: any = { departmentId, status: "active" };
+      if (tenantId) where.tenantId = tenantId;
+
       const doctors = await db.doctor.findMany({
-        where: { departmentId, status: "active" },
+        where,
         orderBy: { name: "asc" },
         include: { department: true },
       });
@@ -130,11 +157,12 @@ export async function GET(req: NextRequest) {
 /**
  * POST /api/public/booking
  * Creates a patient (if needed) and books an appointment.
+ * Accepts optional linkSlug in body to resolve tenant context.
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { doctorId, departmentId, date, time, patientName, patientPhone, patientEmail, patientAge, patientGender, reason } = body;
+    const { doctorId, departmentId, date, time, patientName, patientPhone, patientEmail, patientAge, patientGender, reason, linkSlug } = body;
 
     if (!doctorId || !date || !time || !patientName || !patientPhone) {
       return NextResponse.json(
@@ -143,20 +171,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Find or create patient
-    let patient = await db.patient.findFirst({ where: { phone: patientPhone } });
+    // Resolve tenant from link slug
+    const { tenantId } = await resolveTenantFromSlug(linkSlug || null);
+
+    // Find or create patient (scope by phone + tenant)
+    const patientWhere: any = { phone: patientPhone };
+    if (tenantId) patientWhere.tenantId = tenantId;
+
+    let patient = await db.patient.findFirst({ where: patientWhere });
     if (!patient) {
       const patientCode = `PT-${Date.now().toString(36).toUpperCase()}`;
-      patient = await db.patient.create({
-        data: {
-          patientCode,
-          name: patientName,
-          phone: patientPhone,
-          email: patientEmail || undefined,
-          age: patientAge ? parseInt(patientAge) : 0,
-          gender: patientGender || "male",
-        },
-      });
+      const patientData: any = {
+        patientCode,
+        name: patientName,
+        phone: patientPhone,
+        email: patientEmail || undefined,
+        age: patientAge ? parseInt(patientAge) : 0,
+        gender: patientGender || "male",
+      };
+      if (tenantId) patientData.tenantId = tenantId;
+
+      patient = await db.patient.create({ data: patientData });
     }
 
     // Count existing appointments for token number
@@ -167,33 +202,44 @@ export async function POST(req: NextRequest) {
       where: { date: { gte: dayStart, lt: dayEnd } },
     });
 
-    // Get doctor fee
+    // Get doctor fee and branchId
     const doctor = await db.doctor.findUnique({ where: { id: doctorId } });
 
+    const appointmentData: any = {
+      patientId: patient.id,
+      doctorId,
+      departmentId: departmentId || doctor?.departmentId,
+      date: dayStart,
+      time,
+      type: "online",
+      reason: reason || undefined,
+      fee: doctor?.consultationFee || 0,
+      status: "scheduled",
+      tokenNo: count + 1,
+    };
+    // Scope appointment to doctor's branch if available
+    if (doctor?.branchId) {
+      appointmentData.branchId = doctor.branchId;
+    }
+
     const appointment = await db.appointment.create({
-      data: {
-        patientId: patient.id,
-        doctorId,
-        departmentId: departmentId || doctor?.departmentId,
-        date: dayStart,
-        time,
-        type: "online",
-        reason: reason || undefined,
-        fee: doctor?.consultationFee || 0,
-        status: "scheduled",
-        tokenNo: count + 1,
-      },
+      data: appointmentData,
       include: { patient: true, doctor: { include: { department: true } } },
     });
 
-    await db.auditLog.create({
-      data: {
-        user: "public@booking",
-        action: "CREATE",
-        module: "Appointment",
-        detail: `Public booking by ${patientName} with Dr. ${doctor?.name || "Unknown"} at ${time}`,
-      },
-    });
+    // Create audit log
+    try {
+      await db.auditLog.create({
+        data: {
+          user: "public@booking",
+          action: "CREATE",
+          module: "Appointment",
+          detail: `Public booking by ${patientName} with Dr. ${doctor?.name || "Unknown"} at ${time}`,
+        },
+      });
+    } catch {
+      // AuditLog might fail; don't block the booking
+    }
 
     return NextResponse.json(
       {

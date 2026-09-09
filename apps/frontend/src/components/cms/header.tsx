@@ -165,8 +165,8 @@ export function Header() {
 
       {!impersonation && <div className="flex-1" />}
 
-      {/* Branch Selector — only show when tenant has 2+ branches */}
-      {branches.length >= 2 && (
+      {/* Branch Selector — only show for non-staff users with 2+ branches */}
+      {user?.type !== "staff" && branches.length >= 2 && (
         <Select value={branchId ?? "__all__"} onValueChange={(v) => handleBranchChange(v === "__all__" ? null : v)}>
           <SelectTrigger size="sm" className="h-8 gap-1.5 border border-input bg-muted/50 text-xs px-2.5">
             <Building2 className="w-3.5 h-3.5 shrink-0" />

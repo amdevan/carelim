@@ -43,7 +43,7 @@ export function LoginScreen() {
         return;
       }
       localStorage.setItem("cms-user", JSON.stringify(data.user));
-      login(email, data.token, data.user?.tenantId, data.user?.permissions || [], data.user?.name, data.user?.role);
+      login(email, data.token, data.user?.tenantId, data.user?.permissions || [], data.user?.name, data.user?.role, data.user?.type);
       // Set branch from user profile if available
       if (data.user?.branchId) {
         setBranchId(data.user.branchId);

@@ -148,13 +148,26 @@ export async function POST(req: NextRequest) {
       // Staff login — simpler path, no auto-provisioning
       const tenantId = staffRecord.branch?.tenantId || staffRecord.tenantId || null;
 
+      // Look up all assigned branches for this staff member
+      const staffBranches = await rawDb.staffBranch.findMany({
+        where: { staffId: staffRecord.id },
+        select: { branchId: true },
+      });
+      const branchIds = staffBranches.map((sb) => sb.branchId);
+      // Fallback: if no StaffBranch records, use the primary branchId
+      if (branchIds.length === 0 && staffRecord.branchId) {
+        branchIds.push(staffRecord.branchId);
+      }
+
       const token = signToken({
         userId: staffRecord.id,
         email: staffRecord.email,
         role: staffRecord.role || "Staff",
         type: "staff",
         tenantId: tenantId || undefined,
-      });
+        branchId: staffRecord.branchId || undefined,
+        branchIds,
+      } as any);
 
       await rawDb.staff.update({
         where: { id: staffRecord.id },
@@ -181,6 +194,7 @@ export async function POST(req: NextRequest) {
           name: staffRecord.name,
           email: staffRecord.email,
           role: staffRecord.role || "Staff",
+          type: "staff",
           branchId: staffRecord.branchId,
           tenantId,
           clinicName: null,
@@ -357,6 +371,7 @@ export async function POST(req: NextRequest) {
         name: user!.name,
         email: user!.email,
         role: user!.role?.name || "Administrator",
+        type: "user",
         roleId: user!.roleId,
         branchId: updatedUser?.branchId || user!.branchId,
         branchClinicType,

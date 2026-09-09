@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -589,6 +590,15 @@ function StaffFormDialog({
 }) {
   const isEdit = !!staff;
   const { data: branches } = useFetch<{ id: string; name: string }[]>("/api/branches");
+  const { data: rolesData } = useFetch<{ roles: { id: string; name: string }[] }>("/api/roles");
+  const dynamicRoles = useMemo(() => rolesData?.roles?.map((r) => r.name) || ROLES, [rolesData]);
+
+  // Get assigned branch IDs from staff record
+  const assignedBranchIds = useMemo(() => {
+    if (!(staff as any)?.staffBranches) return staff?.branchId ? [staff.branchId] : [];
+    return (staff as any).staffBranches.map((sb: any) => sb.branchId);
+  }, [staff]);
+
   const [form, setForm] = useState({
     name: staff?.name ?? "",
     email: staff?.email ?? "",
@@ -599,7 +609,7 @@ function StaffFormDialog({
     salary: staff?.salary ?? 0,
     joinDate: staff?.joinDate ? staff.joinDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
     status: staff?.status ?? "active",
-    branchId: (staff as any)?.branchId ?? "",
+    branchIds: assignedBranchIds,
     password: "",
   });
   const [saving, setSaving] = useState(false);
@@ -619,12 +629,21 @@ function StaffFormDialog({
       salary: staff?.salary ?? 0,
       joinDate: staff?.joinDate ? staff.joinDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
       status: staff?.status ?? "active",
-      branchId: (staff as any)?.branchId ?? "",
+      branchIds: assignedBranchIds,
       password: "",
     });
   }
 
   const set = (k: keyof typeof form, v: string | number) => setForm((f) => ({ ...f, [k]: v }));
+
+  const toggleBranch = (branchId: string) => {
+    setForm((f) => ({
+      ...f,
+      branchIds: f.branchIds.includes(branchId)
+        ? f.branchIds.filter((id) => id !== branchId)
+        : [...f.branchIds, branchId],
+    }));
+  };
 
   const submit = async () => {
     if (!form.name || !form.email) {
@@ -651,7 +670,7 @@ function StaffFormDialog({
         designation: form.designation || null,
         joinDate: form.joinDate ? new Date(form.joinDate).toISOString() : new Date().toISOString(),
         status: form.status,
-        branchId: form.branchId || null,
+        branchIds: form.branchIds,
       };
       if (form.password) {
         payload.password = form.password;
@@ -705,7 +724,7 @@ function StaffFormDialog({
             <Select value={form.role} onValueChange={(v) => set("role", v)}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ROLES.map((r) => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
+                {dynamicRoles.map((r) => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -723,16 +742,27 @@ function StaffFormDialog({
             <Label>Designation</Label>
             <Input value={form.designation} onChange={(e) => set("designation", e.target.value)} placeholder="Senior Receptionist" />
           </div>
-          <div className="space-y-1.5">
-            <Label>Branch</Label>
-            <Select value={form.branchId || "__none__"} onValueChange={(v) => set("branchId" as any, v === "__none__" ? "" : v)}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select branch" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— None —</SelectItem>
-                {(branches || []).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+        </div>
+        {/* Multi-Branch Assignment */}
+        <div className="space-y-2 mt-2">
+          <Label>Branches</Label>
+          <p className="text-xs text-muted-foreground">Select which branches this staff member can access</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded-md p-2">
+            {(branches || []).map((b) => (
+              <label key={b.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-1.5 py-1">
+                <Checkbox
+                  checked={form.branchIds.includes(b.id)}
+                  onCheckedChange={() => toggleBranch(b.id)}
+                />
+                <span className="text-sm">{b.name}</span>
+              </label>
+            ))}
+            {(!branches || branches.length === 0) && (
+              <p className="text-xs text-muted-foreground">No branches available</p>
+            )}
           </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
           <div className="space-y-1.5">
             <Label>Salary (Rs)</Label>
             <Input type="number" value={form.salary} onChange={(e) => set("salary", e.target.value)} placeholder="0" />

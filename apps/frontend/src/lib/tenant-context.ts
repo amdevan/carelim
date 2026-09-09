@@ -16,6 +16,8 @@ interface TenantStore {
   tenantId: string | null;
   userId: string | null;
   userType: string | null;
+  branchId: string | null;
+  branchIds: string[];
 }
 
 export const tenantStorage = new AsyncLocalStorage<TenantStore>();
@@ -50,4 +52,20 @@ export function getCurrentUserType(): string | null {
  */
 export function isSuperAdmin(): boolean {
   return getCurrentUserType() === "admin";
+}
+
+/**
+ * Get the current request's branch ID (for staff branch isolation).
+ */
+export function getCurrentBranchId(): string | null {
+  const store = tenantStorage.getStore();
+  return store?.branchId ?? null;
+}
+
+/**
+ * Get all branch IDs for the current staff member (multi-branch support).
+ */
+export function getCurrentBranchIds(): string[] {
+  const store = tenantStorage.getStore();
+  return store?.branchIds ?? [];
 }

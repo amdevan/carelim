@@ -165,9 +165,9 @@ interface AppState {
   setSidebarCollapsed: (v: boolean) => void;
   authed: boolean;
   token: string | null;
-  user: { name: string; email: string; role: string; tenantId?: string | null; permissions?: string[] } | null;
-  login: (email: string, token?: string, tenantId?: string | null, permissions?: string[], name?: string, role?: string) => void;
-  loginAs: (email: string, name: string, role: string, tenantId?: string | null, permissions?: string[]) => void;
+  user: { name: string; email: string; role: string; type?: string; tenantId?: string | null; permissions?: string[] } | null;
+  login: (email: string, token?: string, tenantId?: string | null, permissions?: string[], name?: string, role?: string, type?: string) => void;
+  loginAs: (email: string, name: string, role: string, tenantId?: string | null, permissions?: string[], type?: string) => void;
   logout: () => void;
   commandOpen: boolean;
   setCommandOpen: (v: boolean) => void;
@@ -201,7 +201,7 @@ export const useAppStore = create<AppState>()(
       authed: false,
       token: null,
       user: null,
-      login: (email, token, tenantId, permissions, name, role) =>
+      login: (email, token, tenantId, permissions, name, role, type) =>
         set({
           authed: true,
           token: token || null,
@@ -211,14 +211,15 @@ export const useAppStore = create<AppState>()(
             name: name || email.split("@")[0].replace(/^\w/, (c) => c.toUpperCase()),
             email,
             role: role || "User",
+            type: type || "user",
             tenantId: tenantId || null,
             permissions: permissions || [],
           },
         }),
-      loginAs: (email, name, role, tenantId, permissions) =>
+      loginAs: (email, name, role, tenantId, permissions, type) =>
         set({
           authed: true,
-          user: { name, email, role, tenantId: tenantId || null, permissions: permissions || [] },
+          user: { name, email, role, type: type || "user", tenantId: tenantId || null, permissions: permissions || [] },
           enabledModules: [],
         }),
       logout: () => {

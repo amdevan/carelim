@@ -200,6 +200,12 @@ export async function middleware(request: NextRequest) {
       if (payload.tenantId) {
         response.headers.set("x-tenant-id", payload.tenantId);
       }
+      if (payload.branchId) {
+        response.headers.set("x-branch-id", payload.branchId);
+      }
+      if ((payload as any).branchIds) {
+        response.headers.set("x-branch-ids", JSON.stringify((payload as any).branchIds));
+      }
 
       // Apply security headers
       for (const [key, value] of Object.entries(securityHeaders)) {
