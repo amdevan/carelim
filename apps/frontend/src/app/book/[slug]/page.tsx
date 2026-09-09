@@ -89,6 +89,12 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
     reason: "",
   });
 
+  // Local today string (avoids UTC timezone issues)
+  const todayStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+
   useEffect(() => {
     async function load() {
       try {
@@ -99,7 +105,6 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
 
         const res = await fetch(url);
         const data = await res.json();
-        console.log("Booking API response:", JSON.stringify(data.doctors?.slice(0, 2), null, 2));
         setDoctors(data.doctors || []);
         setDepartments(data.departments || []);
 
@@ -108,6 +113,8 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
           setSelectedDoctor(data.doctors[0]);
           setStep("book");
           setIsDirectLink(true);
+          // Pre-select today's date so time slots show immediately
+          setForm((f) => ({ ...f, date: todayStr }));
         } else if (doctorParam && data.doctors?.length > 0) {
           // Find the exact doctor match
           const matched = data.doctors.find((d: Doctor) => d.id === doctorParam);
@@ -115,6 +122,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
             setSelectedDoctor(matched);
             setStep("book");
             setIsDirectLink(true);
+            setForm((f) => ({ ...f, date: todayStr }));
           }
         }
 
@@ -150,7 +158,6 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
   }, [doctors]);
 
   const handleSelectDoctor = (doctor: Doctor) => {
-    console.log("Selected doctor:", doctor.name, "schedule:", doctor.workingDays, doctor.startTime, "-", doctor.endTime);
     setSelectedDoctor(doctor);
     setStep("book");
     setError("");
@@ -487,7 +494,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                     required
                     value={form.date}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    min={new Date().toISOString().split("T")[0]}
+                    min={todayStr}
                     className="bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/20 focus:border-violet-500/50 focus:ring-violet-500/20 h-11"
                   />
                 </div>
@@ -506,7 +513,12 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                 {(() => {
                   // Check if doctor works on selected day
                   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                  const selectedDate = form.date ? new Date(form.date + "T00:00:00") : null;
+                  // Parse date using local time (not UTC)
+                  let selectedDate: Date | null = null;
+                  if (form.date) {
+                    const [y, m, d] = form.date.split("-").map(Number);
+                    selectedDate = new Date(y, m - 1, d);
+                  }
                   const dayName = selectedDate ? dayNames[selectedDate.getDay()] : null;
                   const workingDaysList = selectedDoctor?.workingDays?.split(",").map((d) => d.trim()) || [];
                   const isWorkingDay = !dayName || workingDaysList.length === 0 || workingDaysList.includes(dayName);
@@ -515,7 +527,6 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                   const docStart = selectedDoctor?.startTime || "09:00";
                   const docEnd = selectedDoctor?.endTime || "17:00";
                   const slots = isWorkingDay ? generateTimeSlots(docStart, docEnd) : [];
-                  console.log("Time slots:", { date: form.date, dayName, isWorkingDay, docStart, docEnd, slotsCount: slots.length, slots: slots.slice(0, 5) });
 
                   if (form.date && !isWorkingDay) {
                     return (
