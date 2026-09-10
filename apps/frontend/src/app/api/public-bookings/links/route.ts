@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const tenantId = getAuthTenantId(req);
-    const origin = req.headers.get("origin") || "http://localhost:3000";
+    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     // Verify tenant exists if provided
     let validTenantId: string | null = null;
@@ -53,6 +53,16 @@ export async function POST(req: NextRequest) {
         if (tenant) validTenantId = tenant.id;
       } catch {
         // Tenant lookup might fail
+      }
+    }
+
+    // If no tenantId from auth, try to get the first available tenant
+    if (!validTenantId) {
+      try {
+        const anyTenant = await db.tenant.findFirst({ select: { id: true } });
+        if (anyTenant) validTenantId = anyTenant.id;
+      } catch {
+        // Continue without tenant
       }
     }
 
@@ -82,7 +92,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Get doctor info if doctorId provided
-      let doctorInfo = null;
+      let doctorInfo: { id: string; name: string; specialization: string } | null = null;
       if (body.doctorId) {
         try {
           doctorInfo = await db.doctor.findUnique({
