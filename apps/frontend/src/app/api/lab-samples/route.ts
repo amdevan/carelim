@@ -12,7 +12,10 @@ export const GET = withTenant(async (req: NextRequest) => {
   if (orderId) where.orderId = orderId;
   const samples = await db.labSample.findMany({
     where,
-    include: { order: { include: { patient: true } }, tracking: { orderBy: { timestamp: "desc" } } },
+    include: {
+      order: { include: { patient: true, items: { include: { test: { select: { name: true } } } } } },
+      tracking: { orderBy: { timestamp: "desc" } },
+    },
     orderBy: { collectionTime: "desc" },
   });
   return NextResponse.json(samples);
@@ -24,15 +27,16 @@ export const POST = withTenant(async (req: NextRequest) => {
   const { orderId, testId, sampleType, containerType, collectorName, location } = body;
   const count = await db.labSample.count();
   const now = new Date();
+  const sampleCode = `S-${nanoid(8).toUpperCase()}`;
   const sample = await db.labSample.create({
     data: {
-      sampleCode: `S-${nanoid(8).toUpperCase()}`,
+      sampleCode,
       orderId,
       testId: testId || null,
       sampleType: sampleType || "Blood",
       containerType: containerType || "EDTA Tube",
-      barcode: `SMP${String(count + 1).padStart(6, "0")}`,
-      qrCode: `QR-${orderId}-${testId || "all"}`,
+      barcode: sampleCode,
+      qrCode: sampleCode,
       collectorName: collectorName || null,
       collectionTime: now,
       collectedAt: now.toISOString(),

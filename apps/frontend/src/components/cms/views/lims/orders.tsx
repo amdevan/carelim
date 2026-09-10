@@ -6,14 +6,11 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StaffSearch } from "@/components/ui/staff-search";
-import { PatientSearch } from "@/components/ui/patient-search";
-import { DoctorSearch } from "@/components/ui/doctor-search";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -27,18 +24,20 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Search, Plus, FlaskConical, TestTube, ListChecks, CheckCircle2,
-  Download, Eye, Syringe, Printer, ArrowUpDown, Barcode, User,
-  Wallet, ClipboardList, Activity, X, Package as PackageIcon,
+  Search, FlaskConical, TestTube, ListChecks, CheckCircle2,
+  Eye, Syringe, Barcode, User, Printer,
+  Wallet, ClipboardList, Activity,
 } from "lucide-react";
 import { formatRs, formatDate, timeAgo, statusColors, statusLabel } from "@/lib/format";
-import { exportToCSV, printHTML, docHeader } from "@/lib/export-utils";
+import { escapeHTML, buildBarcodeBars } from "./utils";
+import { printHTML } from "@/lib/export-utils";
+
 import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+
 import { useAppStore } from "@/store/app-store";
-import { escapeHTML, TAX_RATE, SAMPLE_TYPES, CONTAINER_TYPES, StatCard, InfoTile } from "./utils";
+
 
 /* ---------- Types ---------- */
 
@@ -52,20 +51,7 @@ interface LabTestMaster {
   price: number;
   department?: LabTestDepartment | null;
   sampleType?: string;
-}
-
-interface LabPackageTest {
-  testId: string;
-  test: LabTestMaster;
-}
-
-interface LabPackage {
-  id: string;
-  name: string;
-  code: string;
-  price: number;
-  discountPct?: number;
-  tests: LabPackageTest[];
+  containerType?: string;
 }
 
 interface LabOrderItem {
@@ -186,123 +172,36 @@ const FLAG_COLORS: Record<string, string> = {
   abnormal: "text-violet-600 dark:text-violet-400",
 };
 
-const STATUS_FILTERS = ["all", "ordered", "collected", "processing", "completed", "cancelled"] as const;
 const PRIORITY_FILTERS = ["all", "normal", "urgent", "emergency"] as const;
-
-/* ---------- Helpers ---------- */
-
-function buildOrderHTML(o: LabOrder, clinicName?: string): string {
-  const statusBadge = `<span class="badge teal">${statusLabel(o.status)}</span>`;
-  const priorityBadge = `<span class="badge ${o.priority === "emergency" ? "rose" : o.priority === "urgent" ? "amber" : "teal"}">${statusLabel(o.priority)} Priority</span>`;
-
-  const patientGrid = `
-    <div class="info-grid">
-      <div>
-        <div class="label">Patient</div>
-        <div><strong>${escapeHTML(o.patient.name)}</strong></div>
-        <div>Code: <span style="font-family:monospace">${escapeHTML(o.patient.patientCode)}</span></div>
-        <div>Phone: ${escapeHTML(o.patient.phone || "—")}</div>
-        ${o.patient.age ? `<div>Age/Sex: ${o.patient.age} / ${escapeHTML(o.patient.gender || "—")}</div>` : ""}
-      </div>
-      <div>
-        <div class="label">Order Info</div>
-        <div>Priority: <strong>${escapeHTML(statusLabel(o.priority))}</strong></div>
-        <div>Ordered: ${formatDate(o.orderedAt)}</div>
-        <div>Barcode: <span style="font-family:monospace">${escapeHTML(o.barcode || "—")}</span></div>
-        ${o.clinicalNotes ? `<div class="label" style="margin-top:6px">Clinical Notes</div><div>${escapeHTML(o.clinicalNotes)}</div>` : ""}
-      </div>
-    </div>`;
-
-  const itemRows = (o.items || []).map((it) => `
-    <tr>
-      <td>${escapeHTML(it.test.name)}</td>
-      <td style="font-family:monospace">${escapeHTML(it.test.code)}</td>
-      <td style="text-align:right">${formatRs(it.price)}</td>
-      <td>${statusLabel(it.status)}</td>
-    </tr>`).join("");
-
-  const itemsTable = `
-    <h2>Test Items</h2>
-    <table>
-      <thead><tr><th>Test</th><th>Code</th><th style="text-align:right">Price</th><th>Status</th></tr></thead>
-      <tbody>${itemRows || `<tr><td colspan="4" style="text-align:center;color:#94a3b8">No items</td></tr>`}</tbody>
-    </table>`;
-
-  const totals = `
-    <div class="totals">
-      <div class="row"><span>Subtotal</span><span>${formatRs(o.totalAmount)}</span></div>
-      <div class="row"><span>Discount</span><span>- ${formatRs(o.discount)}</span></div>
-      <div class="row"><span>Tax (13%)</span><span>+ ${formatRs(o.tax)}</span></div>
-      <div class="row grand"><span>Net Amount</span><span>${formatRs(o.netAmount)}</span></div>
-      <div class="row"><span>Paid</span><span>${formatRs(o.paidAmount)}</span></div>
-      <div class="row"><span>Due</span><span>${formatRs(Math.max(0, o.netAmount - o.paidAmount))}</span></div>
-    </div>`;
-
-  return `${docHeader(o.orderNo, "LAB ORDER", formatDate(o.orderedAt), statusBadge + priorityBadge)}
-    ${patientGrid}
-    ${itemsTable}
-    ${totals}
-    <div class="signature">
-      <div class="sig-block"><div class="line"></div><div class="name">Collected By</div><div class="role">Lab Technician</div></div>
-      <div class="sig-block"><div class="line"></div><div class="name">Authorized Signatory</div><div class="role">${clinicName || "Lab Services"}</div></div>
-    </div>`;
-}
-
-function printOrder(o: LabOrder, clinicName?: string) {
-  printHTML(`Lab Order ${o.orderNo}`, buildOrderHTML(o, clinicName), clinicName);
-}
 
 /* ---------- Main Component ---------- */
 
 export function LimsOrders() {
   const [refresh, setRefresh] = useState(0);
-  const tenantBranding = useAppStore((s) => s.tenantBranding);
   const refreshList = useCallback(() => setRefresh((r) => r + 1), []);
   const { data: orders, loading, error } = useFetch<LabOrder[]>(
     refresh ? `/api/lab-orders?_r=${refresh}` : "/api/lab-orders",
   );
 
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
-  const [sortKey, setSortKey] = useState<"orderedAt" | "orderNo" | "netAmount">("orderedAt");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const [createOpen, setCreateOpen] = useState(false);
   const [viewId, setViewId] = useState<string | null>(null);
   const [collectOrder, setCollectOrder] = useState<LabOrder | null>(null);
 
-  /* ---- Filter + sort ---- */
+  /* ---- Filter ---- */
   const filtered = useMemo(() => {
     if (!orders) return [];
     const ql = q.toLowerCase();
-    const list = orders.filter((o) => {
-      const matchesStatus = statusFilter === "all" || o.status === statusFilter;
+    return orders.filter((o) => {
       const matchesPriority = priorityFilter === "all" || o.priority === priorityFilter;
       const matchesSearch = !ql ||
         o.orderNo.toLowerCase().includes(ql) ||
         o.patient.name.toLowerCase().includes(ql) ||
         (o.patient.patientCode || "").toLowerCase().includes(ql);
-      return matchesStatus && matchesPriority && matchesSearch;
+      return matchesPriority && matchesSearch;
     });
-    const dir = sortDir === "asc" ? 1 : -1;
-    return list.sort((a, b) => {
-      let av: number | string;
-      let bv: number | string;
-      if (sortKey === "orderedAt") {
-        av = new Date(a.orderedAt).getTime();
-        bv = new Date(b.orderedAt).getTime();
-      } else if (sortKey === "orderNo") {
-        av = a.orderNo;
-        bv = b.orderNo;
-      } else {
-        av = a.netAmount;
-        bv = b.netAmount;
-      }
-      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
-      return String(av).localeCompare(String(bv)) * dir;
-    });
-  }, [orders, q, statusFilter, priorityFilter, sortKey, sortDir]);
+  }, [orders, q, priorityFilter]);
 
   const pagination = usePagination<LabOrder>(filtered, 10);
 
@@ -321,24 +220,7 @@ export function LimsOrders() {
   /* Reset page to 1 when filters change */
   useEffect(() => {
     pagination.setPage(1);
-  }, [q, statusFilter, priorityFilter, sortKey, sortDir]);
-
-  const handleExport = () => {
-    if (!filtered.length) { toast.info("No lab orders to export"); return; }
-    exportToCSV("lab-orders", [
-      "Order No", "Patient", "Priority", "Tests", "Status", "Total", "Paid", "Payment",
-    ], filtered.map((o) => [
-      o.orderNo,
-      o.patient.name,
-      statusLabel(o.priority),
-      o.items.length,
-      statusLabel(o.status),
-      o.netAmount,
-      o.paidAmount,
-      statusLabel(o.paymentStatus),
-    ]));
-    toast.success(`Exported ${filtered.length} lab orders to CSV`);
-  };
+  }, [q, priorityFilter]);
 
   if (error) {
     return (
@@ -364,109 +246,56 @@ export function LimsOrders() {
             {orders?.length ?? 0} orders · {stats.pending} pending collection · {stats.inProgress} in progress · {stats.completed} completed
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
-            <Download className="w-4 h-4" /> Export CSV
-          </Button>
-          <Button
-            size="sm"
-            className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className="w-4 h-4" /> New Lab Order
-          </Button>
-        </div>
+
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-2">
         {[
-          { label: "Total Orders", value: String(stats.total), icon: FlaskConical, accent: "from-teal-500 to-teal-600" },
-          { label: "Pending Collection", value: String(stats.pending), icon: ListChecks, accent: "from-amber-500 to-orange-500" },
-          { label: "In Progress", value: String(stats.inProgress), icon: TestTube, accent: "from-violet-500 to-purple-600" },
-          { label: "Completed", value: String(stats.completed), icon: CheckCircle2, accent: "from-emerald-500 to-emerald-600" },
-        ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-            <Card className="border-border/60">
-              <CardContent className="p-3.5">
-                <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${s.accent} flex items-center justify-center text-white shadow-sm`}>
-                  <s.icon className="w-[18px] h-[18px]" />
-                </div>
-                <p className="text-xl font-bold mt-2">{s.value}</p>
-                <p className="text-[11px] text-muted-foreground">{s.label}</p>
-              </CardContent>
-            </Card>
-          </motion.div>
+          { label: "Total", value: String(stats.total), icon: FlaskConical, color: "text-teal-600 bg-teal-50 dark:bg-teal-950/30" },
+          { label: "Pending", value: String(stats.pending), icon: ListChecks, color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30" },
+          { label: "In Progress", value: String(stats.inProgress), icon: TestTube, color: "text-violet-600 bg-violet-50 dark:bg-violet-950/30" },
+          { label: "Completed", value: String(stats.completed), icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" },
+        ].map((s) => (
+          <div key={s.label} className={`flex items-center gap-2.5 rounded-lg border bg-card p-2.5`}>
+            <div className={`w-8 h-8 rounded-md ${s.color} flex items-center justify-center shrink-0`}>
+              <s.icon className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-lg font-bold leading-tight">{s.value}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">{s.label}</p>
+            </div>
+          </div>
         ))}
       </div>
 
       {/* Filter bar */}
       <Card>
-        <CardContent className="p-3 space-y-2.5">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-2">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search order no or patient name…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
-              <Select value={sortKey} onValueChange={(v) => setSortKey(v as typeof sortKey)}>
-                <SelectTrigger className="w-[130px] h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="orderedAt">Ordered</SelectItem>
-                  <SelectItem value="orderNo">Order No</SelectItem>
-                  <SelectItem value="netAmount">Net Amount</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 px-2 text-xs"
-                onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-              >
-                {sortDir === "asc" ? "Asc" : "Desc"}
-              </Button>
-            </div>
+        <CardContent className="p-3 flex flex-col sm:flex-row sm:items-center gap-2.5">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search order no or patient name…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="pl-9 h-9"
+            />
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-muted-foreground mr-1">Status:</span>
-              {STATUS_FILTERS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                    statusFilter === s
-                      ? "bg-teal-600 text-white border-teal-600"
-                      : "bg-card hover:bg-accent border-border"
-                  }`}
-                >
-                  {s === "all" ? "All" : statusLabel(s)}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-muted-foreground mr-1">Priority:</span>
-              {PRIORITY_FILTERS.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPriorityFilter(p)}
-                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                    priorityFilter === p
-                      ? "bg-teal-600 text-white border-teal-600"
-                      : "bg-card hover:bg-accent border-border"
-                  }`}
-                >
-                  {p === "all" ? "All" : statusLabel(p)}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-muted-foreground mr-0.5">Priority:</span>
+            {PRIORITY_FILTERS.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPriorityFilter(p)}
+                className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                  priorityFilter === p
+                    ? "bg-teal-600 text-white border-teal-600"
+                    : "bg-card hover:bg-accent border-border"
+                }`}
+              >
+                {p === "all" ? "All" : statusLabel(p)}
+              </button>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -569,20 +398,11 @@ export function LimsOrders() {
                             variant="outline"
                             className="h-7 px-2 text-[11px] gap-1 border-cyan-300 text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/30"
                             onClick={() => setCollectOrder(o)}
-                            title="Collect sample"
+                            title="Send to collection"
                           >
-                            <Syringe className="w-3 h-3" /> Collect
+                            <Syringe className="w-3 h-3" /> Send to Collection
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={() => printOrder(o, tenantBranding?.clinicName ?? undefined)}
-                          title="Print order"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -619,12 +439,6 @@ export function LimsOrders() {
         />
       )}
 
-      {/* New lab order dialog */}
-      <NewLabOrderDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={refreshList}
-      />
     </div>
   );
 }
@@ -632,7 +446,6 @@ export function LimsOrders() {
 /* ---------- Order Detail Sheet ---------- */
 
 function OrderDetail({ order }: { order: LabOrder }) {
-  const tenantBranding = useAppStore((s) => s.tenantBranding);
   return (
     <div>
       <SheetHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30">
@@ -657,9 +470,6 @@ function OrderDetail({ order }: { order: LabOrder }) {
               )}
             </SheetDescription>
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => printOrder(order, tenantBranding?.clinicName ?? undefined)}>
-            <Printer className="w-4 h-4" /> Print
-          </Button>
         </div>
       </SheetHeader>
 
@@ -898,19 +708,37 @@ interface CollectDialogProps {
   onCollected: () => void;
 }
 
+interface SampleToCollect {
+  sampleType: string;
+  containerType: string;
+  tests: string[];
+}
+
 function CollectSampleDialog({ order, open, onClose, onCollected }: CollectDialogProps) {
   const branchId = useAppStore((s) => s.branchId);
   const [saving, setSaving] = useState(false);
   const [collectorName, setCollectorName] = useState("");
-  const [sampleType, setSampleType] = useState("Blood");
-  const [containerType, setContainerType] = useState("EDTA Tube");
   const [location, setLocation] = useState("Sample Reception");
+
+  /* Auto-detect samples from order items */
+  const samplesToCollect = useMemo<SampleToCollect[]>(() => {
+    if (!order?.items) return [];
+    const map = new Map<string, SampleToCollect>();
+    for (const item of order.items) {
+      const st = item.test?.sampleType || "Blood";
+      const ct = item.test?.containerType || "EDTA Tube";
+      const key = `${st}|${ct}`;
+      if (!map.has(key)) {
+        map.set(key, { sampleType: st, containerType: ct, tests: [] });
+      }
+      map.get(key)!.tests.push(item.test.name);
+    }
+    return Array.from(map.values());
+  }, [order]);
 
   useEffect(() => {
     if (open) {
       setCollectorName("");
-      setSampleType("Blood");
-      setContainerType("EDTA Tube");
       setLocation("Sample Reception");
     }
   }, [open]);
@@ -923,398 +751,125 @@ function CollectSampleDialog({ order, open, onClose, onCollected }: CollectDialo
     }
     setSaving(true);
     try {
-      const res = await fetchAPI("/api/lab-samples", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: order.id,
-          sampleType,
-          containerType,
-          collectorName,
-          location,
-          branchId,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Request failed: ${res.status}`);
+      /* Create one sample per container type */
+      for (const s of samplesToCollect) {
+        const res = await fetchAPI("/api/lab-samples", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: order.id,
+            sampleType: s.sampleType,
+            containerType: s.containerType,
+            collectorName,
+            location,
+            branchId,
+          }),
+        });
+        if (!res.ok) throw new Error("Failed to create sample");
       }
-      toast.success(`Sample collected for ${order.orderNo}`);
+      toast.success(`${samplesToCollect.length} sample(s) sent to collection for ${order.orderNo}`);
       onClose();
       onCollected();
     } catch (e) {
-      toast.error(`Failed to collect sample: ${e instanceof Error ? e.message : "Unknown error"}`);
+      toast.error(`Failed to send to collection: ${e instanceof Error ? e.message : "Unknown error"}`);
     } finally {
       setSaving(false);
     }
   };
 
+  const printLabel = (sample: SampleToCollect, idx: number) => {
+    const sampleCode = `${order.orderNo.replace("LAB-", "S-")}-${idx + 1}`;
+    const barcode = sampleCode;
+    const sex = order.patient.gender === "male" ? "M" : order.patient.gender === "female" ? "F" : order.patient.gender || "-";
+    const age = (order.patient.age ?? 0) > 0 ? order.patient.age : "-";
+    const labelHTML = `
+      <style>
+        .lbl-wrap { width: 320px; margin: 0 auto; border: 2px solid #0d9488; border-radius: 10px; padding: 8px 12px; font-family: 'Courier New', monospace; }
+        .lbl-wrap .code { text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 2px; }
+        .lbl-wrap .bars { text-align: center; margin: 4px 0; line-height: 0; }
+        .lbl-wrap .divider { border: 0; border-top: 1px dashed #cbd5e1; margin: 6px 0; }
+        .lbl-wrap table { width: 100%; font-size: 11px; }
+        .lbl-wrap td { padding: 1px 0; }
+        .lbl-wrap .lbl { color: #64748b; }
+        .lbl-wrap .val { font-weight: bold; color: #1a2e35; }
+      </style>
+      <div class="lbl-wrap">
+        <div class="bars">${buildBarcodeBars(barcode)}</div>
+        <div class="code">${escapeHTML(sampleCode)}</div>
+        <hr class="divider" />
+        <table>
+          <tr><td class="lbl">Patient:</td><td class="val">${escapeHTML(order.patient.name)},${sex},${age}</td></tr>
+          <tr><td class="lbl">Date:</td><td class="val">${escapeHTML(new Date().toLocaleDateString())}</td></tr>
+        </table>
+      </div>`;
+    printHTML(`Sample Label ${sampleCode}`, labelHTML);
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Syringe className="w-4 h-4 text-cyan-600" /> Collect Sample
+            <Syringe className="w-4 h-4 text-cyan-600" /> Send to Collection
           </DialogTitle>
           <DialogDescription>
-            Collect sample for order <span className="font-mono">{order.orderNo}</span> ({order.patient.name})
+            {order.orderNo} — {order.patient.name} · {samplesToCollect.length} container(s) detected
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Collector Name */}
           <div className="space-y-1.5">
-            <Label htmlFor="collector">Collector Name *</Label>
+            <Label>Collector Name *</Label>
             <StaffSearch value={collectorName} onValueChange={setCollectorName} label="Collector Name" required />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="stype">Sample Type</Label>
-              <Select value={sampleType} onValueChange={setSampleType}>
-                <SelectTrigger id="stype"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["Blood", "Urine", "Stool", "Sputum", "Tissue", "CSF", "Swab"].map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="container">Container</Label>
-              <Select value={containerType} onValueChange={setContainerType}>
-                <SelectTrigger id="container"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["EDTA Tube", "Citrate Tube", "Heparin Tube", "Plain Tube", "Fluoride Tube", "Container"].map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+
+          {/* Location */}
           <div className="space-y-1.5">
-            <Label htmlFor="loc">Collection Location</Label>
+            <Label>Collection Location</Label>
             <Input
-              id="loc"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="e.g. Sample Reception"
             />
           </div>
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5"
-              disabled={saving}
-            >
-              {saving ? "Collecting…" : (<><Syringe className="w-4 h-4" /> Collect Sample</>)}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
-/* ---------- New Lab Order Dialog ---------- */
-
-interface NewOrderProps {
-  open: boolean;
-  onClose: () => void;
-  onCreated: () => void;
-}
-
-function NewLabOrderDialog({ open, onClose, onCreated }: NewOrderProps) {
-  const { data: tests, loading: testsLoading } = useFetch<LabTestMaster[]>(
-    open ? "/api/lab-tests-master" : null,
-  );
-  const { data: packages } = useFetch<LabPackage[]>(
-    open ? "/api/lab-packages" : null,
-  );
-
-  const [patientId, setPatientId] = useState("");
-  const [doctorId, setDoctorId] = useState("none");
-  const [priority, setPriority] = useState("normal");
-  const [clinicalNotes, setClinicalNotes] = useState("");
-  const [discount, setDiscount] = useState(0);
-  const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
-  const [testSearch, setTestSearch] = useState("");
-  const [selectedPackageId, setSelectedPackageId] = useState("none");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setPatientId("");
-      setDoctorId("none");
-      setPriority("normal");
-      setClinicalNotes("");
-      setDiscount(0);
-      setSelectedTestIds([]);
-      setTestSearch("");
-      setSelectedPackageId("none");
-    }
-  }, [open]);
-
-  const filteredTests = useMemo(() => {
-    if (!tests) return [];
-    const ql = testSearch.toLowerCase();
-    if (!ql) return tests;
-    return tests.filter((t) =>
-      t.name.toLowerCase().includes(ql) ||
-      t.code.toLowerCase().includes(ql) ||
-      (t.category || "").toLowerCase().includes(ql),
-    );
-  }, [tests, testSearch]);
-
-  // When a package is selected, auto-select its tests
-  useEffect(() => {
-    if (!packages) return;
-    if (selectedPackageId === "none") return;
-    const pkg = packages.find((p) => p.id === selectedPackageId);
-    if (pkg) {
-      setSelectedTestIds(pkg.tests.map((t) => t.testId));
-    }
-  }, [selectedPackageId, packages]);
-
-  const selectedTests = useMemo(() => {
-    if (!tests) return [];
-    return tests.filter((t) => selectedTestIds.includes(t.id));
-  }, [tests, selectedTestIds]);
-
-  const subtotal = useMemo(
-    () => selectedTests.reduce((s, t) => s + (t.price || 0), 0),
-    [selectedTests],
-  );
-  const disc = Math.min(Math.max(0, discount || 0), subtotal);
-  const tax = Math.round((subtotal - disc) * TAX_RATE);
-  const netAmount = subtotal - disc + tax;
-
-  const toggleTest = (testId: string) => {
-    setSelectedPackageId("none");
-    setSelectedTestIds((cur) =>
-      cur.includes(testId) ? cur.filter((id) => id !== testId) : [...cur, testId],
-    );
-  };
-
-  const handleRemoveTest = (testId: string) => {
-    setSelectedPackageId("none");
-    setSelectedTestIds((cur) => cur.filter((id) => id !== testId));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!patientId) {
-      toast.error("Please select a patient");
-      return;
-    }
-    if (selectedTestIds.length === 0) {
-      toast.error("Please select at least one test");
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetchAPI("/api/lab-orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patientId,
-          doctorId: doctorId === "none" ? null : doctorId,
-          priority,
-          clinicalNotes: clinicalNotes || null,
-          discount: disc,
-          testIds: selectedTestIds,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Request failed: ${res.status}`);
-      }
-      const order = await res.json();
-      toast.success(`Lab order ${order.orderNo} created`);
-      onClose();
-      onCreated();
-    } catch (e) {
-      toast.error(`Failed to create order: ${e instanceof Error ? e.message : "Unknown error"}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Plus className="w-4 h-4 text-teal-600" /> New Lab Order
-          </DialogTitle>
-          <DialogDescription>
-            Create a new laboratory order with test or package selection.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Patient + Doctor + Priority */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <PatientSearch value={patientId} onValueChange={setPatientId} label="" required />
-            <DoctorSearch value={doctorId} onValueChange={setDoctorId} label="" />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="priority">Priority</Label>
-            <Select value={priority} onValueChange={setPriority}>
-              <SelectTrigger id="priority" className="w-full sm:w-[200px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
-                <SelectItem value="emergency">Emergency</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Package select */}
-          <div className="space-y-1.5">
-            <Label htmlFor="package" className="flex items-center gap-1.5">
-              <PackageIcon className="w-3.5 h-3.5" /> Select Package (optional — auto-selects its tests)
-            </Label>
-            <Select value={selectedPackageId} onValueChange={setSelectedPackageId}>
-              <SelectTrigger id="package">
-                <SelectValue placeholder="No package — pick tests manually below" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No package</SelectItem>
-                {(packages || []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name} ({p.tests.length} tests · {formatRs(p.price)})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Test selection */}
+          {/* Auto-detected samples */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="flex items-center gap-1.5">
-                <TestTube className="w-3.5 h-3.5" /> Select Tests *
-              </Label>
-              <span className="text-xs text-muted-foreground">
-                {selectedTestIds.length} selected · {formatRs(subtotal)}
-              </span>
-            </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search tests by name, code or category…"
-                value={testSearch}
-                onChange={(e) => setTestSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="rounded-lg border max-h-64 overflow-y-auto">
-              {testsLoading ? (
-                <div className="p-4 space-y-2">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-9 w-full" />
-                  ))}
-                </div>
-              ) : filteredTests.length === 0 ? (
-                <div className="p-4 text-center text-xs text-muted-foreground">
-                  {tests && tests.length === 0 ? "No lab tests available" : "No tests match your search"}
-                </div>
-              ) : (
-                <div className="divide-y divide-border/60">
-                  {filteredTests.slice(0, 80).map((t) => {
-                    const checked = selectedTestIds.includes(t.id);
-                    return (
-                      <label
-                        key={t.id}
-                        className="flex items-center gap-3 px-3 py-2 hover:bg-accent/50 cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => toggleTest(t.id)}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{t.name}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            <span className="font-mono">{t.code}</span>
-                            {t.category && <span> · {t.category}</span>}
-                            {t.department && <span> · {t.department.name}</span>}
-                          </p>
-                        </div>
-                        <p className="text-sm font-semibold text-teal-700 dark:text-teal-400 whitespace-nowrap">
-                          {formatRs(t.price)}
-                        </p>
-                      </label>
-                    );
-                  })}
-                  {filteredTests.length > 80 && (
-                    <div className="p-2 text-center text-[11px] text-muted-foreground">
-                      Showing first 80 tests — refine your search to find more
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Selected tests chips */}
-          {selectedTests.length > 0 && (
-            <div className="space-y-1.5">
-              <Label>Selected ({selectedTests.length})</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {selectedTests.map((t) => (
-                  <Badge
-                    key={t.id}
-                    variant="outline"
-                    className="gap-1 py-1 pr-1 pl-2 text-[11px] bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-900"
+            <Label>Sample Containers ({samplesToCollect.length})</Label>
+            {samplesToCollect.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No test items in this order</p>
+            ) : (
+              <div className="space-y-2">
+                {samplesToCollect.map((sample, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-lg border bg-card p-3 flex items-center justify-between gap-3"
                   >
-                    {t.name}
-                    <button
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-md bg-cyan-50 dark:bg-cyan-950/30 flex items-center justify-center shrink-0">
+                        <Syringe className="w-4 h-4 text-cyan-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{sample.sampleType} — {sample.containerType}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {sample.tests.length} test(s): {sample.tests.slice(0, 3).join(", ")}
+                          {sample.tests.length > 3 && ` +${sample.tests.length - 3} more`}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
                       type="button"
-                      onClick={() => handleRemoveTest(t.id)}
-                      className="ml-1 rounded-full hover:bg-teal-200 dark:hover:bg-teal-900 p-0.5"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 text-xs shrink-0"
+                      onClick={() => printLabel(sample, idx)}
                     >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
+                      <Printer className="w-3 h-3" /> Label
+                    </Button>
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Clinical notes */}
-          <div className="space-y-1.5">
-            <Label htmlFor="notes">Clinical Notes</Label>
-            <Textarea
-              id="notes"
-              value={clinicalNotes}
-              onChange={(e) => setClinicalNotes(e.target.value)}
-              placeholder="Symptoms, provisional diagnosis, fasting status, etc."
-              rows={2}
-            />
-          </div>
-
-          {/* Discount + live totals */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="discount">Discount (Rs.)</Label>
-              <Input
-                id="discount"
-                type="number"
-                min={0}
-                value={discount}
-                onChange={(e) => setDiscount(Number(e.target.value) || 0)}
-              />
-            </div>
-            <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatRs(subtotal)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-rose-600">- {formatRs(disc)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Tax (13%)</span><span>+ {formatRs(tax)}</span></div>
-              <div className="flex justify-between font-semibold border-t pt-1 mt-1 text-base">
-                <span>Net Amount</span>
-                <span className="text-teal-700 dark:text-teal-400">{formatRs(netAmount)}</span>
-              </div>
-            </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2">
@@ -1324,9 +879,9 @@ function NewLabOrderDialog({ open, onClose, onCreated }: NewOrderProps) {
             <Button
               type="submit"
               className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5"
-              disabled={saving || !patientId || selectedTestIds.length === 0}
+              disabled={saving || samplesToCollect.length === 0}
             >
-              {saving ? "Creating…" : (<><Plus className="w-4 h-4" /> Create Order</>)}
+              {saving ? "Sending…" : (<><Syringe className="w-4 h-4" /> Send to Collection</>)}
             </Button>
           </DialogFooter>
         </form>

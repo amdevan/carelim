@@ -149,6 +149,33 @@ const defaultSettings: SettingsMap = {
   billing_email_subject_template: "Invoice {invoice_no} from {clinic_name}",
   billing_receipt_template: "standard",
   billing_font_size: "medium",
+  // Laboratory Settings
+  lab_department_name: "",
+  lab_order_prefix: "LAB",
+  lab_sample_prefix: "S",
+  lab_auto_assign: "true",
+  lab_enable_barcode: "true",
+  lab_enable_qr: "false",
+  lab_auto_detect_type: "true",
+  lab_require_collector: "true",
+  lab_container_labels: "true",
+  lab_print_size: "A4",
+  lab_template: "standard",
+  lab_font_size: "medium",
+  lab_header_enabled: "true",
+  lab_header_text: "",
+  lab_footer_enabled: "true",
+  lab_footer_text: "This is a computer-generated report. Please verify before use.",
+  lab_default_notes: "",
+  lab_show_logo: "true",
+  lab_show_qr: "false",
+  lab_show_barcode: "true",
+  lab_show_signature: "true",
+  lab_show_reference_ranges: "true",
+  lab_show_flags: "true",
+  lab_auto_numbering: "true",
+  lab_report_prefix: "RPT",
+  lab_validity_days: "30",
 };
 
 const colorSwatches = [
@@ -254,6 +281,7 @@ export function SettingsView() {
               <TabsTrigger value="modules" className="gap-1.5 justify-start data-[state=active]:bg-teal-50 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-teal-950/30 dark:data-[state=active]:text-teal-300 data-[state=active]:shadow-sm"><LayoutGrid className="w-4 h-4" /> Modules</TabsTrigger>
               <TabsTrigger value="prescription" className="gap-1.5 justify-start data-[state=active]:bg-teal-50 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-teal-950/30 dark:data-[state=active]:text-teal-300 data-[state=active]:shadow-sm"><Pill className="w-4 h-4" /> Prescription</TabsTrigger>
               <TabsTrigger value="billing-settings" className="gap-1.5 justify-start data-[state=active]:bg-teal-50 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-teal-950/30 dark:data-[state=active]:text-teal-300 data-[state=active]:shadow-sm"><ReceiptText className="w-4 h-4" /> Billing</TabsTrigger>
+              <TabsTrigger value="lab-settings" className="gap-1.5 justify-start data-[state=active]:bg-teal-50 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-teal-950/30 dark:data-[state=active]:text-teal-300 data-[state=active]:shadow-sm"><FlaskConical className="w-4 h-4" /> Laboratory</TabsTrigger>
               <TabsTrigger value="dental-config" className="gap-1.5 justify-start data-[state=active]:bg-teal-50 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-teal-950/30 dark:data-[state=active]:text-teal-300 data-[state=active]:shadow-sm"><Smile className="w-4 h-4" /> Dental Config</TabsTrigger>
               <TabsTrigger value="audit" className="gap-1.5 justify-start data-[state=active]:bg-teal-50 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-teal-950/30 dark:data-[state=active]:text-teal-300 data-[state=active]:shadow-sm"><Eye className="w-4 h-4" /> Audit Logs</TabsTrigger>
               <TabsTrigger value="backup" className="gap-1.5 justify-start data-[state=active]:bg-teal-50 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-teal-950/30 dark:data-[state=active]:text-teal-300 data-[state=active]:shadow-sm"><Database className="w-4 h-4" /> Backup</TabsTrigger>
@@ -297,6 +325,9 @@ export function SettingsView() {
           </TabsContent>
           <TabsContent value="billing-settings" className="mt-0">
             <BillingSettingsTab form={form} updateForm={updateForm} saving={saving} onSave={(partial) => putSettings(partial, "Billing settings saved")} />
+          </TabsContent>
+          <TabsContent value="lab-settings" className="mt-0">
+            <LabSettingsTab form={form} updateForm={updateForm} saving={saving} onSave={(partial) => putSettings(partial, "Laboratory settings saved")} />
           </TabsContent>
           <TabsContent value="dental-config" className="mt-0">
             <DentalConfigTab />
@@ -1688,6 +1719,151 @@ function BillingSettingsTab({ form, updateForm, saving, onSave }: { form: Settin
 
       <div className="flex justify-end">
         <Button disabled={saving} onClick={() => onSave({ billing_print_size: form.billing_print_size, billing_header_enabled: form.billing_header_enabled, billing_header_text: billingHeader, billing_footer_enabled: form.billing_footer_enabled, billing_footer_text: billingFooter, billing_notes: billingNotes, billing_terms_conditions: billingTerms, billing_invoice_number_prefix: form.billing_invoice_number_prefix, billing_receipt_number_prefix: form.billing_receipt_number_prefix, billing_show_tax_number: form.billing_show_tax_number, billing_show_discount: form.billing_show_discount, billing_show_subtotal: form.billing_show_subtotal, billing_show_signature: form.billing_show_signature, billing_show_logo: form.billing_show_logo, billing_show_patient_id: form.billing_show_patient_id, billing_watermark: billingWatermark, billing_default_payment_terms: form.billing_default_payment_terms, billing_late_fee: form.billing_late_fee, billing_credit_note_prefix: form.billing_credit_note_prefix, billing_email_subject_template: billingEmailTemplate, billing_receipt_template: form.billing_receipt_template, billing_font_size: form.billing_font_size })} className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5"><Save className="w-4 h-4" /> {saving ? "Saving…" : "Save Billing Settings"}</Button>
+      </div>
+    </div>
+  );
+}
+
+// ============== Laboratory Settings Tab ==============
+function LabSettingsTab({ form, updateForm, saving, onSave }: { form: SettingsMap; updateForm: (k: string, v: string) => void; saving: boolean; onSave: (p: SettingsMap) => void }) {
+  const [labFooter, setLabFooter] = useState(form.lab_footer_text ?? "");
+  const [labHeader, setLabHeader] = useState(form.lab_header_text ?? "");
+  const [labNotes, setLabNotes] = useState(form.lab_default_notes ?? "");
+
+  useEffect(() => { setLabFooter(form.lab_footer_text ?? ""); }, [form.lab_footer_text]);
+  useEffect(() => { setLabHeader(form.lab_header_text ?? ""); }, [form.lab_header_text]);
+  useEffect(() => { setLabNotes(form.lab_default_notes ?? ""); }, [form.lab_default_notes]);
+
+  const LAB_PRINT_SIZES = ["A4", "Letter", "Legal", "Half Page", "Thermal 80mm", "Thermal 58mm"];
+  const LAB_TEMPLATES = [
+    { key: "standard", name: "Standard", desc: "Clean professional lab report layout" },
+    { key: "compact", name: "Compact", desc: "Minimal space, thermal printer friendly" },
+    { key: "detailed", name: "Detailed", desc: "Full breakdown with reference ranges" },
+  ];
+  const FONT_SIZES = [
+    { key: "small", label: "Small (9pt)" },
+    { key: "medium", label: "Medium (11pt)" },
+    { key: "large", label: "Large (13pt)" },
+  ];
+  const SAMPLE_TYPES = ["Blood", "Urine", "Stool", "Saliva", "CSF", "Tissue", "Sputum", "Swab"];
+
+  return (
+    <div className="space-y-4">
+      {/* General Settings */}
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><FlaskConical className="w-4 h-4 text-teal-600" /> General Settings</CardTitle><CardDescription className="text-xs">Configure general laboratory settings</CardDescription></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5"><Label>Lab Department Name</Label><Input value={form.lab_department_name ?? ""} onChange={(e) => updateForm("lab_department_name", e.target.value)} placeholder="e.g. Pathology, Microbiology" /></div>
+            <div className="space-y-1.5"><Label>Order Number Prefix</Label><Input value={form.lab_order_prefix ?? "LAB"} onChange={(e) => updateForm("lab_order_prefix", e.target.value)} placeholder="LAB" /></div>
+          </div>
+          <div className="space-y-1.5"><Label>Sample Code Prefix</Label><Input value={form.lab_sample_prefix ?? "S"} onChange={(e) => updateForm("lab_sample_prefix", e.target.value)} placeholder="S" /></div>
+          <Separator />
+          <div className="flex items-center justify-between rounded-lg border px-3 py-3"><div><p className="text-sm font-medium">Auto-Assign Samples</p><p className="text-[11px] text-muted-foreground">Automatically assign sample codes when samples are collected</p></div><Switch checked={form.lab_auto_assign === "true"} onCheckedChange={(c) => updateForm("lab_auto_assign", String(c))} /></div>
+          <div className="flex items-center justify-between rounded-lg border px-3 py-3"><div><p className="text-sm font-medium">Enable Barcode Printing</p><p className="text-[11px] text-muted-foreground">Show print button for sample labels with barcode</p></div><Switch checked={form.lab_enable_barcode === "true"} onCheckedChange={(c) => updateForm("lab_enable_barcode", String(c))} /></div>
+          <div className="flex items-center justify-between rounded-lg border px-3 py-3"><div><p className="text-sm font-medium">Enable QR Code</p><p className="text-[11px] text-muted-foreground">Generate QR codes on sample labels</p></div><Switch checked={form.lab_enable_qr === "true"} onCheckedChange={(c) => updateForm("lab_enable_qr", String(c))} /></div>
+        </CardContent>
+      </Card>
+
+      {/* Sample Collection */}
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><ClipboardList className="w-4 h-4 text-teal-600" /> Sample Collection</CardTitle><CardDescription className="text-xs">Configure sample collection defaults and container settings</CardDescription></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2"><Label>Default Sample Types</Label>
+            <div className="flex flex-wrap gap-2">
+              {SAMPLE_TYPES.map((type) => (
+                <Badge key={type} variant="outline" className="text-xs">{type}</Badge>
+              ))}
+            </div>
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between rounded-lg border px-3 py-3"><div><p className="text-sm font-medium">Auto-Detect Sample Type</p><p className="text-[11px] text-muted-foreground">Automatically detect sample type based on test type</p></div><Switch checked={form.lab_auto_detect_type === "true"} onCheckedChange={(c) => updateForm("lab_auto_detect_type", String(c))} /></div>
+          <div className="flex items-center justify-between rounded-lg border px-3 py-3"><div><p className="text-sm font-medium">Require Collector Name</p><p className="text-[11px] text-muted-foreground">Make collector name mandatory during sample collection</p></div><Switch checked={form.lab_require_collector === "true"} onCheckedChange={(c) => updateForm("lab_require_collector", String(c))} /></div>
+          <div className="flex items-center justify-between rounded-lg border px-3 py-3"><div><p className="text-sm font-medium">Show Container Labels</p><p className="text-[11px] text-muted-foreground">Display container-specific labels on sample form</p></div><Switch checked={form.lab_container_labels === "true"} onCheckedChange={(c) => updateForm("lab_container_labels", String(c))} /></div>
+        </CardContent>
+      </Card>
+
+      {/* Print & Template */}
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Printer className="w-4 h-4 text-teal-600" /> Print & Template</CardTitle><CardDescription className="text-xs">Configure lab report print layout and template</CardDescription></CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2"><Label>Print Size</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {LAB_PRINT_SIZES.map((size) => (
+                <button key={size} type="button" onClick={() => updateForm("lab_print_size", size)} className={`rounded-lg border-2 px-3 py-2 text-left transition-all text-xs font-medium ${form.lab_print_size === size ? "border-teal-500 bg-teal-50/50 dark:bg-teal-950/20 text-teal-700 dark:text-teal-300" : "border-border hover:border-teal-300 text-muted-foreground"}`}>
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Separator />
+          <div className="space-y-2"><Label>Report Template</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {LAB_TEMPLATES.map((t) => (
+                <button key={t.key} type="button" onClick={() => updateForm("lab_template", t.key)} className={`rounded-xl border-2 p-3 text-left transition-all ${form.lab_template === t.key ? "border-teal-500 bg-teal-50/50 dark:bg-teal-950/20" : "border-border hover:border-teal-300"}`}>
+                  <p className="text-sm font-medium">{t.name}</p><p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
+                  {form.lab_template === t.key && <Badge className="mt-2 bg-teal-600 text-white text-[9px]">Active</Badge>}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2"><Label>Font Size</Label>
+            <div className="flex gap-2">
+              {FONT_SIZES.map((f) => (
+                <button key={f.key} type="button" onClick={() => updateForm("lab_font_size", f.key)} className={`rounded-lg border-2 px-4 py-2 text-xs font-medium transition-all ${form.lab_font_size === f.key ? "border-teal-500 bg-teal-50/50 dark:bg-teal-950/20 text-teal-700 dark:text-teal-300" : "border-border hover:border-teal-300 text-muted-foreground"}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Header & Footer */}
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><FileSignature className="w-4 h-4 text-teal-600" /> Header & Footer</CardTitle><CardDescription className="text-xs">Customize the header and footer on printed lab reports</CardDescription></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border px-3 py-3"><div><p className="text-sm font-medium">Show Header</p><p className="text-[11px] text-muted-foreground">Display custom header text above the report</p></div><Switch checked={form.lab_header_enabled === "true"} onCheckedChange={(c) => updateForm("lab_header_enabled", String(c))} /></div>
+          {form.lab_header_enabled === "true" && (
+            <div className="space-y-1.5"><Label>Custom Header Text</Label><Input value={labHeader} onChange={(e) => setLabHeader(e.target.value)} onBlur={() => updateForm("lab_header_text", labHeader)} placeholder="e.g. Laboratory Report — Clinic Name" /></div>
+          )}
+          <Separator />
+          <div className="flex items-center justify-between rounded-lg border px-3 py-3"><div><p className="text-sm font-medium">Show Footer</p><p className="text-[11px] text-muted-foreground">Display disclaimer and notes at the bottom of the report</p></div><Switch checked={form.lab_footer_enabled === "true"} onCheckedChange={(c) => updateForm("lab_footer_enabled", String(c))} /></div>
+          {form.lab_footer_enabled === "true" && (
+            <div className="space-y-1.5"><Label>Footer Text</Label><Textarea value={labFooter} onChange={(e) => setLabFooter(e.target.value)} onBlur={() => updateForm("lab_footer_text", labFooter)} placeholder="This is a computer-generated report. Please verify before use." rows={2} /></div>
+          )}
+          <Separator />
+          <div className="space-y-1.5"><Label>Default Notes</Label><Textarea value={labNotes} onChange={(e) => setLabNotes(e.target.value)} onBlur={() => updateForm("lab_default_notes", labNotes)} placeholder="e.g. Results should be interpreted clinically." rows={2} /></div>
+        </CardContent>
+      </Card>
+
+      {/* Display Options */}
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Eye className="w-4 h-4 text-teal-600" /> Display Options</CardTitle><CardDescription className="text-xs">Control what appears on the printed lab report</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          {[
+            { key: "lab_show_logo", label: "Show Clinic Logo", desc: "Display clinic logo in the report header" },
+            { key: "lab_show_qr", label: "Show QR Code", desc: "QR code linking to digital report record" },
+            { key: "lab_show_barcode", label: "Show Barcode", desc: "Barcode with sample/order reference number" },
+            { key: "lab_show_signature", label: "Show Pathologist Signature", desc: "Signature and designation line for the pathologist" },
+            { key: "lab_show_reference_ranges", label: "Show Reference Ranges", desc: "Display normal range values alongside results" },
+            { key: "lab_show_flags", label: "Show Result Flags", desc: "Highlight High/Low/Critical values with color flags" },
+            { key: "lab_auto_numbering", label: "Auto-Numbering", desc: "Automatically generate sequential report numbers" },
+          ].map((item) => (
+            <div key={item.key} className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+              <div><p className="text-sm font-medium">{item.label}</p><p className="text-[11px] text-muted-foreground">{item.desc}</p></div>
+              <Switch checked={form[item.key] === "true"} onCheckedChange={(c) => updateForm(item.key, String(c))} />
+            </div>
+          ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div className="space-y-1.5"><Label>Report Number Prefix</Label><Input value={form.lab_report_prefix ?? "RPT"} onChange={(e) => updateForm("lab_report_prefix", e.target.value)} placeholder="RPT" /></div>
+            <div className="space-y-1.5"><Label>Validity (days)</Label><Input type="number" value={form.lab_validity_days ?? "30"} onChange={(e) => updateForm("lab_validity_days", e.target.value)} placeholder="30" /></div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button disabled={saving} onClick={() => onSave({ lab_department_name: form.lab_department_name, lab_order_prefix: form.lab_order_prefix, lab_sample_prefix: form.lab_sample_prefix, lab_auto_assign: form.lab_auto_assign, lab_enable_barcode: form.lab_enable_barcode, lab_enable_qr: form.lab_enable_qr, lab_auto_detect_type: form.lab_auto_detect_type, lab_require_collector: form.lab_require_collector, lab_container_labels: form.lab_container_labels, lab_print_size: form.lab_print_size, lab_template: form.lab_template, lab_font_size: form.lab_font_size, lab_header_enabled: form.lab_header_enabled, lab_header_text: labHeader, lab_footer_enabled: form.lab_footer_enabled, lab_footer_text: labFooter, lab_default_notes: labNotes, lab_show_logo: form.lab_show_logo, lab_show_qr: form.lab_show_qr, lab_show_barcode: form.lab_show_barcode, lab_show_signature: form.lab_show_signature, lab_show_reference_ranges: form.lab_show_reference_ranges, lab_show_flags: form.lab_show_flags, lab_auto_numbering: form.lab_auto_numbering, lab_report_prefix: form.lab_report_prefix, lab_validity_days: form.lab_validity_days })} className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5"><Save className="w-4 h-4" /> {saving ? "Saving…" : "Save Laboratory Settings"}</Button>
       </div>
     </div>
   );

@@ -55,7 +55,7 @@ export const POST = withTenant(async (req: NextRequest) => {
 
           await db.labOrder.create({
             data: {
-              orderNo: `LAB-ORD-${String(labOrderCount + 1).padStart(5, "0")}`,
+              orderNo: `LAB-${String(labOrderCount + 1).padStart(5, "0")}`,
               patientId: data.patientId,
               doctorId: data.doctorId || null,
               priority: "normal",

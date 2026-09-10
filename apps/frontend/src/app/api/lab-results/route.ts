@@ -12,7 +12,7 @@ export const GET = withTenant(async (req: NextRequest) => {
   const results = await db.labResult.findMany({
     where,
     include: {
-      order: { include: { patient: true } },
+      order: { include: { patient: true, samples: { select: { sampleCode: true, testId: true } } } },
       parameters: { include: { parameter: { include: { referenceRanges: true } } } },
     },
     orderBy: { createdAt: "desc" },

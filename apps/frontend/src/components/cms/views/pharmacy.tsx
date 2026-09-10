@@ -4,20 +4,16 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LayoutDashboard, Package, ShoppingCart, ShoppingBag, RotateCcw, Pill,
+  LayoutDashboard, ShoppingBag, RotateCcw, Pill,
 } from "lucide-react";
 import { PmsDashboard } from "@/components/cms/views/pms/dashboard";
-import { PmsMedicines } from "@/components/cms/views/pms/medicines";
-import { PmsPurchases } from "@/components/cms/views/pms/purchases";
 import { PmsSales } from "@/components/cms/views/pms/sales";
 import { PmsReturns } from "@/components/cms/views/pms/returns";
 
-type PmsTab = "dashboard" | "medicines" | "purchases" | "sales" | "returns";
+type PmsTab = "dashboard" | "sales" | "returns";
 
 const tabs: { key: PmsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "medicines", label: "Medicines", icon: Package },
-  { key: "purchases", label: "Purchase Orders", icon: ShoppingCart },
   { key: "sales", label: "Sales (POS)", icon: ShoppingBag },
   { key: "returns", label: "Returns", icon: RotateCcw },
 ];
@@ -27,8 +23,6 @@ export function PharmacyView() {
 
   const views: Record<PmsTab, React.ReactNode> = {
     dashboard: <PmsDashboard />,
-    medicines: <PmsMedicines />,
-    purchases: <PmsPurchases />,
     sales: <PmsSales />,
     returns: <PmsReturns />,
   };
@@ -42,7 +36,7 @@ export function PharmacyView() {
         </div>
         <div>
           <h2 className="text-xl font-bold leading-tight">Pharmacy Management System</h2>
-          <p className="text-xs text-muted-foreground">Enterprise PMS · Inventory · POS · Purchases · Expiry · Analytics</p>
+          <p className="text-xs text-muted-foreground">POS · Sales · Returns</p>
         </div>
       </div>
 

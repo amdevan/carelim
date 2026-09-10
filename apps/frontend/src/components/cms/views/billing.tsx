@@ -159,6 +159,125 @@ function printInvoice(inv: Invoice, settings?: Record<string, string>) {
   printHTML(`Invoice ${inv.invoiceNo}`, buildInvoiceHTML(inv, settings), clinicName);
 }
 
+/* ---------- OPD Card HTML builder ---------- */
+function buildOPDCardHTML(inv: Invoice, settings?: Record<string, string>): string {
+  const barcodeVal = inv.patient.patientCode || inv.invoiceNo;
+    const patientName = inv.patient.name || "Patient";
+
+  // Extract doctor name from consultation item description
+  // Format: "Consultation - Dr. DoctorName" or "Consultation - DoctorName"
+  let doctorName = "";
+  const consultItem = (inv.items || []).find((i) => i.description.toLowerCase().includes("consultation"));
+  if (consultItem) {
+    const desc = consultItem.description;
+    // Remove "Consultation" prefix and any dash/en-dash separator
+    let extracted = desc.replace(/^consultation\s*[-–—]\s*/i, "").trim();
+    // If it looks like a CUID, it's not a real name
+    if (extracted.length > 20 && /^c[a-z0-9]{20,}$/i.test(extracted)) {
+      doctorName = "";
+    } else {
+      // Remove all leading "Dr." prefixes (we add it back in display)
+      while (extracted.toLowerCase().startsWith("dr.")) {
+        extracted = extracted.substring(3).trim();
+      }
+      doctorName = extracted;
+    }
+  }
+
+  return `
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; }
+    .opd-card { width: 350px; border: 2px solid #0d9488; border-radius: 8px; overflow: hidden; margin: 20px auto; }
+    .opd-header { background: linear-gradient(135deg, #0d9488, #10b981); color: white; padding: 12px 16px; text-align: center; }
+    .opd-header .logo { height: 28px; margin-bottom: 4px; }
+    .opd-header h2 { font-size: 16px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+    .opd-header .sub { font-size: 10px; opacity: 0.9; margin-top: 2px; text-transform: uppercase; letter-spacing: 2px; }
+    .opd-body { padding: 12px 16px; font-size: 11px; }
+    .opd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+    .opd-field { display: flex; align-items: baseline; gap: 4px; }
+    .opd-field.full { grid-column: 1 / -1; }
+    .opd-field-label { color: #64748b; font-weight: 600; white-space: nowrap; font-size: 10px; text-transform: uppercase; }
+    .opd-field-label::after { content: ":"; }
+    .opd-field-value { font-weight: 700; color: #1e293b; font-size: 11px; }
+    .opd-name-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; padding: 6px 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin: 4px 0; }
+    .opd-name { font-size: 14px; font-weight: 700; color: #1e293b; }
+    .opd-age-gender { font-size: 11px; font-weight: 600; color: #0d9488; }
+    .opd-barcode-row { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; }
+    .opd-barcode svg { max-width: 140px; height: 32px; }
+    .opd-footer { text-align: center; padding: 6px 16px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 8px; color: #94a3b8; }
+    @media print { .opd-card { margin: 0; border: 2px solid #0d9488; } }
+  </style>
+  <div class="opd-card">
+    <div class="opd-header">
+      <div class="sub">Consultation</div>
+    </div>
+    <div class="opd-body">
+      <div class="opd-grid">
+        <div class="opd-field"><span class="opd-field-label">Doctor</span><span class="opd-field-value">${doctorName ? `Dr. ${escapeHTML(doctorName)}` : "—"}</span></div>
+        <div class="opd-field"><span class="opd-field-label">Room No</span><span class="opd-field-value">${settings?.room_no || "—"}</span></div>
+        <div class="opd-field"><span class="opd-field-label">File No</span><span class="opd-field-value">${escapeHTML(inv.patient.patientCode)}</span></div>
+        <div class="opd-field"><span class="opd-field-label">Country</span><span class="opd-field-value">NP</span></div>
+      </div>
+      <div class="opd-name-row">
+        <span class="opd-field-label">Patient</span>
+        <span class="opd-name">${escapeHTML(patientName)}</span>
+      </div>
+      <div class="opd-grid">
+        <div class="opd-field full"><span class="opd-field-label">Address</span><span class="opd-field-value">—</span></div>
+        <div class="opd-field"><span class="opd-field-label">Phone</span><span class="opd-field-value">${escapeHTML(inv.patient.phone || "—")}</span></div>
+        <div class="opd-field"><span class="opd-field-label">Date</span><span class="opd-field-value">${formatDate(inv.date)}</span></div>
+      </div>
+      <div class="opd-barcode-row">
+        <div class="opd-barcode">
+          <svg viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
+            ${generateBarcodeSVG(barcodeVal)}
+            <text x="100" y="38" text-anchor="middle" font-size="7" fill="#64748b" font-family="monospace">${escapeHTML(barcodeVal)}</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function generateBarcodeSVG(value: string): string {
+  // CODE128 encoding for clear thermal printer output
+  let bars = "";
+  const barPatterns: Record<string, string> = {
+    "0": "11011001100", "1": "11001101100", "2": "11001100110", "3": "10010011000", "4": "10010001100",
+    "5": "10001001100", "6": "10011001000", "7": "10011000100", "8": "10001100100", "9": "11001001000",
+    "A": "11001000100", "B": "11000100100", "C": "11001000100", "D": "10110011100", "E": "10011011100",
+    "F": "10011001110", "G": "10111001100", "H": "10011101100", "I": "10011100110", "J": "11001110010",
+    "K": "11001011100", "L": "11001001110", "M": "11011100100", "N": "11001110100", "O": "11101101110",
+    "P": "11101001100", "Q": "11100101100", "R": "11100100110", "S": "11101100100", "T": "11100110100",
+    "U": "11100110010", "V": "11011011000", "W": "11011000110", "X": "11000110110", "Y": "10100011000",
+    "Z": "10001011000", "-": "10001000110", ".": "11101101110", " ": "10010110000",
+    "$": "10010111000", "/": "10110011000", "+": "10011011000", "%": "11011010000", "*": "11010111010",
+  };
+  const startCode = "11010000100";
+  const endCode = "1100011101011";
+  const encoded = value.toUpperCase().split("").map(c => barPatterns[c] || "10111010000").join("");
+  const allBars = startCode + encoded + endCode;
+  let cx = 0;
+  for (let i = 0; i < allBars.length; i++) {
+    if (allBars[i] === "1") {
+      bars += `<rect x="${cx}" y="0" width="1.5" height="28" fill="#000"/>`;
+    }
+    cx += 1.5;
+  }
+  const totalWidth = cx;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} 36" style="width:${totalWidth * 0.55}px;height:36px;">
+    <rect x="0" y="0" width="${totalWidth}" height="36" fill="white"/>
+    ${bars}
+    <text x="${totalWidth / 2}" y="35" text-anchor="middle" font-size="7" fill="#000" font-family="'Courier New',monospace" font-weight="bold">${escapeHTML(value)}</text>
+  </svg>`;
+}
+
+function printOPDCard(inv: Invoice, settings?: Record<string, string>) {
+  const clinicName = settings?.clinic_name || settings?.organization_name;
+  printHTML(`OPD Card - ${inv.invoiceNo}`, buildOPDCardHTML(inv, settings), clinicName);
+}
+
 export function BillingView() {
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
@@ -461,6 +580,17 @@ export function BillingView() {
                         >
                           <Printer className="w-3.5 h-3.5" />
                         </Button>
+                        {inv.type === "consultation" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-teal-600"
+                            title="Print OPD Card"
+                            onClick={() => printOPDCard(inv, settings ?? undefined)}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -750,7 +880,9 @@ function CreateInvoiceDialog({
 
   const buildItems = (): InvoiceItem[] => {
     if (type === "consultation") {
-      return [{ description: `Consultation - Dr. ${doctorName || "TBD"}`, qty: 1, rate: consultationFee, amount: consultationFee }];
+      const doc = doctors?.find((d) => d.id === doctorName);
+      const displayName = doc ? doc.name : doctorName || "TBD";
+      return [{ description: `Consultation - Dr. ${displayName}`, qty: 1, rate: consultationFee, amount: consultationFee }];
     }
     if (type === "pharmacy") {
       return medItems.filter((m) => m.medicineName).map((m) => ({
@@ -840,8 +972,35 @@ function CreateInvoiceDialog({
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed to create invoice");
+      const created = await res.json();
       reset();
       onCreated();
+      if (type === "consultation") {
+        toast.success("Consultation invoice created", {
+          description: "Click to print OPD card",
+          action: {
+            label: "Print OPD Card",
+            onClick: () => {
+              const inv: Invoice = {
+                id: created.id, invoiceNo: created.invoiceNo, patientId: created.patientId,
+                type: "consultation", subtotal: created.subtotal, discount: created.discount,
+                tax: created.tax, total: created.total, paid: created.paid, due: created.due,
+                status: created.status, paymentMethod: created.paymentMethod, date: created.date,
+                patient: { id: patientId, patientCode: "", name: "", phone: "" },
+                items: finalItems.map((i) => ({ description: i.description, qty: i.qty, rate: i.rate, amount: i.amount })),
+              };
+              // Re-fetch the invoice to get full patient data
+              fetchAPI(`/api/invoices/${created.id}`).then((r) => r.json()).then((full) => {
+                printOPDCard(full, settings ?? undefined);
+              }).catch(() => {
+                printOPDCard(inv, settings ?? undefined);
+              });
+            },
+          },
+        });
+      } else {
+        toast.success("Invoice created successfully");
+      }
     } catch {
       toast.error("Failed to create invoice");
     } finally {
@@ -1410,6 +1569,11 @@ function InvoiceDetail({ invoice, settings, onDelete }: { invoice: Invoice; sett
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printInvoice(invoice, settings ?? undefined)}>
               <Printer className="w-4 h-4" /> Print Invoice
             </Button>
+            {invoice.type === "consultation" && (
+              <Button variant="outline" size="sm" className="gap-1.5 border-teal-300 text-teal-700 hover:bg-teal-50 dark:border-teal-700 dark:text-teal-300" onClick={() => printOPDCard(invoice, settings ?? undefined)}>
+                <FileText className="w-4 h-4" /> Print OPD Card
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

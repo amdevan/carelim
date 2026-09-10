@@ -4,18 +4,22 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LayoutDashboard, Package, ArrowDownUp, ClipboardCheck, Boxes,
+  LayoutDashboard, Package, ArrowDownUp, ClipboardCheck, Boxes, ShoppingCart,
 } from "lucide-react";
 import { AimsDashboard } from "@/components/cms/views/aims/dashboard";
 import { AimsItems } from "@/components/cms/views/aims/items";
 import { AimsTransfers } from "@/components/cms/views/aims/transfers";
 import { AimsAudits } from "@/components/cms/views/aims/audits";
+import { PmsMedicines } from "@/components/cms/views/pms/medicines";
+import { PmsPurchases } from "@/components/cms/views/pms/purchases";
 
-type AimsTab = "dashboard" | "items" | "transfers" | "audits";
+type AimsTab = "dashboard" | "items" | "medicines" | "purchases" | "transfers" | "audits";
 
 const tabs: { key: AimsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "items", label: "Items", icon: Package },
+  { key: "medicines", label: "Medicines", icon: Package },
+  { key: "purchases", label: "Purchase Orders", icon: ShoppingCart },
   { key: "transfers", label: "Stock Transfers", icon: ArrowDownUp },
   { key: "audits", label: "Stock Audits", icon: ClipboardCheck },
 ];
@@ -26,6 +30,8 @@ export function InventoryView() {
   const views: Record<AimsTab, React.ReactNode> = {
     dashboard: <AimsDashboard />,
     items: <AimsItems />,
+    medicines: <PmsMedicines />,
+    purchases: <PmsPurchases />,
     transfers: <AimsTransfers />,
     audits: <AimsAudits />,
   };
@@ -39,7 +45,7 @@ export function InventoryView() {
         </div>
         <div>
           <h2 className="text-xl font-bold leading-tight">Inventory Management System</h2>
-          <p className="text-xs text-muted-foreground">Multi-warehouse · Batch & Expiry · Transfers · Audits · Analytics</p>
+          <p className="text-xs text-muted-foreground">Multi-warehouse · Medicines · Purchases · Transfers · Audits</p>
         </div>
       </div>
 

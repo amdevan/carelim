@@ -35,7 +35,7 @@ import { exportToCSV, printHTML, docHeader } from "@/lib/export-utils";
 import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+
 
 /* ---------- Types ---------- */
 
@@ -91,6 +91,7 @@ interface LabResult {
   order: {
     orderNo: string;
     patient: { patientCode: string; name: string; age: number; gender: string; phone?: string };
+    samples?: { sampleCode: string; testId: string | null }[];
   };
   parameters: LabResultParameter[];
 }
@@ -289,15 +290,30 @@ export function LimsResults() {
   const [enterResult, setEnterResult] = useState<LabResult | null>(null);
   const [approveResult, setApproveResult] = useState<LabResult | null>(null);
   const [viewResult, setViewResult] = useState<LabResult | null>(null);
+  const [labType, setLabType] = useState<"internal" | "external">("internal");
+  const [uploadResult, setUploadResult] = useState<LabResult | null>(null);
+
+  /* Filter by lab type: external = results with External in technician or releasedBy */
+  const isExternalResult = (r: LabResult) => {
+    const t = (r.technicianName || "").toLowerCase();
+    const rb = (r.releasedBy || "").toLowerCase();
+    return t.includes("external") || rb.includes("external") || t.includes("pathcare") || rb.includes("pathcare") || t.includes("national health") || rb.includes("national health") || t.includes("himalayan") || rb.includes("himalayan");
+  };
+
+  const labFiltered = useMemo(() => {
+    if (!results) return [];
+    if (labType === "internal") return results.filter((r) => !isExternalResult(r));
+    return results.filter((r) => isExternalResult(r));
+  }, [results, labType]);
 
   const filtered = useMemo(() => {
-    if (!results) return [];
     const ql = q.toLowerCase();
-    const list = results.filter((r) => {
+    const list = labFiltered.filter((r) => {
       const matchesStatus = statusFilter === "all" || r.status === statusFilter;
       const matchesSearch = !ql ||
         r.order.orderNo.toLowerCase().includes(ql) ||
-        r.order.patient.name.toLowerCase().includes(ql);
+        r.order.patient.name.toLowerCase().includes(ql) ||
+        (r.order.samples?.find(s => s.testId === r.testId) || r.order.samples?.[0])?.sampleCode.toLowerCase().includes(ql);
       return matchesStatus && matchesSearch;
     });
     if (!sortKey) return list;
@@ -312,24 +328,23 @@ export function LimsResults() {
       }
       return 0;
     });
-  }, [results, q, statusFilter, sortKey, sortDir]);
+  }, [labFiltered, q, statusFilter, sortKey, sortDir]);
 
   const pagination = usePagination<LabResult>(filtered, 10);
 
   const stats = useMemo(() => {
-    if (!results) return { pending: 0, entered: 0, verified: 0, released: 0 };
     return {
-      pending: results.filter((r) => r.status === "pending").length,
-      entered: results.filter((r) => r.status === "entered").length,
-      verified: results.filter((r) => r.status === "verified").length,
-      released: results.filter((r) => r.status === "released" || r.status === "approved").length,
+      pending: labFiltered.filter((r) => r.status === "pending").length,
+      entered: labFiltered.filter((r) => r.status === "entered").length,
+      verified: labFiltered.filter((r) => r.status === "verified").length,
+      released: labFiltered.filter((r) => r.status === "released" || r.status === "approved").length,
     };
-  }, [results]);
+  }, [labFiltered]);
 
   const handleExport = () => {
     if (!filtered.length) { toast.info("No results to export"); return; }
     exportToCSV("lab-results.csv", [
-      "Order No", "Patient", "Test", "Status", "Technician", "Flags",
+      "Order No", "Sample", "Patient", "Test", "Status", "Technician", "Flags",
     ], filtered.map((r) => {
       const counts = flagCounts(r.parameters);
       const flags = FLAG_ORDER
@@ -338,6 +353,7 @@ export function LimsResults() {
         .join("; ") || "None";
       return [
         r.order.orderNo,
+        r.order.samples?.[0]?.sampleCode || "",
         r.order.patient.name,
         testNameMap.get(r.testId)?.name || r.testId,
         r.status,
@@ -376,6 +392,28 @@ export function LimsResults() {
           <p className="text-sm text-muted-foreground">Lab technician workspace · {results?.length ?? 0} results</p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-lg border overflow-hidden">
+            <button
+              onClick={() => setLabType("internal")}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                labType === "internal"
+                  ? "bg-teal-600 text-white"
+                  : "bg-card hover:bg-accent text-muted-foreground"
+              }`}
+            >
+              <Beaker className="w-3.5 h-3.5 inline mr-1" /> Internal Lab
+            </button>
+            <button
+              onClick={() => setLabType("external")}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                labType === "external"
+                  ? "bg-violet-600 text-white"
+                  : "bg-card hover:bg-accent text-muted-foreground"
+              }`}
+            >
+              <Send className="w-3.5 h-3.5 inline mr-1" /> External Lab
+            </button>
+          </div>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
             <Download className="w-4 h-4" /> Export CSV
           </Button>
@@ -383,24 +421,22 @@ export function LimsResults() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-4 gap-2">
         {[
-          { label: "Pending Entry", value: stats.pending, icon: ClipboardList, accent: "from-amber-500 to-orange-500" },
-          { label: "Entered", value: stats.entered, icon: PenLine, accent: "from-cyan-500 to-cyan-600" },
-          { label: "Pending Approval", value: stats.verified, icon: ShieldCheck, accent: "from-violet-500 to-violet-600" },
-          { label: "Approved / Released", value: stats.released, icon: CheckCircle2, accent: "from-emerald-500 to-emerald-600" },
-        ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4 sm:p-5">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.accent} flex items-center justify-center shadow-sm`}>
-                  <s.icon className="w-5 h-5 text-white" />
-                </div>
-                <p className="mt-3 text-xl sm:text-2xl font-bold tracking-tight">{s.value}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{s.label}</p>
-              </CardContent>
-            </Card>
-          </motion.div>
+          { label: "Pending", value: stats.pending, icon: ClipboardList, color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30" },
+          { label: "Entered", value: stats.entered, icon: PenLine, color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-950/30" },
+          { label: "Approval", value: stats.verified, icon: ShieldCheck, color: "text-violet-600 bg-violet-50 dark:bg-violet-950/30" },
+          { label: "Released", value: stats.released, icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" },
+        ].map((s) => (
+          <div key={s.label} className="flex items-center gap-2.5 rounded-lg border bg-card p-2.5">
+            <div className={`w-8 h-8 rounded-md ${s.color} flex items-center justify-center shrink-0`}>
+              <s.icon className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-lg font-bold leading-tight">{s.value}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">{s.label}</p>
+            </div>
+          </div>
         ))}
       </div>
 
@@ -431,6 +467,7 @@ export function LimsResults() {
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <SortHeader label="Order No" colKey="orderNo" sortKey={sortKey} sortDir={sortDir} onSort={() => toggleSort("orderNo")} />
+                  <TableHead>Sample</TableHead>
                   <TableHead>Patient</TableHead>
                   <TableHead className="hidden md:table-cell">Test</TableHead>
                   <TableHead className="text-center">Params</TableHead>
@@ -450,7 +487,7 @@ export function LimsResults() {
                   ))
                 ) : pagination.paged.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">
+                    <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-10">
                       <FileText className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
                       No results found
                     </TableCell>
@@ -461,6 +498,12 @@ export function LimsResults() {
                   return (
                     <TableRow key={r.id} className="hover:bg-accent/40">
                       <TableCell className="font-mono text-xs">{r.order.orderNo}</TableCell>
+                      <TableCell className="font-mono text-xs text-cyan-600 dark:text-cyan-400">
+                        {(() => {
+                          const sample = r.order.samples?.find(s => s.testId === r.testId) || r.order.samples?.[0];
+                          return sample?.sampleCode || "—";
+                        })()}
+                      </TableCell>
                       <TableCell>
                         <p className="font-medium text-sm">{r.order.patient.name}</p>
                         <p className="text-xs text-muted-foreground font-mono">{r.order.patient.patientCode}</p>
@@ -487,9 +530,11 @@ export function LimsResults() {
                         <ResultActions
                           result={r}
                           testName={testName}
+                          labType={labType}
                           onEnter={() => setEnterResult(r)}
                           onApprove={() => setApproveResult(r)}
                           onView={() => setViewResult(r)}
+                          onUpload={() => setUploadResult(r)}
                           onActioned={refreshFn}
                         />
                       </TableCell>
@@ -527,6 +572,14 @@ export function LimsResults() {
         onSaved={() => { setApproveResult(null); refreshFn(); }}
       />
 
+      {/* Upload report dialog */}
+      <UploadReportDialog
+        result={uploadResult}
+        testName={uploadResult ? (testNameMap.get(uploadResult.testId)?.name || `Test ${uploadResult.testId.slice(-6)}`) : ""}
+        onOpenChange={(o) => !o && setUploadResult(null)}
+        onUploaded={() => { setUploadResult(null); refreshFn(); }}
+      />
+
       {/* View Sheet */}
       <ResultViewSheet
         result={viewResult}
@@ -534,6 +587,7 @@ export function LimsResults() {
         onOpenChange={(o) => !o && setViewResult(null)}
         onPrint={() => viewResult && printLabReport(viewResult, testNameMap.get(viewResult.testId)?.name || `Test ${viewResult.testId.slice(-6)}`)}
       />
+
     </div>
   );
 }
@@ -559,13 +613,15 @@ function FlagBadges({ counts }: { counts: Record<string, number> }) {
 /* ---------- Result Actions ---------- */
 
 function ResultActions({
-  result, testName, onEnter, onApprove, onView, onActioned,
+  result, testName, labType, onEnter, onApprove, onView, onUpload, onActioned,
 }: {
   result: LabResult;
   testName: string;
+  labType: "internal" | "external";
   onEnter: () => void;
   onApprove: () => void;
   onView: () => void;
+  onUpload: () => void;
   onActioned: () => void;
 }) {
   const [saving, setSaving] = useState(false);
@@ -585,37 +641,56 @@ function ResultActions({
       <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-teal-700 dark:text-teal-400" title="View details" onClick={onView}>
         <Eye className="w-3.5 h-3.5" />
       </Button>
-      {result.status === "pending" && (
-        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-amber-50 hover:bg-amber-100 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900"
-          onClick={onEnter}>
-          <PenLine className="w-3 h-3" /> Enter Result
-        </Button>
-      )}
-      {result.status === "entered" && (
-        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-cyan-50 hover:bg-cyan-100 border-cyan-200 text-cyan-700 dark:bg-cyan-950/30 dark:border-cyan-900"
-          disabled={saving}
-          onClick={() => handle({ action: "verify", verifiedBy: "Pathologist" }, `Result for ${result.order.orderNo} verified`)}>
-          <ShieldCheck className="w-3 h-3" /> Verify
-        </Button>
-      )}
-      {result.status === "verified" && (
-        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-700 dark:bg-teal-950/30 dark:border-teal-900"
-          onClick={onApprove}>
-          <CheckCircle2 className="w-3 h-3" /> Approve
-        </Button>
-      )}
-      {result.status === "approved" && (
-        <Button size="sm" className="h-7 gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-          disabled={saving}
-          onClick={() => handle({ action: "release", releasedBy: "Lab Department" }, `Result for ${result.order.orderNo} released`)}>
-          <Send className="w-3 h-3" /> Release
-        </Button>
-      )}
-      {result.status === "released" && (
-        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs"
-          onClick={() => printLabReport(result, testName)}>
-          <Printer className="w-3 h-3" /> Print Report
-        </Button>
+      {labType === "internal" ? (
+        <>
+          {result.status === "pending" && (
+            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-amber-50 hover:bg-amber-100 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900"
+              onClick={onEnter}>
+              <PenLine className="w-3 h-3" /> Result Entry
+            </Button>
+          )}
+          {result.status === "entered" && (
+            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-cyan-50 hover:bg-cyan-100 border-cyan-200 text-cyan-700 dark:bg-cyan-950/30 dark:border-cyan-900"
+              disabled={saving}
+              onClick={() => handle({ action: "verify", verifiedBy: "Pathologist" }, `Result for ${result.order.orderNo} verified`)}>
+              <ShieldCheck className="w-3 h-3" /> Verify
+            </Button>
+          )}
+          {result.status === "verified" && (
+            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-700 dark:bg-teal-950/30 dark:border-teal-900"
+              onClick={onApprove}>
+              <CheckCircle2 className="w-3 h-3" /> Approve
+            </Button>
+          )}
+          {result.status === "approved" && (
+            <Button size="sm" className="h-7 gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={saving}
+              onClick={() => handle({ action: "release", releasedBy: "Lab Department" }, `Result for ${result.order.orderNo} released`)}>
+              <Send className="w-3 h-3" /> Release
+            </Button>
+          )}
+          {result.status === "released" && (
+            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs"
+              onClick={() => printLabReport(result, testName)}>
+              <Printer className="w-3 h-3" /> Print
+            </Button>
+          )}
+        </>
+      ) : (
+        <>
+          {result.status !== "released" && (
+            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-violet-50 hover:bg-violet-100 border-violet-200 text-violet-700 dark:bg-violet-950/30 dark:border-violet-900"
+              onClick={onUpload}>
+              <FileText className="w-3 h-3" /> Upload Report
+            </Button>
+          )}
+          {result.status === "released" && (
+            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs"
+              onClick={() => printLabReport(result, testName)}>
+              <Printer className="w-3 h-3" /> Print
+            </Button>
+          )}
+        </>
       )}
     </div>
   );
@@ -944,6 +1019,109 @@ function ApproveResultDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
               {saving ? "Approving…" : "Approve Result"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ---------- Upload Report Dialog ---------- */
+
+function UploadReportDialog({
+  result, testName, onOpenChange, onUploaded,
+}: {
+  result: LabResult | null;
+  testName: string;
+  onOpenChange: (v: boolean) => void;
+  onUploaded: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (result) {
+      setFile(null);
+      setNotes("");
+    }
+  }, [result]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!result) return;
+    if (!file) {
+      toast.error("Please select a report file");
+      return;
+    }
+    setSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("resultId", result.id);
+      formData.append("notes", notes);
+
+      const res = await fetchAPI("/api/lab-results/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      toast.success(`Report uploaded for ${result.order.orderNo}`);
+      onUploaded();
+    } catch {
+      toast.error("Failed to upload report");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!result} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-violet-600" /> Upload Lab Report
+          </DialogTitle>
+          <DialogDescription>
+            Upload external lab report for <span className="font-mono">{result?.order?.orderNo}</span> — {testName}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Report File *</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                className="flex-1 text-sm file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-violet-100 file:text-violet-700 hover:file:bg-violet-200 dark:file:bg-violet-900/50 dark:file:text-violet-300"
+              />
+            </div>
+            {file && (
+              <p className="text-[11px] text-muted-foreground">{file.name} ({(file.size / 1024).toFixed(1)} KB)</p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="upload-notes">Notes</Label>
+            <Textarea
+              id="upload-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional notes about the report..."
+              rows={2}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+              disabled={saving || !file}
+            >
+              {saving ? "Uploading…" : (<><FileText className="w-4 h-4" /> Upload Report</>)}
             </Button>
           </DialogFooter>
         </form>

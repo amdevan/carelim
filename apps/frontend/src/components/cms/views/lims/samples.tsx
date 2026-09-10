@@ -33,8 +33,8 @@ import { exportToCSV, printHTML } from "@/lib/export-utils";
 import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
-import { escapeHTML, SAMPLE_STATUS_COLORS, SAMPLE_TYPE_COLORS, SAMPLE_TYPES, CONTAINER_TYPES, SortHeader, InfoTile } from "./utils";
+
+import { escapeHTML, buildBarcodeBars, SAMPLE_STATUS_COLORS, SAMPLE_TYPE_COLORS, SAMPLE_TYPES, CONTAINER_TYPES, SortHeader, InfoTile } from "./utils";
 
 /* ---------- Types ---------- */
 
@@ -63,7 +63,11 @@ interface LabSample {
   status: string;
   rejectionReason: string | null;
   location: string | null;
-  order: { orderNo: string; patient: { patientCode: string; name: string; phone: string } };
+  order: {
+    orderNo: string;
+    patient: { patientCode: string; name: string; phone: string; gender: string; age: number };
+    items?: { test: { name: string } }[];
+  };
   tracking: LabSampleTracking[];
 }
 
@@ -100,58 +104,35 @@ interface LabOrder {
 
 /* ---------- Constants ---------- */
 
-const STATUS_FILTERS = ["all", "pending", "collected", "received", "rejected", "recollected", "processing", "completed"] as const;
+const STATUS_FILTERS = ["all", "pending", "collected", "received", "recollected"] as const;
 
 type SortKey = "sampleCode" | "collectedAt" | "status" | "";
 
 /* ---------- Helpers ---------- */
 
-// Build a simple monospace barcode representation from a string.
-// Each character deterministically produces a sequence of narrow/wide bars.
-function buildBarcodeBars(code: string): string {
-  if (!code) return "";
-  const chars = code.split("");
-  return chars.map((ch) => {
-    const seed = ch.charCodeAt(0);
-    const pattern = [1, 0, 1, 1, 0, 1, 0, 1].map((b) => {
-      const wide = ((seed >> (b + 1)) & 1) === 1;
-      const width = wide ? 4 : 2;
-      const color = b === 1 ? "transparent" : "#0d9488";
-      return `<span style="display:inline-block;width:${width}px;height:48px;background:${color};vertical-align:middle;"></span>`;
-    }).join("");
-    return `<span style="display:inline-block;margin-right:2px;">${pattern}</span>`;
-  }).join("");
-}
-
 function printSampleLabel(sample: LabSample, clinicName?: string) {
   const barcode = sample.barcode || sample.sampleCode;
+  const patient = sample.order.patient;
+  const sex = patient.gender === "male" ? "M" : patient.gender === "female" ? "F" : patient.gender || "-";
+  const age = patient.age > 0 ? patient.age : "-";
   const body = `
   <style>
-    .label-wrap { width: 320px; margin: 0 auto; border: 2px solid #0d9488; border-radius: 10px; padding: 14px 16px; font-family: 'Courier New', monospace; }
-    .label-wrap .brand { text-align: center; font-size: 13px; font-weight: bold; color: #0d9488; letter-spacing: 1px; margin-bottom: 4px; }
+    .label-wrap { width: 320px; margin: 0 auto; border: 2px solid #0d9488; border-radius: 10px; padding: 8px 12px; font-family: 'Courier New', monospace; }
     .label-wrap .code { text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 2px; }
-    .label-wrap .bars { text-align: center; margin: 8px 0 4px; line-height: 0; }
-    .label-wrap .barcode-text { text-align: center; font-size: 12px; letter-spacing: 3px; color: #1a2e35; }
-    .label-wrap .divider { border: 0; border-top: 1px dashed #cbd5e1; margin: 10px 0; }
+    .label-wrap .bars { text-align: center; margin: 4px 0; line-height: 0; }
+    .label-wrap .divider { border: 0; border-top: 1px dashed #cbd5e1; margin: 6px 0; }
     .label-wrap table { width: 100%; font-size: 11px; }
-    .label-wrap td { padding: 2px 0; }
-    .label-wrap .lbl { color: #64748b; width: 80px; }
+    .label-wrap td { padding: 1px 0; }
+    .label-wrap .lbl { color: #64748b; }
     .label-wrap .val { font-weight: bold; color: #1a2e35; }
   </style>
   <div class="label-wrap">
-    <div class="brand">${clinicName || "Lab"}</div>
-    <div class="code">${escapeHTML(sample.sampleCode)}</div>
     <div class="bars">${buildBarcodeBars(barcode)}</div>
-    <div class="barcode-text">${escapeHTML(barcode)}</div>
+    <div class="code">${escapeHTML(sample.sampleCode)}</div>
     <hr class="divider" />
     <table>
-      <tr><td class="lbl">Patient:</td><td class="val">${escapeHTML(sample.order.patient.name)}</td></tr>
-      <tr><td class="lbl">Code:</td><td class="val">${escapeHTML(sample.order.patient.patientCode)}</td></tr>
-      <tr><td class="lbl">Order:</td><td class="val">${escapeHTML(sample.order.orderNo)}</td></tr>
-      <tr><td class="lbl">Sample:</td><td class="val">${escapeHTML(sample.sampleType)}</td></tr>
-      <tr><td class="lbl">Container:</td><td class="val">${escapeHTML(sample.containerType)}</td></tr>
-      <tr><td class="lbl">Collected:</td><td class="val">${sample.collectedAt ? escapeHTML(formatDate(sample.collectedAt)) : "-"}</td></tr>
-      <tr><td class="lbl">Collector:</td><td class="val">${escapeHTML(sample.collectorName || "-")}</td></tr>
+      <tr><td class="lbl">Patient:</td><td class="val">${escapeHTML(patient.name)},${sex},${age}</td></tr>
+      <tr><td class="lbl">Date:</td><td class="val">${sample.collectedAt ? escapeHTML(formatDate(sample.collectedAt)) : "-"}</td></tr>
     </table>
   </div>`;
   printHTML(`Sample Label ${sample.sampleCode}`, body);
@@ -196,6 +177,7 @@ export function LimsSamples() {
   const [collectOpen, setCollectOpen] = useState(false);
   const [trackSample, setTrackSample] = useState<LabSample | null>(null);
   const [rejectSample, setRejectSample] = useState<LabSample | null>(null);
+  const [sendLabSample, setSendLabSample] = useState<LabSample | null>(null);
 
   const filtered = useMemo(() => {
     if (!samples) return [];
@@ -225,12 +207,13 @@ export function LimsSamples() {
   const pagination = usePagination<LabSample>(filtered, 10);
 
   const stats = useMemo(() => {
-    if (!samples) return { total: 0, pending: 0, collected: 0, processing: 0 };
+    if (!samples) return { total: 0, pending: 0, collected: 0, sentToLab: 0, recollected: 0 };
     return {
       total: samples.length,
       pending: samples.filter((s) => s.status === "pending").length,
       collected: samples.filter((s) => s.status === "collected").length,
-      processing: samples.filter((s) => s.status === "processing").length,
+      sentToLab: samples.filter((s) => s.status === "received").length,
+      recollected: samples.filter((s) => s.status === "recollected").length,
     };
   }, [samples]);
 
@@ -283,24 +266,23 @@ export function LimsSamples() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-5 gap-2">
         {[
-          { label: "Total Samples", value: stats.total, icon: TestTube, accent: "from-teal-500 to-teal-600" },
-          { label: "Pending Collection", value: stats.pending, icon: ClipboardList, accent: "from-amber-500 to-orange-500" },
-          { label: "Collected", value: stats.collected, icon: CheckCircle2, accent: "from-cyan-500 to-cyan-600" },
-          { label: "Processing", value: stats.processing, icon: Microscope, accent: "from-violet-500 to-violet-600" },
-        ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4 sm:p-5">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.accent} flex items-center justify-center shadow-sm`}>
-                  <s.icon className="w-5 h-5 text-white" />
-                </div>
-                <p className="mt-3 text-xl sm:text-2xl font-bold tracking-tight">{s.value}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{s.label}</p>
-              </CardContent>
-            </Card>
-          </motion.div>
+          { label: "Total", value: stats.total, icon: TestTube, color: "text-teal-600 bg-teal-50 dark:bg-teal-950/30" },
+          { label: "Pending", value: stats.pending, icon: ClipboardList, color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30" },
+          { label: "Collected", value: stats.collected, icon: CheckCircle2, color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-950/30" },
+          { label: "Sent to Lab", value: stats.sentToLab, icon: Microscope, color: "text-violet-600 bg-violet-50 dark:bg-violet-950/30" },
+          { label: "Recollected", value: stats.recollected, icon: Syringe, color: "text-rose-600 bg-rose-50 dark:bg-rose-950/30" },
+        ].map((s) => (
+          <div key={s.label} className="flex items-center gap-2.5 rounded-lg border bg-card p-2.5">
+            <div className={`w-8 h-8 rounded-md ${s.color} flex items-center justify-center shrink-0`}>
+              <s.icon className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-lg font-bold leading-tight">{s.value}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">{s.label}</p>
+            </div>
+          </div>
         ))}
       </div>
 
@@ -316,10 +298,10 @@ export function LimsSamples() {
             <div className="flex flex-wrap gap-1.5">
               {STATUS_FILTERS.map((s) => (
                 <button key={s} onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors capitalize ${
+                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                     statusFilter === s ? "bg-teal-600 text-white border-teal-600" : "bg-card hover:bg-accent border-border"
                   }`}>
-                  {s === "all" ? "All" : s}
+                  {s === "all" ? "All" : s === "received" ? "Sent to Lab" : s.charAt(0).toUpperCase() + s.slice(1)}
                 </button>
               ))}
             </div>
@@ -400,6 +382,12 @@ export function LimsSamples() {
                         sample={s}
                         onTrack={() => setTrackSample(s)}
                         onPrint={() => printSampleLabel(s, tenantBranding?.clinicName ?? undefined)}
+                        onCollect={() => patchSample(
+                          s.id,
+                          { status: "collected", collectedAt: new Date().toISOString() },
+                          `Sample ${s.sampleCode} collected`,
+                          refreshFn,
+                        )}
                         onReceive={() => patchSample(
                           s.id,
                           { status: "received", location: "Sample Reception", handler: "Lab Reception" },
@@ -407,12 +395,7 @@ export function LimsSamples() {
                           refreshFn,
                         )}
                         onReject={() => setRejectSample(s)}
-                        onSendLab={() => patchSample(
-                          s.id,
-                          { status: "processing", location: "Lab Department", handler: "Lab Dispatcher" },
-                          `Sample ${s.sampleCode} sent to lab department`,
-                          refreshFn,
-                        )}
+                        onSendLab={() => setSendLabSample(s)}
                       />
                     </TableCell>
                   </TableRow>
@@ -448,6 +431,13 @@ export function LimsSamples() {
         onOpenChange={(o) => !o && setRejectSample(null)}
         onSaved={() => { setRejectSample(null); refreshFn(); }}
       />
+
+      {/* Send to Lab dialog */}
+      <SendToLabDialog
+        sample={sendLabSample}
+        onOpenChange={(o) => !o && setSendLabSample(null)}
+        onSent={() => { setSendLabSample(null); refreshFn(); }}
+      />
     </div>
   );
 }
@@ -455,11 +445,12 @@ export function LimsSamples() {
 /* ---------- Sample Actions ---------- */
 
 function SampleActions({
-  sample, onTrack, onPrint, onReceive, onReject, onSendLab,
+  sample, onTrack, onPrint, onCollect, onReceive, onReject, onSendLab,
 }: {
   sample: LabSample;
   onTrack: () => void;
   onPrint: () => void;
+  onCollect: () => void;
   onReceive: () => void;
   onReject: () => void;
   onSendLab: () => void;
@@ -472,6 +463,12 @@ function SampleActions({
       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Print label" onClick={onPrint}>
         <Printer className="w-3.5 h-3.5" />
       </Button>
+      {sample.status === "pending" && (
+        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-cyan-50 hover:bg-cyan-100 border-cyan-200 text-cyan-700 dark:bg-cyan-950/30 dark:border-cyan-900 dark:hover:bg-cyan-950/50"
+          onClick={onCollect}>
+          <Syringe className="w-3 h-3" /> Collect
+        </Button>
+      )}
       {sample.status === "collected" && (
         <>
           <Button variant="outline" size="sm" className="h-7 gap-1 text-xs bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-700 dark:bg-teal-950/30 dark:border-teal-900 dark:hover:bg-teal-950/50"
@@ -646,6 +643,98 @@ function CollectSampleDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ---------- Send to Lab Dialog ---------- */
+
+const LAB_OPTIONS = [
+  { id: "internal", name: "Internal Lab", location: "Lab Department" },
+  { id: "external_1", name: "PathCare Laboratory", location: "External" },
+  { id: "external_2", name: "National Health Lab", location: "External" },
+  { id: "external_3", name: "Himalayan Diagnostics", location: "External" },
+];
+
+function SendToLabDialog({
+  sample, onOpenChange, onSent,
+}: {
+  sample: LabSample | null;
+  onOpenChange: (v: boolean) => void;
+  onSent: () => void;
+}) {
+  const [selectedLab, setSelectedLab] = useState("internal");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (sample) setSelectedLab("internal");
+  }, [sample]);
+
+  const handleSubmit = async () => {
+    if (!sample) return;
+    const lab = LAB_OPTIONS.find((l) => l.id === selectedLab);
+    setSaving(true);
+    try {
+      await patchSample(
+        sample.id,
+        { status: "processing", location: lab?.location || "Lab Department", handler: lab?.name || "Lab" },
+        `Sample ${sample.sampleCode} sent to ${lab?.name || "lab"}`,
+        onSent,
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!sample} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Send className="w-4 h-4 text-violet-600" /> Send to Lab
+          </DialogTitle>
+          <DialogDescription>
+            Select a lab to send sample <span className="font-mono">{sample?.sampleCode}</span>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          {LAB_OPTIONS.map((lab) => (
+            <label
+              key={lab.id}
+              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                selectedLab === lab.id
+                  ? "border-violet-400 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-800"
+                  : "border-border hover:bg-accent/50"
+              }`}
+            >
+              <input
+                type="radio"
+                name="lab"
+                value={lab.id}
+                checked={selectedLab === lab.id}
+                onChange={() => setSelectedLab(lab.id)}
+                className="accent-violet-600"
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium">{lab.name}</p>
+                <p className="text-[11px] text-muted-foreground">{lab.location}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+            onClick={handleSubmit}
+            disabled={saving}
+          >
+            {saving ? "Sending…" : (<><Send className="w-4 h-4" /> Send to Lab</>)}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

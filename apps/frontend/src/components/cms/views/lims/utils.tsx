@@ -44,6 +44,22 @@ export function escapeHTML(s: unknown): string {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 }
 
+export function buildBarcodeBars(code: string): string {
+  let hash = 0;
+  for (let i = 0; i < code.length; i++) {
+    hash = ((hash << 5) - hash + code.charCodeAt(i)) | 0;
+  }
+  const bars: string[] = [];
+  let seed = Math.abs(hash);
+  for (let i = 0; i < 40; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const w = (seed % 2) + 1;
+    bars.push(`<span style="display:inline-block;width:${w}px;height:28px;background:#1a2e35;margin:0 ${i % 5 === 0 ? 2 : 1}px;border-radius:1px"></span>`);
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+  }
+  return bars.join("");
+}
+
 export function toDateInputValue(d: string | null): string {
   if (!d) return "";
   return new Date(d).toISOString().split("T")[0];
