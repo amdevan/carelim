@@ -29,7 +29,19 @@ export const GET = withTenant(async (req: NextRequest) => {
 export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
   const { testIds, patientId, doctorId, priority, clinicalNotes, discount } = body;
-  const count = await db.labOrder.count();
+  // Get the highest existing lab order number to avoid duplicates
+  const latest = await db.labOrder.findMany({
+    where: { orderNo: { startsWith: "LAB-" } },
+    orderBy: { orderNo: "desc" },
+    take: 1,
+    select: { orderNo: true },
+  });
+  let nextNum = 1;
+  if (latest.length > 0) {
+    const match = latest[0].orderNo.match(/LAB-(\d+)/);
+    if (match) nextNum = parseInt(match[1], 10) + 1;
+  }
+  const orderNo = `LAB-${String(nextNum).padStart(5, "0")}`;
   const tests = await db.labTestMaster.findMany({ where: { id: { in: testIds } } });
   const totalAmount = tests.reduce((s, t) => s + t.price, 0);
   const disc = discount || 0;
@@ -38,7 +50,7 @@ export const POST = withTenant(async (req: NextRequest) => {
 
   const order = await db.labOrder.create({
     data: {
-      orderNo: `LAB-${String(count + 1).padStart(5, "0")}`,
+      orderNo,
       patientId,
       doctorId: doctorId || null,
       priority: priority || "normal",
@@ -50,7 +62,7 @@ export const POST = withTenant(async (req: NextRequest) => {
       netAmount,
       paidAmount: 0,
       paymentStatus: "unpaid",
-      barcode: `LAB${String(count + 1).padStart(6, "0")}`,
+      barcode: orderNo,
       items: {
         create: tests.map(t => ({ testId: t.id, price: t.price, status: "ordered", resultStatus: "pending" })),
       },

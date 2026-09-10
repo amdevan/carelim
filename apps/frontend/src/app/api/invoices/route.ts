@@ -29,14 +29,24 @@ export const POST = withTenant(async (req: NextRequest) => {
   if (denied) return denied;
   try {
     const body = await req.json();
-    const count = await db.invoice.count();
-    const nextNum = (count + 1).toString().padStart(5, "0");
+    // Get the highest existing invoice number to avoid duplicates
+    const latest = await db.invoice.findMany({
+      where: { invoiceNo: { startsWith: "INV-" } },
+      orderBy: { invoiceNo: "desc" },
+      take: 1,
+      select: { invoiceNo: true },
+    });
+    let nextNum = 1;
+    if (latest.length > 0) {
+      const match = latest[0].invoiceNo.match(/INV-(\d+)/);
+      if (match) nextNum = parseInt(match[1], 10) + 1;
+    }
     const { items, testIds, ...data } = body;
     const invoice = await db.invoice.create({
       data: {
         ...data,
         date: new Date(),
-        invoiceNo: `INV-${nextNum}`,
+        invoiceNo: `INV-${nextNum.toString().padStart(5, "0")}`,
         items: { create: items || [] },
       },
       include: { items: true, patient: true },
@@ -47,7 +57,19 @@ export const POST = withTenant(async (req: NextRequest) => {
       try {
         const tests = await db.labTestMaster.findMany({ where: { id: { in: testIds } } });
         if (tests.length > 0) {
-          const labOrderCount = await db.labOrder.count();
+          // Get the highest existing lab order number to avoid duplicates
+          const latestLab = await db.labOrder.findMany({
+            where: { orderNo: { startsWith: "LAB-" } },
+            orderBy: { orderNo: "desc" },
+            take: 1,
+            select: { orderNo: true },
+          });
+          let labNextNum = 1;
+          if (latestLab.length > 0) {
+            const m = latestLab[0].orderNo.match(/LAB-(\d+)/);
+            if (m) labNextNum = parseInt(m[1], 10) + 1;
+          }
+          const labOrderNo = `LAB-${String(labNextNum).padStart(5, "0")}`;
           const totalAmount = tests.reduce((s, t) => s + t.price, 0);
           const disc = data.discount || 0;
           const tax = Math.round((totalAmount - disc) * 0.13);
@@ -55,7 +77,7 @@ export const POST = withTenant(async (req: NextRequest) => {
 
           await db.labOrder.create({
             data: {
-              orderNo: `LAB-${String(labOrderCount + 1).padStart(5, "0")}`,
+              orderNo: labOrderNo,
               patientId: data.patientId,
               doctorId: data.doctorId || null,
               priority: "normal",
@@ -67,7 +89,7 @@ export const POST = withTenant(async (req: NextRequest) => {
               paidAmount: data.paid || 0,
               paymentStatus: data.paid >= netAmount ? "paid" : data.paid > 0 ? "partial" : "unpaid",
               invoiceId: invoice.id,
-              barcode: `LAB${String(labOrderCount + 1).padStart(6, "0")}`,
+              barcode: labOrderNo,
               items: {
                 create: tests.map(t => ({ testId: t.id, price: t.price, status: "ordered", resultStatus: "pending" })),
               },
