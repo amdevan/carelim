@@ -832,6 +832,7 @@ function CreateInvoiceDialog({
       // Include testIds for lab invoices to create lab orders
       if (type === "lab") {
         body.testIds = labItems.filter((l) => l.testId && l.testName).map((l) => l.testId);
+        if (doctorName) body.doctorId = doctorName;
       }
       const res = await fetchAPI("/api/invoices", {
         method: "POST",
@@ -946,6 +947,19 @@ function CreateInvoiceDialog({
                     <Plus className="w-3.5 h-3.5" /> Add Manual
                   </Button>
                 </div>
+              </div>
+
+              {/* Doctor Selector for Lab */}
+              <div className="bg-cyan-100/50 dark:bg-cyan-900/20 rounded-lg p-2.5">
+                <DoctorSearch value={doctorName} onValueChange={setDoctorName} label="Ordering Doctor (for commission tracking)" />
+                {doctorName && doctors && (() => {
+                  const doc = doctors.find((d) => d.id === doctorName);
+                  return doc ? (
+                    <p className="text-xs text-cyan-600 dark:text-cyan-400 mt-1">
+                      Dr. {doc.name} — {doc.specialization || "General"} — Commission will be calculated on this order
+                    </p>
+                  ) : null;
+                })()}
               </div>
 
               {/* Quick Add from Test Master */}
