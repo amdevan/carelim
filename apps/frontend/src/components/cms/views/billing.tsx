@@ -864,8 +864,23 @@ function CreateInvoiceDialog({
           <DialogDescription>Fill in patient details and charges. Totals compute automatically.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
-          {/* Patient Selector — full width */}
-          <PatientSearch value={patientId} onValueChange={setPatientId} label="" required />
+          {/* Patient + Doctor selectors */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <PatientSearch value={patientId} onValueChange={setPatientId} label="" required />
+            {type === "lab" && (
+              <div className="space-y-1.5">
+                <DoctorSearch value={doctorName} onValueChange={setDoctorName} label="Ordering Doctor" />
+                {doctorName && doctors && (() => {
+                  const doc = doctors.find((d) => d.id === doctorName);
+                  return doc ? (
+                    <p className="text-xs text-cyan-600 dark:text-cyan-400">
+                      Dr. {doc.name} — {doc.specialization || "General"}
+                    </p>
+                  ) : null;
+                })()}
+              </div>
+            )}
+          </div>
 
           {/* Type-specific sections */}
           {type === "consultation" && (
@@ -947,19 +962,6 @@ function CreateInvoiceDialog({
                     <Plus className="w-3.5 h-3.5" /> Add Manual
                   </Button>
                 </div>
-              </div>
-
-              {/* Doctor Selector for Lab */}
-              <div className="bg-cyan-100/50 dark:bg-cyan-900/20 rounded-lg p-2.5">
-                <DoctorSearch value={doctorName} onValueChange={setDoctorName} label="Ordering Doctor (for commission tracking)" />
-                {doctorName && doctors && (() => {
-                  const doc = doctors.find((d) => d.id === doctorName);
-                  return doc ? (
-                    <p className="text-xs text-cyan-600 dark:text-cyan-400 mt-1">
-                      Dr. {doc.name} — {doc.specialization || "General"} — Commission will be calculated on this order
-                    </p>
-                  ) : null;
-                })()}
               </div>
 
               {/* Quick Add from Test Master */}
