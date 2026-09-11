@@ -5,6 +5,9 @@ echo "Syncing database schema..."
 
 node -e "
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
+
 async function migrate() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const client = await pool.connect();
@@ -17,10 +20,64 @@ async function migrate() {
         ok++;
       } catch(e) {
         fail++;
-        if (!e.message.includes('already exists') && !e.message.includes('does not exist')) {
-          console.error('FAIL:', label || sql.substring(0, 60), '->', e.message.substring(0, 100));
+        if (!e.message.includes('already exists') && !e.message.includes('does not exist') && !e.message.includes('cannot drop')) {
+          console.error('FAIL:', label || sql.substring(0, 60), '->', e.message.substring(0, 120));
         }
       }
+    }
+
+    // Parse Prisma schema to find models with tenantId and branchId
+    let schema = '';
+    try {
+      schema = fs.readFileSync('/app/prisma/schema.prisma', 'utf8');
+    } catch {
+      try {
+        schema = fs.readFileSync(path.join(process.cwd(), 'prisma/schema.prisma'), 'utf8');
+      } catch {
+        console.log('Could not read schema.prisma, using hardcoded lists');
+      }
+    }
+
+    const modelsWithTenantId = new Set();
+    const modelsWithBranchId = new Set();
+
+    if (schema) {
+      // Parse model blocks
+      const modelRegex = /model\s+(\w+)\s*\{([^}]+)\}/g;
+      let match;
+      while ((match = modelRegex.exec(schema)) !== null) {
+        const modelName = match[1];
+        const body = match[2];
+        if (body.includes('tenantId')) modelsWithTenantId.add(modelName);
+        if (body.includes('branchId')) modelsWithBranchId.add(modelName);
+      }
+      console.log('Parsed schema: ' + modelsWithTenantId.size + ' models need tenantId, ' + modelsWithBranchId.size + ' need branchId');
+    }
+
+    // Fallback: hardcoded list if schema parsing failed
+    if (modelsWithTenantId.size === 0) {
+      ['Patient','Doctor','Appointment','Prescription','Medicine','PharmacySale','Invoice',
+       'LabTest','LabOrder','LabTestMaster','LabResult','LabSample','LabPackage','LabDepartment',
+       'LabQualityControl','LabEquipment','LabInventory','LabSupplier',
+       'RadiologyStudy','RadiologyTest','RadiologyModality','RadiologyEquipment','RadiologyTemplate','RadiologyAlert','RadiologySchedule',
+       'Expense','PatientPayment','ClinicalNote','Staff','Department','Supplier','Setting',
+       'AuditLog','Account','JournalEntry','CashTransaction','BankTransaction',
+       'DoctorCommission','InsuranceClaim','SupplierPayment','Referral',
+       'InventoryItem','InventoryBatch','InventoryMovement','StockTransfer','StockAudit','PurchaseOrder',
+       'PatientSource','CareCoordinator','LeaveRequest','StaffAttendance','Payroll',
+       'Organization','ClinicSettings','BookingConfig','BookingLink','PublicBooking',
+       'Role','Permission','RolePermission','SaaSInvoice','TenantModule','UsageTracking','SupportTicket','SaaSAuditLog',
+       'IVFCycle','FertilityAssessment','TreatmentProtocol','DentalExamination','DentalTreatmentPlan',
+       'MSLead','Campaign','CRMContact','CRMDeal','EmailTemplate',
+       'PatientUser','PatientDocument','Odontogram','DentalLabOrder',
+      ].forEach(m => modelsWithTenantId.add(m));
+    }
+
+    if (modelsWithBranchId.size === 0) {
+      ['Patient','Doctor','Appointment','Prescription','Medicine','PharmacySale','Invoice',
+       'LabTest','LabOrder','RadiologyStudy','Expense','PatientPayment','ClinicalNote',
+       'Staff','Department','BookingLink',
+      ].forEach(m => modelsWithBranchId.add(m));
     }
 
     // Get all existing tables
@@ -39,47 +96,15 @@ async function migrate() {
       return existingCols[table] && existingCols[table].has(col);
     }
 
-    // Tables that need tenantId
-    const tenantTables = [
-      'Patient', 'Doctor', 'Appointment', 'Prescription', 'Medicine',
-      'PharmacySale', 'Invoice', 'LabTest', 'LabOrder', 'LabTestMaster',
-      'LabResult', 'LabSample', 'RadiologyStudy', 'Expense', 'PatientPayment',
-      'ClinicalNote', 'Staff', 'Department', 'Supplier', 'Setting',
-      'AuditLog', 'Account', 'JournalEntry', 'CashTransaction', 'BankTransaction',
-      'DoctorCommission', 'InsuranceClaim', 'SupplierPayment', 'Referral',
-      'InventoryItem', 'InventoryBatch', 'InventoryMovement', 'StockTransfer',
-      'StockAudit', 'PurchaseOrder', 'PatientSource', 'CareCoordinator',
-      'LeaveRequest', 'StaffAttendance', 'Payroll',
-      // New tables
-      'Organization', 'ClinicSettings', 'BookingConfig', 'BookingLink',
-      'PublicBooking', 'Role', 'Permission', 'RolePermission',
-      // IVF
-      'IVFCycle', 'FertilityAssessment',
-      // Dental
-      'DentalExamination', 'DentalTreatmentPlan',
-      // CRM
-      'MSLead', 'Campaign', 'CRMContact', 'CRMDeal',
-      // SaaS
-      'SaaSInvoice', 'TenantModule',
-    ];
-
-    // Tables that need branchId
-    const branchTables = [
-      'Patient', 'Doctor', 'Appointment', 'Prescription', 'Medicine',
-      'PharmacySale', 'Invoice', 'LabTest', 'LabOrder',
-      'RadiologyStudy', 'Expense', 'PatientPayment', 'ClinicalNote',
-      'Staff', 'Department', 'BookingLink',
-    ];
-
-    // Tables that need tenantId columns
-    for (const table of tenantTables) {
+    // Add tenantId to all tables that need it
+    for (const table of modelsWithTenantId) {
       if (existingTables.has(table) && !hasCol(table, 'tenantId')) {
         await run('ALTER TABLE \"' + table + '\" ADD COLUMN IF NOT EXISTS \"tenantId\" TEXT', table + '.tenantId');
       }
     }
 
-    // Tables that need branchId columns
-    for (const table of branchTables) {
+    // Add branchId to all tables that need it
+    for (const table of modelsWithBranchId) {
       if (existingTables.has(table) && !hasCol(table, 'branchId')) {
         await run('ALTER TABLE \"' + table + '\" ADD COLUMN IF NOT EXISTS \"branchId\" TEXT', table + '.branchId');
       }
@@ -94,13 +119,13 @@ async function migrate() {
       }
     }
 
-    // Staff table - ensure all needed columns
+    // Staff table
     const staffCols = ['tenantId', 'branchId', 'password', 'status', 'lastLogin', 'department', 'designation', 'salary', 'joinDate', 'phone', 'name', 'email', 'role'];
     for (const col of staffCols) {
       if (existingTables.has('Staff') && !hasCol('Staff', col)) {
+        const type = col === 'salary' ? 'DOUBLE PRECISION DEFAULT 0' : col === 'joinDate' || col === 'lastLogin' ? 'TIMESTAMP(3)' : 'TEXT';
         const def = col === 'status' ? \" DEFAULT 'active'\" : col === 'password' ? \" DEFAULT 'medcore123'\" : '';
-        const type = col === 'salary' ? 'DOUBLE PRECISION DEFAULT 0' : col === 'joinDate' || col === 'lastLogin' ? 'TIMESTAMP(3)' : 'TEXT' + def;
-        await run('ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"' + col + '\" ' + type, 'Staff.' + col);
+        await run('ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"' + col + '\" ' + type + def, 'Staff.' + col);
       }
     }
 
@@ -114,6 +139,11 @@ async function migrate() {
       await run('ALTER TABLE \"Tenant\" ADD COLUMN IF NOT EXISTS \"logoUrl\" TEXT', 'Tenant.logoUrl');
     }
 
+    // Drop and recreate AuditLog with tenantId
+    await run('DROP TABLE IF EXISTS \"AuditLog\" CASCADE', 'drop AuditLog');
+    await run('CREATE TABLE \"AuditLog\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"user\" TEXT NOT NULL, \"action\" TEXT NOT NULL, \"module\" TEXT NOT NULL, \"detail\" TEXT, \"ip\" TEXT, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"AuditLog_pkey\" PRIMARY KEY (\"id\"))', 'create AuditLog');
+    await run('CREATE INDEX IF NOT EXISTS \"AuditLog_tenantId_idx\" ON \"AuditLog\"(\"tenantId\")', 'AuditLog index');
+
     // Create missing tables
     const createTables = [
       'CREATE TABLE IF NOT EXISTS \"BookingLink\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"branchId\" TEXT, \"configId\" TEXT, \"doctorId\" TEXT, \"doctorName\" TEXT, \"department\" TEXT, \"label\" TEXT, \"url\" TEXT NOT NULL, \"slug\" TEXT NOT NULL, \"active\" BOOLEAN NOT NULL DEFAULT true, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"BookingLink_pkey\" PRIMARY KEY (\"id\"));',
@@ -125,25 +155,15 @@ async function migrate() {
       'CREATE UNIQUE INDEX IF NOT EXISTS \"Role_name_key\" ON \"Role\"(\"name\");',
       'CREATE TABLE IF NOT EXISTS \"Permission\" (\"id\" TEXT NOT NULL, \"module\" TEXT NOT NULL, \"action\" TEXT NOT NULL, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"Permission_pkey\" PRIMARY KEY (\"id\"));',
       'CREATE TABLE IF NOT EXISTS \"RolePermission\" (\"roleId\" TEXT NOT NULL, \"permissionId\" TEXT NOT NULL, CONSTRAINT \"RolePermission_pkey\" PRIMARY KEY (\"roleId\",\"permissionId\"));',
-      'CREATE TABLE IF NOT EXISTS \"Organization\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"name\" TEXT NOT NULL, \"clinicType\" TEXT NOT NULL DEFAULT ' + \"'General'\" + ', \"clinicId\" TEXT NOT NULL, \"subdomain\" TEXT NOT NULL, \"adminUserId\" TEXT, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"Organization_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"Organization_clinicId_key\" ON \"Organization\"(\"clinicId\");',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"Organization_subdomain_key\" ON \"Organization\"(\"subdomain\");',
-      'CREATE TABLE IF NOT EXISTS \"ClinicSettings\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"clinicName\" TEXT, \"clinicEmail\" TEXT, \"clinicPhone\" TEXT, \"clinicLogo\" TEXT, \"address\" TEXT, \"city\" TEXT, \"state\" TEXT, \"country\" TEXT, \"primaryColor\" TEXT, \"logo\" TEXT, \"taxRate\" DOUBLE PRECISION DEFAULT 0, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"ClinicSettings_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"ClinicSettings_tenantId_key\" ON \"ClinicSettings\"(\"tenantId\");',
       'CREATE TABLE IF NOT EXISTS \"StaffBranch\" (\"id\" TEXT NOT NULL, \"staffId\" TEXT NOT NULL, \"branchId\" TEXT NOT NULL, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"StaffBranch_pkey\" PRIMARY KEY (\"id\"));',
       'CREATE UNIQUE INDEX IF NOT EXISTS \"StaffBranch_staffId_branchId_key\" ON \"StaffBranch\"(\"staffId\", \"branchId\");',
     ];
-
-    // Drop and recreate AuditLog with tenantId
-    await run('DROP TABLE IF EXISTS \"AuditLog\" CASCADE', 'drop AuditLog');
-    await run('CREATE TABLE \"AuditLog\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"user\" TEXT NOT NULL, \"action\" TEXT NOT NULL, \"module\" TEXT NOT NULL, \"detail\" TEXT, \"ip\" TEXT, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"AuditLog_pkey\" PRIMARY KEY (\"id\"))', 'create AuditLog');
-    await run('CREATE INDEX IF NOT EXISTS \"AuditLog_tenantId_idx\" ON \"AuditLog\"(\"tenantId\")', 'AuditLog index');
 
     for (const sql of createTables) {
       await run(sql, 'create: ' + sql.substring(20, 50));
     }
 
-    console.log('Schema sync: ' + ok + ' ok, ' + fail + ' failed');
+    console.log('Schema sync complete: ' + ok + ' ok, ' + fail + ' failed');
   } finally {
     client.release();
     await pool.end();
