@@ -110,6 +110,20 @@ async function migrate() {
       }
     }
 
+    // Create tenantId indexes for all tenant models (performance)
+    for (const table of modelsWithTenantId) {
+      if (existingTables.has(table) && hasCol(table, 'tenantId')) {
+        await run('CREATE INDEX IF NOT EXISTS \"' + table + '_tenantId_idx\" ON \"' + table + '\"(\"tenantId\")', table + '.tenantId_idx');
+      }
+    }
+
+    // Create branchId indexes for all branch models (performance)
+    for (const table of modelsWithBranchId) {
+      if (existingTables.has(table) && hasCol(table, 'branchId')) {
+        await run('CREATE INDEX IF NOT EXISTS \"' + table + '_branchId_idx\" ON \"' + table + '\"(\"branchId\")', table + '.branchId_idx');
+      }
+    }
+
     // User table - ensure all needed columns exist
     const userCols = ['tenantId', 'roleId', 'branchId', 'status', 'lastLogin', 'phone', 'password', 'createdAt', 'name', 'email'];
     for (const col of userCols) {

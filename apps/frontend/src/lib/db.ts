@@ -35,6 +35,7 @@ const TENANT_MODELS = new Set([
   // Lab
   'labDepartment', 'labTestMaster', 'labPackage', 'labOrder',
   'labQualityControl', 'labEquipment', 'labInventory', 'labSupplier',
+  'labSample', 'labResult', 'labResultParameter', 'labOrderItem', 'labSampleTracking',
   // Inventory
   'inventoryLocation', 'inventoryItem', 'inventoryBatch', 'inventoryMovement',
   'stockTransfer', 'stockAudit',
@@ -135,10 +136,10 @@ function getFilteredClient(): PrismaClient {
             if (WHERE_OPS.has(operation)) {
               if (!args.where) args.where = {}
 
-              // For findUnique, findUniqueOrThrow: only filter if compound where
+              // For findUnique, findUniqueOrThrow: skip ONLY if querying by id (global unique, safe)
               if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
                 const whereKeys = Object.keys(args.where)
-                if (whereKeys.length === 1) {
+                if (whereKeys.length === 1 && whereKeys[0] === 'id') {
                   return query(args)
                 }
               }

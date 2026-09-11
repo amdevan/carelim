@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withTenant } from "@/lib/with-tenant";
 
-export async function GET() {
+export const GET = withTenant(async () => {
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
@@ -132,4 +132,4 @@ export async function GET() {
     },
     departments: departments.map(d => ({ id: d.id, name: d.name, code: d.code, color: d.color, tests: d._count.tests, equipment: d._count.equipment })),
   });
-}
+})

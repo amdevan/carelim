@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       email: doctor.email,
       role: "doctor",
       type: "doctor",
+      tenantId: doctor.tenantId || "",
     });
 
     const response = NextResponse.json({

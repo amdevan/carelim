@@ -76,8 +76,8 @@ model DoctorScheduleSlot {
   capacity    Int      @default(20) // max appointments per slot/day
   bookedCount Int      @default(0)
   status      String   @default("available") // available | full | blocked | leave
-  notes       String?
-  createdAt   DateTime @default(now())
+  notes        String?
+  createdAt    DateTime @default(now())
 }
 
 model Patient {
@@ -1683,6 +1683,7 @@ model SaaSInvoice {
   date DateTime @default(now())
   paidAt DateTime?
   description String?
+  @@index([tenantId])
 }
 model PlatformModule {
   id String @id @default(cuid())
@@ -1701,6 +1702,7 @@ model TenantModule {
   moduleId String
   module PlatformModule @relation(fields: [moduleId], references: [id])
   enabled Boolean @default(true)
+  @@index([tenantId])
 }
 model AddOn {
   id String @id @default(cuid())
@@ -1722,6 +1724,7 @@ model UsageTracking {
   appointmentCount Int @default(0)
   storageUsedMB Float @default(0)
   apiCalls Int @default(0)
+  @@index([tenantId])
 }
 model SupportTicket {
   id String @id @default(cuid())
@@ -1736,6 +1739,7 @@ model SupportTicket {
   category String @default("technical")
   createdAt DateTime @default(now())
   resolvedAt DateTime?
+  @@index([tenantId])
 }
 model AdminUser {
   id String @id @default(cuid())
@@ -1757,6 +1761,7 @@ model SaaSAuditLog {
   detail String?
   ipAddress String?
   createdAt DateTime @default(now())
+  @@index([tenantId])
 }
 model Lead {
   id String @id @default(cuid())
@@ -1827,6 +1832,7 @@ model FertilityAssessment {
   recommendations String?
   doctorId    String?
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
 model TreatmentProtocol {
@@ -1882,9 +1888,10 @@ model EggRetrieval {
   doctorId    String?
   notes       String?
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
-model SemenProcessing {
+model EggRetrieval {
   id              String   @id @default(cuid())
   tenantId        String?
   tenant          Tenant?  @relation(fields: [tenantId], references: [id])
@@ -1902,6 +1909,7 @@ model SemenProcessing {
   viableCount     Int?
   notes           String?
   createdAt       DateTime @default(now())
+  @@index([tenantId])
 }
 
 model Embryo {
@@ -1921,6 +1929,7 @@ model Embryo {
   transferId  String?
   notes       String?
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
 model EmbryoTransfer {
@@ -1938,6 +1947,7 @@ model EmbryoTransfer {
   doctorId    String?
   notes       String?
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
 model CryobankStorage {
@@ -1979,9 +1989,10 @@ model PregnancyFollowup {
   status      String   @default("tracking") // tracking | ongoing | delivered | miscarried | ectopic
   notes       String?
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
-model DonorProfile {
+model SemenProcessing {
   id          String   @id @default(cuid())
   tenantId    String?
   tenant      Tenant?  @relation(fields: [tenantId], references: [id])
@@ -2079,6 +2090,7 @@ model Odontogram {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
   teeth       Tooth[]
+  @@index([tenantId])
 }
 
 model Tooth {
@@ -2156,6 +2168,7 @@ model DentalImage {
   takenAt     DateTime @default(now())
   notes       String?
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
 model DentalLabOrder {
@@ -2288,6 +2301,7 @@ model AppointmentExtension {
   status             String   @default("pending") // pending | confirmed | checked_in | consultation | billing | completed | cancelled | no_show
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt
+  @@index([tenantId])
 }
 
 model Referral {
@@ -2307,6 +2321,7 @@ model Referral {
   status          String   @default("pending") // pending | earned | settled | cancelled
   settledAt       DateTime?
   createdAt       DateTime @default(now())
+  @@index([tenantId])
 }
 
 model PatientActivityLog {
@@ -2318,6 +2333,7 @@ model PatientActivityLog {
   description   String?
   performedBy   String?
   createdAt     DateTime @default(now())
+  @@index([tenantId])
 }
 
 model CareCoordinator {
@@ -2331,6 +2347,7 @@ model CareCoordinator {
   remarks      String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @default(now()) @updatedAt
+  @@index([tenantId])
 }
 
 model MSLead {
@@ -2370,6 +2387,7 @@ model Campaign {
   endDate     DateTime?
   status      String   @default("active") // active | paused | completed
   createdAt   DateTime @default(now())
+  @@index([tenantId])
 }
 
 model CommissionSettlement {
@@ -2416,6 +2434,7 @@ model Organization {
   subscriptions Subscription[]
   modules       OrganizationModule[]
   settings      OrganizationSetting[]
+  @@index([tenantId])
 }
 
 model OrganizationModule {
@@ -2494,6 +2513,7 @@ model PatientUser {
   messages      PatientMessage[]
   notifications PatientNotification[]
   reminders     PatientReminder[]
+  @@index([tenantId])
 }
 
 model PatientDocument {
@@ -2698,6 +2718,8 @@ model BookingLink {
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([branchId])
 }
 
 model PublicBooking {
