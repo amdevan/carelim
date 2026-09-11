@@ -110,6 +110,31 @@ async function migrate() {
       }
     }
 
+    // Backfill tenantId for all existing rows (NULL → first tenant)
+    const tenantRes = await client.query('SELECT id FROM \"Tenant\" LIMIT 1');
+    if (tenantRes.rows.length > 0) {
+      const defaultTenantId = tenantRes.rows[0].id;
+      console.log('Backfilling tenantId with: ' + defaultTenantId);
+      for (const table of modelsWithTenantId) {
+        if (existingTables.has(table) && hasCol(table, 'tenantId')) {
+          await run('UPDATE \"' + table + '\" SET \"tenantId\" = \'' + defaultTenantId + '\' WHERE \"tenantId\" IS NULL', table + '.backfill');
+        }
+      }
+      // Backfill branchId — set to first branch of the tenant
+      const branchRes = await client.query('SELECT id FROM \"Branch\" WHERE \"tenantId\" = \'' + defaultTenantId + '\' LIMIT 1');
+      if (branchRes.rows.length > 0) {
+        const defaultBranchId = branchRes.rows[0].id;
+        console.log('Backfilling branchId with: ' + defaultBranchId);
+        for (const table of modelsWithBranchId) {
+          if (existingTables.has(table) && hasCol(table, 'branchId')) {
+            await run('UPDATE \"' + table + '\" SET \"branchId\" = \'' + defaultBranchId + '\' WHERE \"branchId\" IS NULL', table + '.backfill_branch');
+          }
+        }
+      }
+    } else {
+      console.log('No tenant found, skipping backfill');
+    }
+
     // Create tenantId indexes for all tenant models (performance)
     for (const table of modelsWithTenantId) {
       if (existingTables.has(table) && hasCol(table, 'tenantId')) {
