@@ -9,62 +9,140 @@ async function migrate() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const client = await pool.connect();
   try {
-    const statements = [
-      'CREATE TABLE IF NOT EXISTS \"BookingLink\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"branchId\" TEXT, \"configId\" TEXT, \"doctorId\" TEXT, \"doctorName\" TEXT, \"department\" TEXT, \"label\" TEXT, \"url\" TEXT NOT NULL, \"slug\" TEXT NOT NULL, \"active\" BOOLEAN NOT NULL DEFAULT true, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"BookingLink_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"BookingLink_slug_key\" ON \"BookingLink\"(\"slug\");',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"BookingLink_tenantId_slug_key\" ON \"BookingLink\"(\"tenantId\", \"slug\");',
-      'CREATE TABLE IF NOT EXISTS \"BookingConfig\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT NOT NULL, \"slotDuration\" INTEGER NOT NULL DEFAULT 30, \"maxBookingsPerSlot\" INTEGER NOT NULL DEFAULT 5, \"allowWalkIn\" BOOLEAN NOT NULL DEFAULT true, \"requirePhone\" BOOLEAN NOT NULL DEFAULT false, \"enableWaitlist\" BOOLEAN NOT NULL DEFAULT false, \"workingHours\" JSONB, \"holidays\" JSONB, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"BookingConfig_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"BookingConfig_tenantId_key\" ON \"BookingConfig\"(\"tenantId\");',
-      // Ensure all columns exist on User table
-      'ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"tenantId\" TEXT;',
-      'ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"roleId\" TEXT;',
-      'ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"branchId\" TEXT;',
-      'ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"status\" TEXT DEFAULT \\'active\\';',
-      'ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"lastLogin\" TIMESTAMP(3);',
-      'ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"phone\" TEXT;',
-      'ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"password\" TEXT DEFAULT \\'medcore123\\';',
-      'ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"createdAt\" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;',
-      // Ensure all columns exist on Staff table
-      'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"tenantId\" TEXT;',
-      'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"branchId\" TEXT;',
-      'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"password\" TEXT DEFAULT \\'medcore123\\';',
-      'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"status\" TEXT DEFAULT \\'active\\';',
-      'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"lastLogin\" TIMESTAMP(3);',
-      'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"department\" TEXT;',
-      'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"designation\" TEXT;',
-      'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"salary\" DOUBLE PRECISION DEFAULT 0;',
-      'ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"joinDate\" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;',
-      // Tenant columns
-      'ALTER TABLE \"Tenant\" ADD COLUMN IF NOT EXISTS \"logoUrl\" TEXT;',
-      // Branch columns
-      'ALTER TABLE \"Branch\" ADD COLUMN IF NOT EXISTS \"clinicType\" TEXT DEFAULT \\'General\\';',
-      // Drop and recreate AuditLog if it exists without tenantId
-      'DROP TABLE IF EXISTS \"AuditLog\" CASCADE;',
-      'CREATE TABLE \"AuditLog\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"user\" TEXT NOT NULL, \"action\" TEXT NOT NULL, \"module\" TEXT NOT NULL, \"detail\" TEXT, \"ip\" TEXT, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"AuditLog_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE INDEX IF NOT EXISTS \"AuditLog_tenantId_idx\" ON \"AuditLog\"(\"tenantId\");',
-      'CREATE TABLE IF NOT EXISTS \"StaffBranch\" (\"id\" TEXT NOT NULL, \"staffId\" TEXT NOT NULL, \"branchId\" TEXT NOT NULL, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"StaffBranch_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"StaffBranch_staffId_branchId_key\" ON \"StaffBranch\"(\"staffId\", \"branchId\");',
-      'CREATE TABLE IF NOT EXISTS \"Role\" (\"id\" TEXT NOT NULL, \"name\" TEXT NOT NULL, \"description\" TEXT, \"isSystem\" BOOLEAN NOT NULL DEFAULT false, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"Role_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"Role_name_key\" ON \"Role\"(\"name\");',
-      'CREATE TABLE IF NOT EXISTS \"Permission\" (\"id\" TEXT NOT NULL, \"module\" TEXT NOT NULL, \"action\" TEXT NOT NULL, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"Permission_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE TABLE IF NOT EXISTS \"RolePermission\" (\"roleId\" TEXT NOT NULL, \"permissionId\" TEXT NOT NULL, CONSTRAINT \"RolePermission_pkey\" PRIMARY KEY (\"roleId\",\"permissionId\"));',
-      'CREATE TABLE IF NOT EXISTS \"Organization\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"name\" TEXT NOT NULL, \"clinicType\" TEXT NOT NULL DEFAULT \\'General\\', \"registrationNo\" TEXT, \"panVatNo\" TEXT, \"country\" TEXT, \"stateProvince\" TEXT, \"city\" TEXT, \"fullAddress\" TEXT, \"googleMapUrl\" TEXT, \"logoUrl\" TEXT, \"clinicId\" TEXT NOT NULL, \"subdomain\" TEXT NOT NULL, \"adminUserId\" TEXT, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"Organization_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"Organization_clinicId_key\" ON \"Organization\"(\"clinicId\");',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"Organization_subdomain_key\" ON \"Organization\"(\"subdomain\");',
-      'CREATE TABLE IF NOT EXISTS \"ClinicSettings\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"clinicName\" TEXT, \"clinicEmail\" TEXT, \"clinicPhone\" TEXT, \"clinicWebsite\" TEXT, \"clinicLogo\" TEXT, \"address\" TEXT, \"city\" TEXT, \"state\" TEXT, \"country\" TEXT DEFAULT \\'Nepal\\', \"zipCode\" TEXT, \"timezone\" TEXT DEFAULT \\'Asia/Kathmandu\\', \"currency\" TEXT DEFAULT \\'NPR\\', \"currencySymbol\" TEXT DEFAULT \\'रू\\', \"primaryColor\" TEXT, \"logo\" TEXT, \"taxRate\" DOUBLE PRECISION DEFAULT 0, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"ClinicSettings_pkey\" PRIMARY KEY (\"id\"));',
-      'CREATE UNIQUE INDEX IF NOT EXISTS \"ClinicSettings_tenantId_key\" ON \"ClinicSettings\"(\"tenantId\");',
-    ];
-
     let ok = 0, fail = 0;
-    for (const sql of statements) {
+
+    async function run(sql, label) {
       try {
         await client.query(sql);
         ok++;
       } catch(e) {
         fail++;
-        console.error('FAIL:', sql.substring(0, 60), '->', e.message);
+        if (!e.message.includes('already exists') && !e.message.includes('does not exist')) {
+          console.error('FAIL:', label || sql.substring(0, 60), '->', e.message.substring(0, 100));
+        }
       }
     }
+
+    // Get all existing tables
+    const tablesRes = await client.query(\"SELECT tablename FROM pg_tables WHERE schemaname = 'public'\");
+    const existingTables = new Set(tablesRes.rows.map(r => r.tablename));
+
+    // Get all existing columns per table
+    const colsRes = await client.query(\"SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public'\");
+    const existingCols = {};
+    for (const row of colsRes.rows) {
+      if (!existingCols[row.table_name]) existingCols[row.table_name] = new Set();
+      existingCols[row.table_name].add(row.column_name);
+    }
+
+    function hasCol(table, col) {
+      return existingCols[table] && existingCols[table].has(col);
+    }
+
+    // Tables that need tenantId
+    const tenantTables = [
+      'Patient', 'Doctor', 'Appointment', 'Prescription', 'Medicine',
+      'PharmacySale', 'Invoice', 'LabTest', 'LabOrder', 'LabTestMaster',
+      'LabResult', 'LabSample', 'RadiologyStudy', 'Expense', 'PatientPayment',
+      'ClinicalNote', 'Staff', 'Department', 'Supplier', 'Setting',
+      'AuditLog', 'Account', 'JournalEntry', 'CashTransaction', 'BankTransaction',
+      'DoctorCommission', 'InsuranceClaim', 'SupplierPayment', 'Referral',
+      'InventoryItem', 'InventoryBatch', 'InventoryMovement', 'StockTransfer',
+      'StockAudit', 'PurchaseOrder', 'PatientSource', 'CareCoordinator',
+      'LeaveRequest', 'StaffAttendance', 'Payroll',
+      // New tables
+      'Organization', 'ClinicSettings', 'BookingConfig', 'BookingLink',
+      'PublicBooking', 'Role', 'Permission', 'RolePermission',
+      // IVF
+      'IVFCycle', 'FertilityAssessment',
+      // Dental
+      'DentalExamination', 'DentalTreatmentPlan',
+      // CRM
+      'MSLead', 'Campaign', 'CRMContact', 'CRMDeal',
+      // SaaS
+      'SaaSInvoice', 'TenantModule',
+    ];
+
+    // Tables that need branchId
+    const branchTables = [
+      'Patient', 'Doctor', 'Appointment', 'Prescription', 'Medicine',
+      'PharmacySale', 'Invoice', 'LabTest', 'LabOrder',
+      'RadiologyStudy', 'Expense', 'PatientPayment', 'ClinicalNote',
+      'Staff', 'Department', 'BookingLink',
+    ];
+
+    // Tables that need tenantId columns
+    for (const table of tenantTables) {
+      if (existingTables.has(table) && !hasCol(table, 'tenantId')) {
+        await run('ALTER TABLE \"' + table + '\" ADD COLUMN IF NOT EXISTS \"tenantId\" TEXT', table + '.tenantId');
+      }
+    }
+
+    // Tables that need branchId columns
+    for (const table of branchTables) {
+      if (existingTables.has(table) && !hasCol(table, 'branchId')) {
+        await run('ALTER TABLE \"' + table + '\" ADD COLUMN IF NOT EXISTS \"branchId\" TEXT', table + '.branchId');
+      }
+    }
+
+    // User table - ensure all needed columns exist
+    const userCols = ['tenantId', 'roleId', 'branchId', 'status', 'lastLogin', 'phone', 'password', 'createdAt', 'name', 'email'];
+    for (const col of userCols) {
+      if (existingTables.has('User') && !hasCol('User', col)) {
+        const def = col === 'status' ? \" DEFAULT 'active'\" : col === 'password' ? \" DEFAULT 'medcore123'\" : '';
+        await run('ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS \"' + col + '\" TEXT' + def, 'User.' + col);
+      }
+    }
+
+    // Staff table - ensure all needed columns
+    const staffCols = ['tenantId', 'branchId', 'password', 'status', 'lastLogin', 'department', 'designation', 'salary', 'joinDate', 'phone', 'name', 'email', 'role'];
+    for (const col of staffCols) {
+      if (existingTables.has('Staff') && !hasCol('Staff', col)) {
+        const def = col === 'status' ? \" DEFAULT 'active'\" : col === 'password' ? \" DEFAULT 'medcore123'\" : '';
+        const type = col === 'salary' ? 'DOUBLE PRECISION DEFAULT 0' : col === 'joinDate' || col === 'lastLogin' ? 'TIMESTAMP(3)' : 'TEXT' + def;
+        await run('ALTER TABLE \"Staff\" ADD COLUMN IF NOT EXISTS \"' + col + '\" ' + type, 'Staff.' + col);
+      }
+    }
+
+    // Branch table
+    if (existingTables.has('Branch') && !hasCol('Branch', 'clinicType')) {
+      await run(\"ALTER TABLE \\\"Branch\\\" ADD COLUMN IF NOT EXISTS \\\"clinicType\\\" TEXT DEFAULT 'General'\", 'Branch.clinicType');
+    }
+
+    // Tenant table
+    if (existingTables.has('Tenant') && !hasCol('Tenant', 'logoUrl')) {
+      await run('ALTER TABLE \"Tenant\" ADD COLUMN IF NOT EXISTS \"logoUrl\" TEXT', 'Tenant.logoUrl');
+    }
+
+    // Create missing tables
+    const createTables = [
+      'CREATE TABLE IF NOT EXISTS \"BookingLink\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"branchId\" TEXT, \"configId\" TEXT, \"doctorId\" TEXT, \"doctorName\" TEXT, \"department\" TEXT, \"label\" TEXT, \"url\" TEXT NOT NULL, \"slug\" TEXT NOT NULL, \"active\" BOOLEAN NOT NULL DEFAULT true, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"BookingLink_pkey\" PRIMARY KEY (\"id\"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS \"BookingLink_slug_key\" ON \"BookingLink\"(\"slug\");',
+      'CREATE UNIQUE INDEX IF NOT EXISTS \"BookingLink_tenantId_slug_key\" ON \"BookingLink\"(\"tenantId\", \"slug\");',
+      'CREATE TABLE IF NOT EXISTS \"BookingConfig\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT NOT NULL, \"slotDuration\" INTEGER NOT NULL DEFAULT 30, \"maxBookingsPerSlot\" INTEGER NOT NULL DEFAULT 5, \"allowWalkIn\" BOOLEAN NOT NULL DEFAULT true, \"requirePhone\" BOOLEAN NOT NULL DEFAULT false, \"enableWaitlist\" BOOLEAN NOT NULL DEFAULT false, \"workingHours\" JSONB, \"holidays\" JSONB, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"BookingConfig_pkey\" PRIMARY KEY (\"id\"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS \"BookingConfig_tenantId_key\" ON \"BookingConfig\"(\"tenantId\");',
+      'CREATE TABLE IF NOT EXISTS \"Role\" (\"id\" TEXT NOT NULL, \"name\" TEXT NOT NULL, \"description\" TEXT, \"isSystem\" BOOLEAN NOT NULL DEFAULT false, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"Role_pkey\" PRIMARY KEY (\"id\"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS \"Role_name_key\" ON \"Role\"(\"name\");',
+      'CREATE TABLE IF NOT EXISTS \"Permission\" (\"id\" TEXT NOT NULL, \"module\" TEXT NOT NULL, \"action\" TEXT NOT NULL, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"Permission_pkey\" PRIMARY KEY (\"id\"));',
+      'CREATE TABLE IF NOT EXISTS \"RolePermission\" (\"roleId\" TEXT NOT NULL, \"permissionId\" TEXT NOT NULL, CONSTRAINT \"RolePermission_pkey\" PRIMARY KEY (\"roleId\",\"permissionId\"));',
+      'CREATE TABLE IF NOT EXISTS \"Organization\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"name\" TEXT NOT NULL, \"clinicType\" TEXT NOT NULL DEFAULT ' + \"'General'\" + ', \"clinicId\" TEXT NOT NULL, \"subdomain\" TEXT NOT NULL, \"adminUserId\" TEXT, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"Organization_pkey\" PRIMARY KEY (\"id\"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS \"Organization_clinicId_key\" ON \"Organization\"(\"clinicId\");',
+      'CREATE UNIQUE INDEX IF NOT EXISTS \"Organization_subdomain_key\" ON \"Organization\"(\"subdomain\");',
+      'CREATE TABLE IF NOT EXISTS \"ClinicSettings\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"clinicName\" TEXT, \"clinicEmail\" TEXT, \"clinicPhone\" TEXT, \"clinicLogo\" TEXT, \"address\" TEXT, \"city\" TEXT, \"state\" TEXT, \"country\" TEXT, \"primaryColor\" TEXT, \"logo\" TEXT, \"taxRate\" DOUBLE PRECISION DEFAULT 0, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"ClinicSettings_pkey\" PRIMARY KEY (\"id\"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS \"ClinicSettings_tenantId_key\" ON \"ClinicSettings\"(\"tenantId\");',
+      'CREATE TABLE IF NOT EXISTS \"StaffBranch\" (\"id\" TEXT NOT NULL, \"staffId\" TEXT NOT NULL, \"branchId\" TEXT NOT NULL, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"StaffBranch_pkey\" PRIMARY KEY (\"id\"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS \"StaffBranch_staffId_branchId_key\" ON \"StaffBranch\"(\"staffId\", \"branchId\");',
+    ];
+
+    // Drop and recreate AuditLog with tenantId
+    await run('DROP TABLE IF EXISTS \"AuditLog\" CASCADE', 'drop AuditLog');
+    await run('CREATE TABLE \"AuditLog\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"user\" TEXT NOT NULL, \"action\" TEXT NOT NULL, \"module\" TEXT NOT NULL, \"detail\" TEXT, \"ip\" TEXT, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"AuditLog_pkey\" PRIMARY KEY (\"id\"))', 'create AuditLog');
+    await run('CREATE INDEX IF NOT EXISTS \"AuditLog_tenantId_idx\" ON \"AuditLog\"(\"tenantId\")', 'AuditLog index');
+
+    for (const sql of createTables) {
+      await run(sql, 'create: ' + sql.substring(20, 50));
+    }
+
     console.log('Schema sync: ' + ok + ' ok, ' + fail + ' failed');
   } finally {
     client.release();
