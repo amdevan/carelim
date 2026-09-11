@@ -1891,7 +1891,7 @@ model EggRetrieval {
   @@index([tenantId])
 }
 
-model EggRetrieval {
+model SemenProcessing {
   id              String   @id @default(cuid())
   tenantId        String?
   tenant          Tenant?  @relation(fields: [tenantId], references: [id])
@@ -1992,7 +1992,7 @@ model PregnancyFollowup {
   @@index([tenantId])
 }
 
-model SemenProcessing {
+model DonorProfile {
   id          String   @id @default(cuid())
   tenantId    String?
   tenant      Tenant?  @relation(fields: [tenantId], references: [id])
