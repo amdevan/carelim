@@ -35,7 +35,6 @@ const TENANT_MODELS = new Set([
   // Lab
   'labDepartment', 'labTestMaster', 'labPackage', 'labOrder',
   'labQualityControl', 'labEquipment', 'labInventory', 'labSupplier',
-  'labSample', 'labResult', 'labResultParameter', 'labOrderItem', 'labSampleTracking',
   // Inventory
   'inventoryLocation', 'inventoryItem', 'inventoryBatch', 'inventoryMovement',
   'stockTransfer', 'stockAudit',
