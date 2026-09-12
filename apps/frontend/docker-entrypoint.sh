@@ -115,9 +115,17 @@ async function migrate() {
     if (tenantRes.rows.length > 0) {
       const defaultTenantId = tenantRes.rows[0].id;
       console.log('Backfilling tenantId with: ' + defaultTenantId);
+      let backfilled = 0;
       for (const table of modelsWithTenantId) {
         if (existingTables.has(table) && hasCol(table, 'tenantId')) {
-          await run('UPDATE \"' + table + '\" SET \"tenantId\" = \'' + defaultTenantId + '\' WHERE \"tenantId\" IS NULL', table + '.backfill');
+          // Count NULLs first
+          const countRes = await client.query('SELECT COUNT(*) as cnt FROM \"' + table + '\" WHERE \"tenantId\" IS NULL');
+          const nullCount = parseInt(countRes.rows[0].cnt);
+          if (nullCount > 0) {
+            const res = await client.query('UPDATE \"' + table + '\" SET \"tenantId\" = \'' + defaultTenantId + '\' WHERE \"tenantId\" IS NULL');
+            console.log(table + ': backfilled ' + res.rowCount + ' rows (was ' + nullCount + ' NULL)');
+            backfilled += res.rowCount;
+          }
         }
       }
       // Backfill branchId — set to first branch of the tenant
@@ -127,10 +135,12 @@ async function migrate() {
         console.log('Backfilling branchId with: ' + defaultBranchId);
         for (const table of modelsWithBranchId) {
           if (existingTables.has(table) && hasCol(table, 'branchId')) {
-            await run('UPDATE \"' + table + '\" SET \"branchId\" = \'' + defaultBranchId + '\' WHERE \"branchId\" IS NULL', table + '.backfill_branch');
+            const res = await client.query('UPDATE \"' + table + '\" SET \"branchId\" = \'' + defaultBranchId + '\' WHERE \"branchId\" IS NULL');
+            if (res.rowCount > 0) console.log(table + ': backfilled branchId for ' + res.rowCount + ' rows');
           }
         }
       }
+      console.log('Total tenantId backfilled: ' + backfilled + ' rows');
     } else {
       console.log('No tenant found, skipping backfill');
     }
