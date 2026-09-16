@@ -34,6 +34,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-${JWT_SECRET}}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NEXT_PUBLIC_API_URL=http://backend:4000
     networks:
       - carelim-net

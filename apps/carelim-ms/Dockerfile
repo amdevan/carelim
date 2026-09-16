@@ -42,6 +42,7 @@ COPY --from=builder /app/apps/carelim-ms/.next/static ./.next/static
 COPY --from=builder /app/packages/database/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/pg ./node_modules/pg
 
 EXPOSE 3002
 

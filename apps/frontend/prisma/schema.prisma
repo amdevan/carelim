@@ -37,7 +37,7 @@ model Doctor {
   branch         Branch?  @relation(fields: [branchId], references: [id])
   name           String
   email          String   @unique
-  password       String   @default("carelim123")
+  password       String
   phone          String
   gender         String   @default("male")
   qualification  String
@@ -56,6 +56,7 @@ model Doctor {
   endTime        String   @default("17:00")
   status         String   @default("active") // active | on_leave | inactive
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   appointments   Appointment[]
   prescriptions  Prescription[]
   scheduleSlots  DoctorScheduleSlot[]
@@ -144,6 +145,7 @@ model Appointment {
   fee         Float    @default(0)
   notes       String?
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   @@index([branchId])
   @@index([patientId])
   @@index([doctorId])
@@ -431,6 +433,7 @@ model Invoice {
   status      String   @default("unpaid") // unpaid | partial | paid | refunded
   paymentMethod String?
   date        DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   items       InvoiceItem[]
   @@index([branchId])
   @@index([patientId])
@@ -478,7 +481,7 @@ model Staff {
   branch       Branch?  @relation(fields: [branchId], references: [id])
   name         String
   email        String   @unique
-  password     String   @default("medcore123")
+  password     String
   phone        String
   role         String   @default("receptionist")
   department   String?
@@ -503,6 +506,7 @@ model StaffBranch {
   branchId  String
   branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@unique([staffId, branchId])
   @@index([staffId])
   @@index([branchId])
@@ -654,7 +658,7 @@ model User {
   tenant        Tenant?  @relation(fields: [tenantId], references: [id])
   name          String
   email         String   @unique
-  password      String   @default("medcore123")
+  password      String
   phone         String?
   roleId        String?
   role          Role?    @relation(fields: [roleId], references: [id])
@@ -1765,7 +1769,7 @@ model AdminUser {
   id String @id @default(cuid())
   name String
   email String @unique
-  password String @default("carelim123")
+  password String
   role String @default("super_admin")
   isActive Boolean @default(true)
   lastLoginAt DateTime?

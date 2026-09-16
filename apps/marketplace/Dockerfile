@@ -38,10 +38,14 @@ COPY --from=builder /app/apps/marketplace/.next/standalone/node_modules ./node_m
 # Copy static assets
 COPY --from=builder /app/apps/marketplace/.next/static ./.next/static
 
+# Copy public assets
+COPY --from=builder /app/apps/marketplace/public ./public
+
 # Copy Prisma schema and client
 COPY --from=builder /app/packages/database/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/pg ./node_modules/pg
 
 EXPOSE 3003
 

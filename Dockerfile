@@ -11,8 +11,9 @@ COPY packages/ packages/
 # Install all workspace dependencies
 RUN npm install --include=dev
 
-# Generate Prisma client from the frontend schema (Prisma 7 compatible)
+# Generate Prisma client (needs DATABASE_URL for provider resolution)
 WORKDIR /app/apps/frontend
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npx prisma generate
 
 ENV NODE_OPTIONS="--max-old-space-size=4096"

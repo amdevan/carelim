@@ -18,10 +18,13 @@ export const GET = withTenant(async (req: NextRequest) => {
 export const POST = withTenant(async (req: NextRequest) => {
   try {
     const body = await req.json();
-    // Hash password if provided, otherwise use default
-    const hashedPassword = body.password
-      ? await hashPassword(body.password)
-      : await hashPassword("medcore123");
+    if (!body.name || !body.email) {
+      return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
+    }
+    if (!body.password || body.password.length < 8) {
+      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+    }
+    const hashedPassword = await hashPassword(body.password);
     // Clean empty strings to null for nullable fields
     const branchIds: string[] = body.branchIds || (body.branchId ? [body.branchId] : []);
     const primaryBranchId = branchIds[0] || body.branchId || null;

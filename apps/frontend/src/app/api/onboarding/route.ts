@@ -39,6 +39,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (basicInfo.adminPassword.length < 8) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters" },
+        { status: 400 }
+      );
+    }
 
     // Check if email already exists (rawDb — no tenant context during onboarding)
     const existingUser = await rawDb.user.findUnique({

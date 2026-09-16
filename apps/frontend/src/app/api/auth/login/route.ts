@@ -400,12 +400,11 @@ export async function POST(req: NextRequest) {
       name: error?.name,
       message: error?.message,
       code: error?.code,
-      stack: error?.stack,
     });
 
     if (error?.name === "PrismaClientValidationError") {
       return NextResponse.json(
-        { error: "Invalid request", detail: error?.message },
+        { error: "Invalid request" },
         { status: 400 }
       );
     }
@@ -418,14 +417,8 @@ export async function POST(req: NextRequest) {
           { status: 404 }
         );
       }
-      if (prismaCode === "P2002") {
-        return NextResponse.json(
-          { error: "Duplicate record", detail: error?.meta?.target?.join(", ") },
-          { status: 409 }
-        );
-      }
       return NextResponse.json(
-        { error: "Database error", code: prismaCode },
+        { error: "Database error" },
         { status: 500 }
       );
     }
