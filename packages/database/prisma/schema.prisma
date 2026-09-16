@@ -145,6 +145,10 @@ model Appointment {
   notes       String?
   createdAt   DateTime @default(now())
   @@index([branchId])
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([date])
+  @@index([doctorId, date])
 }
 
 model Prescription {
@@ -166,6 +170,8 @@ model Prescription {
   items       PrescriptionItem[]
   clinicalData String?
   @@index([branchId])
+  @@index([patientId])
+  @@index([doctorId])
 }
 
 model PrescriptionItem {
@@ -178,6 +184,7 @@ model PrescriptionItem {
   duration      String
   quantity      Int      @default(1)
   instructions  String?
+  @@index([prescriptionId])
 }
 
 model Medicine {
@@ -426,6 +433,8 @@ model Invoice {
   date        DateTime @default(now())
   items       InvoiceItem[]
   @@index([branchId])
+  @@index([patientId])
+  @@index([status])
 }
 
 model InvoiceItem {
@@ -436,6 +445,7 @@ model InvoiceItem {
   qty       Int      @default(1)
   rate      Float    @default(0)
   amount    Float    @default(0)
+  @@index([invoiceId])
 }
 
 model LabTest {
@@ -456,6 +466,8 @@ model LabTest {
   orderedAt   DateTime @default(now())
   completedAt DateTime?
   @@index([branchId])
+  @@index([patientId])
+  @@index([status])
 }
 
 model Staff {
@@ -1210,6 +1222,8 @@ model LabOrder {
   samples       LabSample[]
   results       LabResult[]
   @@index([tenantId])
+  @@index([patientId])
+  @@index([status])
 }
 
 model LabOrderItem {
@@ -1224,6 +1238,8 @@ model LabOrderItem {
   resultStatus String @default("pending") // pending | entered | verified | approved | released
   comments  String?
   results   LabResult[]
+  @@index([orderId])
+  @@index([testId])
 }
 
 model LabSample {
@@ -1245,6 +1261,8 @@ model LabSample {
   rejectionReason String?
   location    String?
   tracking    LabSampleTracking[]
+  @@index([orderId])
+  @@index([status])
 }
 
 model LabSampleTracking {
@@ -1256,6 +1274,7 @@ model LabSampleTracking {
   handler   String?
   timestamp DateTime @default(now())
   notes     String?
+  @@index([sampleId])
 }
 
 model LabResult {
@@ -1280,6 +1299,9 @@ model LabResult {
   reportVersion Int   @default(1)
   parameters  LabResultParameter[]
   createdAt   DateTime @default(now())
+  @@index([orderId])
+  @@index([testItemId])
+  @@index([status])
 }
 
 model LabResultParameter {
@@ -1291,6 +1313,8 @@ model LabResultParameter {
   value       String?
   flag        String   @default("normal") // normal | high | low | critical | panic | abnormal
   comment     String?
+  @@index([resultId])
+  @@index([parameterId])
 }
 
 model LabQualityControl {
@@ -2714,4 +2738,12 @@ model PublicBooking {
   status       String   @default("pending")
   notes        String?
   createdAt    DateTime @default(now())
+}
+
+// ─── Rate Limiting (database-backed) ──────────────────────────────
+model RateLimitCounter {
+  key       String   @id
+  count     Int      @default(0)
+  expiresAt DateTime
+  @@index([expiresAt])
 }

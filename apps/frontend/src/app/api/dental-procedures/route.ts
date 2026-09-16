@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withTenant } from "@/lib/with-tenant";
-import { nanoid } from "nanoid";
+import { generateNanoCode } from "@/lib/id-generator";
+import { getNextSequenceNumber, createWithRetry } from "@/lib/id-generator";
 
 export const GET = withTenant(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
@@ -16,8 +17,7 @@ export const GET = withTenant(async (req: NextRequest) => {
 // appends a clinical note to the patient's EMR timeline.
 export const POST = withTenant(async (req: NextRequest) => {
   const body = await req.json();
-  const count = await db.dentalProcedure.count();
-  const procNo = `DPR-${nanoid(8).toUpperCase()}`;
+  const procNo = generateNanoCode("DPR-");
   const procDate = body.procedureDate ? new Date(body.procedureDate) : new Date();
 
   // Determine cost from treatment plan if not provided
@@ -32,10 +32,18 @@ export const POST = withTenant(async (req: NextRequest) => {
   const total = cost + tax;
 
   // Auto-create invoice via Billing module
-  const invCount = await db.invoice.count();
-  const invoice = await db.invoice.create({
-    data: {
-      invoiceNo: `INV-${String(invCount + 1).padStart(5, "0")}`,
+  let invoiceNo = await getNextSequenceNumber("INV-", () =>
+    db.invoice.findMany({
+      where: { invoiceNo: { startsWith: "INV-" } },
+      orderBy: { invoiceNo: "desc" },
+      take: 1,
+      select: { invoiceNo: true },
+    }).then(rows => rows.map(r => ({ code: r.invoiceNo })))
+  );
+  const invoice = await createWithRetry(
+    () => db.invoice.create({
+      data: {
+        invoiceNo,
       patientId: body.patientId,
       type: "consultation",
       subtotal: cost,
@@ -49,7 +57,18 @@ export const POST = withTenant(async (req: NextRequest) => {
       date: procDate,
       items: { create: [{ description: `Dental — ${body.procedureType?.replace(/_/g, " ") || "procedure"} (${body.toothNumbers || "—"})`, qty: 1, rate: cost, amount: cost }] },
     },
-  });
+  }),
+    async () => {
+      invoiceNo = await getNextSequenceNumber("INV-", () =>
+        db.invoice.findMany({
+          where: { invoiceNo: { startsWith: "INV-" } },
+          orderBy: { invoiceNo: "desc" },
+          take: 1,
+          select: { invoiceNo: true },
+        }).then(rows => rows.map(r => ({ code: r.invoiceNo })))
+      );
+    },
+  );
   await db.auditLog.create({ data: { user: body.doctorId || "system", action: "CREATE", module: "Billing", detail: `Auto-invoice ${invoice.invoiceNo} for dental procedure ${procNo}` } });
 
   // Deduct materials from inventory if itemId matches an inventoryItem
