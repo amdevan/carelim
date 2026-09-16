@@ -37,9 +37,17 @@ export const PUT = withTenant(async (req: NextRequest, context) => {
 
     const { id } = await context!.params;
     const body = await req.json();
+    const USER_UPDATABLE = new Set(["name", "email", "phone", "role", "status", "branchId"]);
+    const data: Record<string, unknown> = {};
+    for (const key of USER_UPDATABLE) {
+      if (key in body) data[key] = body[key];
+    }
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
     const user = await db.user.update({
       where: { id },
-      data: body,
+      data,
       include: { role: true },
     });
 

@@ -15,12 +15,23 @@ export const GET = withTenant(async (_req: NextRequest, { params }: { params: Pr
   }
 });
 
+const APPT_UPDATABLE = new Set([
+  "status", "time", "type", "reason", "priority", "notes", "fee", "patientId", "doctorId",
+]);
+
 export const PATCH = withTenant(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const { id } = await params;
     const body = await req.json();
-    const appt = await db.appointment.update({ where: { id }, data: body });
-    await db.auditLog.create({ data: { user: getAuthEmail(req), action: "UPDATE", module: "Appointment", detail: `Updated appointment status to ${body.status || ""}` } });
+    const data: Record<string, unknown> = {};
+    for (const key of APPT_UPDATABLE) {
+      if (key in body) data[key] = body[key];
+    }
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
+    const appt = await db.appointment.update({ where: { id }, data });
+    await db.auditLog.create({ data: { user: getAuthEmail(req), action: "UPDATE", module: "Appointment", detail: `Updated appointment status to ${data.status || ""}` } });
     return NextResponse.json(appt);
   } catch (error) {
     console.error("Error updating appointment:", error);

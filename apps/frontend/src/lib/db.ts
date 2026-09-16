@@ -193,12 +193,13 @@ function getFilteredClient(): PrismaClient {
               }
             }
 
-            // UPDATE / UPDATE MANY — prevent tenantId override
+            // UPDATE / UPDATE MANY — prevent override of protected fields
             if (operation === 'update' || operation === 'updateMany') {
               if (args.data) {
-                delete args.data.tenantId
-                delete args.data.id
-                delete args.data.createdAt
+                const PROTECTED_FIELDS = ['id', 'tenantId', 'createdAt', 'updatedAt', 'createdBy', 'branchId']
+                for (const field of PROTECTED_FIELDS) {
+                  delete args.data[field]
+                }
               }
             }
 

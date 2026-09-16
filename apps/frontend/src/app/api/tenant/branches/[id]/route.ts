@@ -34,7 +34,15 @@ export const PUT = withTenant(async (req: NextRequest, context) => {
 
     const { id } = await context!.params;
     const body = await req.json();
-    const branch = await db.branch.update({ where: { id }, data: body });
+    const BRANCH_UPDATABLE = new Set(["name", "code", "clinicType", "address", "city", "state", "country", "zipCode", "phone", "email", "website", "timezone", "manager", "status"]);
+    const data: Record<string, unknown> = {};
+    for (const key of BRANCH_UPDATABLE) {
+      if (key in body) data[key] = body[key];
+    }
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
+    const branch = await db.branch.update({ where: { id }, data });
     return NextResponse.json(branch);
   } catch (error) {
     console.error("Update tenant branch error:", error);
