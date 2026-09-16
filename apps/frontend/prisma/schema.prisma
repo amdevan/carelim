@@ -492,6 +492,7 @@ model Staff {
   joinDate     DateTime @default(now())
   status       String   @default("active")
   lastLogin    DateTime?
+  updatedAt    DateTime @updatedAt
   attendance   StaffAttendance[]
   payrolls     Payroll[]
   leaveRequests LeaveRequest[]
