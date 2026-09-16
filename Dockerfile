@@ -39,9 +39,8 @@ COPY --from=builder /app/apps/frontend/public ./public
 
 # Copy Prisma schema and generated client (required at runtime)
 COPY --from=builder /app/apps/frontend/prisma ./prisma
-COPY --from=builder /app/apps/frontend/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/apps/frontend/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/apps/frontend/node_modules/pg ./node_modules/pg
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Copy entrypoint
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
