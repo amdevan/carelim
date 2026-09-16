@@ -4,7 +4,7 @@ import { jwtVerify } from "jose";
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "";
 
-async function verifyTokenEdge(token: string): Promise<{ userId: string; email: string; role: string; type: string; tenantId?: string } | null> {
+async function verifyTokenEdge(token: string): Promise<{ userId: string; email: string; role: string; type: string; tenantId?: string; branchId?: string; branchIds?: string[] } | null> {
   try {
     const secret = new TextEncoder().encode(JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
@@ -14,6 +14,8 @@ async function verifyTokenEdge(token: string): Promise<{ userId: string; email: 
       role: (payload.role as string) || "",
       type: (payload.type as string) || "user",
       tenantId: (payload.tenantId as string) || undefined,
+      branchId: (payload.branchId as string) || undefined,
+      branchIds: (payload.branchIds as string[]) || undefined,
     };
   } catch {
     return null;
@@ -40,6 +42,9 @@ const DEV_DOMAIN_ROUTES: Record<string, string> = {
 // API routes that require authentication
 const PROTECTED_API_PREFIXES = [
   "/api/patients",
+  "/api/patient/",          // Patient portal routes (singular)
+  "/api/patient/family",
+  "/api/patient/doctors",
   "/api/doctors",
   "/api/appointments",
   "/api/prescriptions",
@@ -163,6 +168,7 @@ export async function middleware(request: NextRequest) {
     "X-XSS-Protection": "1; mode=block",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';",
   };
 
   // HSTS only in production
@@ -203,8 +209,8 @@ export async function middleware(request: NextRequest) {
       if (payload.branchId) {
         response.headers.set("x-branch-id", payload.branchId);
       }
-      if ((payload as any).branchIds) {
-        response.headers.set("x-branch-ids", JSON.stringify((payload as any).branchIds));
+      if (payload.branchIds) {
+        response.headers.set("x-branch-ids", JSON.stringify(payload.branchIds));
       }
 
       // Apply security headers

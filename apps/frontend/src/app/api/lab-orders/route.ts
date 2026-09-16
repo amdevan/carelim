@@ -5,29 +5,35 @@ import { withTenant } from "@/lib/with-tenant";
 import { nanoid } from "nanoid";
 
 export const GET = withTenant(async (req: NextRequest) => {
-  const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status");
-  const priority = searchParams.get("priority");
-  const patientId = searchParams.get("patientId");
-  const where: Record<string, unknown> = {};
-  if (status) where.status = status;
-  if (priority) where.priority = priority;
-  if (patientId) where.patientId = patientId;
-  const orders = await db.labOrder.findMany({
-    where,
-    include: {
-      patient: true,
-      items: { include: { test: { include: { department: true } } } },
-      samples: { include: { tracking: true } },
-      results: { include: { parameters: { include: { parameter: { include: { referenceRanges: true } } } } } },
-    },
-    orderBy: { orderedAt: "desc" },
-  });
-  return NextResponse.json(orders);
+  try {
+    const { searchParams } = new URL(req.url);
+    const status = searchParams.get("status");
+    const priority = searchParams.get("priority");
+    const patientId = searchParams.get("patientId");
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    if (priority) where.priority = priority;
+    if (patientId) where.patientId = patientId;
+    const orders = await db.labOrder.findMany({
+      where,
+      include: {
+        patient: true,
+        items: { include: { test: { include: { department: true } } } },
+        samples: { include: { tracking: true } },
+        results: { include: { parameters: { include: { parameter: { include: { referenceRanges: true } } } } } },
+      },
+      orderBy: { orderedAt: "desc" },
+    });
+    return NextResponse.json(orders);
+  } catch (error) {
+    console.error("Error fetching lab orders:", error);
+    return NextResponse.json({ error: "Failed to fetch lab orders" }, { status: 500 });
+  }
 });
 
 export const POST = withTenant(async (req: NextRequest) => {
-  const body = await req.json();
+  try {
+    const body = await req.json();
   const { testIds, patientId, doctorId, priority, clinicalNotes, discount } = body;
   // Get the highest existing lab order number to avoid duplicates
   const latest = await db.labOrder.findMany({
@@ -71,4 +77,8 @@ export const POST = withTenant(async (req: NextRequest) => {
   });
   await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "LabOrder", detail: `Created lab order ${order.orderNo}` } });
   return NextResponse.json(order, { status: 201 });
+  } catch (error) {
+    console.error("Error creating lab order:", error);
+    return NextResponse.json({ error: "Failed to create lab order" }, { status: 500 });
+  }
 });

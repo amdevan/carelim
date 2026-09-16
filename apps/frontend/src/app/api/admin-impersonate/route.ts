@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rawDb as db } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
 
-// POST /api/admin-impersonate — Create impersonation session
+// POST /api/admin-impersonate — Create impersonation session (admin only)
 export async function POST(req: NextRequest) {
   try {
+    // Require super admin or admin role
+    const user = getAuthUser(req);
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    if (user.type !== "admin" && user.role !== "Administrator" && user.role !== "Super Admin") {
+      return NextResponse.json({ error: "Forbidden: admin access required" }, { status: 403 });
+    }
+
     const { tenantId } = await req.json();
     if (!tenantId) {
       return NextResponse.json({ error: "tenantId is required" }, { status: 400 });

@@ -11,6 +11,8 @@
     "@carelim/database": "*",
     "@carelim/ui": "*",
     "@prisma/adapter-pg": "^7.10.0",
+    "jose": "^6.0.11",
+    "jsonwebtoken": "^9.0.2",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-dialog": "^1.1.14",

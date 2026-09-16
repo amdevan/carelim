@@ -37,7 +37,11 @@ export async function POST(req: NextRequest) {
     }
 
     const jwt = await import("jsonwebtoken");
-    const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "";
+    const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
+    if (!JWT_SECRET) {
+      console.error("FATAL: JWT_SECRET or NEXTAUTH_SECRET must be set");
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    }
     const token = jwt.default.sign(
       { userId, email, role: userRole, type: "admin" },
       JWT_SECRET,

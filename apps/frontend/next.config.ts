@@ -3,9 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   devIndicators: false,
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   reactStrictMode: true,
   // Allow the sandbox preview domain and localhost variants to hot-reload /
   // fetch _next/* assets without triggering cross-origin warnings in dev.

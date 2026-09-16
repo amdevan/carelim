@@ -36,6 +36,12 @@ COPY --from=builder /app/apps/frontend/.next/static ./.next/static
 # Copy public assets
 COPY --from=builder /app/apps/frontend/public ./public
 
+# Copy Prisma schema and generated client (required at runtime)
+COPY --from=builder /app/apps/frontend/prisma ./prisma
+COPY --from=builder /app/apps/frontend/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/apps/frontend/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/apps/frontend/node_modules/pg ./node_modules/pg
+
 # Copy entrypoint
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh

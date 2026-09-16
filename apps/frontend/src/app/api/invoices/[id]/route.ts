@@ -26,14 +26,24 @@ export const PATCH = withTenant(async (req: NextRequest, { params }: { params: P
 
     const newPaid = body.paid !== undefined ? body.paid : current.paid;
     const newTotal = body.total !== undefined ? body.total : current.total;
-    body.due = Math.max(0, newTotal - newPaid);
+    const due = Math.max(0, newTotal - newPaid);
 
     // Auto-update status based on due
+    let status = body.status || current.status;
     if (body.paid !== undefined) {
-      body.status = body.due <= 0 ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+      status = due <= 0 ? "paid" : newPaid > 0 ? "partial" : "unpaid";
     }
 
-    const inv = await db.invoice.update({ where: { id }, data: body });
+    // Whitelist allowed fields
+    const data: Record<string, unknown> = { due, status };
+    if (body.paid !== undefined) data.paid = body.paid;
+    if (body.total !== undefined) data.total = body.total;
+    if (body.discount !== undefined) data.discount = body.discount;
+    if (body.tax !== undefined) data.tax = body.tax;
+    if (body.notes !== undefined) data.notes = body.notes;
+    if (body.paymentMethod !== undefined) data.paymentMethod = body.paymentMethod;
+
+    const inv = await db.invoice.update({ where: { id }, data });
     if (body.paid !== undefined) {
       await db.auditLog.create({ data: { user: getAuthEmail(req), action: "PAYMENT", module: "Billing", detail: `Payment for invoice ${inv.invoiceNo}` } });
     }

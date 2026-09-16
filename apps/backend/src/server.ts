@@ -50,10 +50,15 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
+    const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
+    if (!jwtSecret) {
+      console.error("FATAL: JWT_SECRET or NEXTAUTH_SECRET must be set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
     const jwt = await import("jsonwebtoken");
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role, type: "admin" },
-      process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "carelim-secret",
+      jwtSecret,
       { expiresIn: "7d" }
     );
 

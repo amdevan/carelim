@@ -135,13 +135,8 @@ function getFilteredClient(): PrismaClient {
             if (WHERE_OPS.has(operation)) {
               if (!args.where) args.where = {}
 
-              // For findUnique, findUniqueOrThrow: skip ONLY if querying by id (global unique, safe)
-              if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
-                const whereKeys = Object.keys(args.where)
-                if (whereKeys.length === 1 && whereKeys[0] === 'id') {
-                  return query(args)
-                }
-              }
+              // For findUnique, findUniqueOrThrow: always apply tenant filter
+              // (Removed unsafe id-only bypass that allowed cross-tenant data access)
 
               if (isTenantModel) {
                 // Models with tenantId — add directly
@@ -192,7 +187,25 @@ function getFilteredClient(): PrismaClient {
                 args.create = { ...args.create, tenantId }
               }
               if (isTenantModel && args.update) {
-                args.update = { ...args.update, tenantId }
+                delete args.update.tenantId
+                delete args.update.id
+                delete args.update.createdAt
+              }
+            }
+
+            // UPDATE / UPDATE MANY — prevent tenantId override
+            if (operation === 'update' || operation === 'updateMany') {
+              if (args.data) {
+                delete args.data.tenantId
+                delete args.data.id
+                delete args.data.createdAt
+              }
+            }
+
+            // DELETE — prevent cross-tenant deletes
+            if (operation === 'delete' || operation === 'deleteMany') {
+              if (isTenantModel && args.where && !args.where.tenantId) {
+                args.where = { ...args.where, tenantId }
               }
             }
 

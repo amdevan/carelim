@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { withTenant } from "@/lib/with-tenant";
 
 export const GET = withTenant(async (req: NextRequest) => {
+  try {
   const { searchParams } = new URL(req.url);
   const branchId = searchParams.get("branchId");
   const branchFilter = branchId ? { branchId } : {};
@@ -163,4 +164,8 @@ export const GET = withTenant(async (req: NextRequest) => {
     expiringSoon,
     recentActivities,
   });
+  } catch (error) {
+    console.error("Error fetching dashboard:", error);
+    return NextResponse.json({ error: "Failed to fetch dashboard data" }, { status: 500 });
+  }
 });

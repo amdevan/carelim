@@ -44,7 +44,7 @@ export async function requirePermission(
   // Check if user is super admin (bypasses permission checks)
   const userType = req.headers.get("x-user-type");
   const userRole = req.headers.get("x-user-role");
-  if (userType === "admin" || userType === "user" || userRole === "Administrator" || userRole === "Super Admin") return null;
+  if (userType === "admin" || userRole === "Administrator" || userRole === "Super Admin") return null;
 
   const permissions = await getUserPermissions(userId);
   if (!hasPermission(permissions, module, action)) {
