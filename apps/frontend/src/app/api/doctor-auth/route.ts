@@ -5,7 +5,7 @@ import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   // Rate limit login attempts
-  const rateLimited = rateLimitResponse(req, RATE_LIMITS.login, "doctor-login");
+  const rateLimited = await rateLimitResponse(req, RATE_LIMITS.login, "doctor-login");
   if (rateLimited) return rateLimited;
 
   try {

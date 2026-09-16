@@ -38,6 +38,20 @@ export const POST = withTenant(async (req: NextRequest) => {
   let skipped = 0;
   const errors: string[] = [];
 
+  // For doctor imports, ensure a default department exists
+  let defaultDepartmentId: string | null = null;
+  if (type === "doctors") {
+    const dept = await db.department.findFirst({ where: { branchId } });
+    if (dept) {
+      defaultDepartmentId = dept.id;
+    } else {
+      const created = await db.department.create({
+        data: { name: "General", code: "GEN", branchId },
+      });
+      defaultDepartmentId = created.id;
+    }
+  }
+
   for (const row of rows) {
     try {
       switch (type) {
@@ -79,10 +93,13 @@ export const POST = withTenant(async (req: NextRequest) => {
           await db.doctor.create({
             data: {
               name,
-              specialization: specialization || null,
-              phone: phone || null,
-              email: email || null,
-              qualification: qualification || null,
+              email: email || `import-${Date.now()}@placeholder.local`,
+              password: "changeme",
+              phone: phone || "0000000000",
+              specialization: specialization || "General",
+              qualification: qualification || "MBBS",
+              departmentId: defaultDepartmentId!,
+              licenseNumber: `IMPORT-${Date.now()}`,
               branchId,
               status: "active",
             },
@@ -102,10 +119,11 @@ export const POST = withTenant(async (req: NextRequest) => {
           await db.staff.create({
             data: {
               name,
-              role: role || null,
+              role: role || "receptionist",
               department: department || null,
-              phone: phone || null,
-              email: email || null,
+              phone: phone || "0000000000",
+              email: email || `import-staff-${Date.now()}@placeholder.local`,
+              password: "changeme",
               branchId,
               status: "active",
             },
@@ -118,11 +136,11 @@ export const POST = withTenant(async (req: NextRequest) => {
           const genericName = row.genericname || row.generic_name || row.generic || "";
           const category = row.category || row.type || "";
           const strength = row.strength || row.dosage || "";
-          const form = row.form || row.formtype || "";
+          const dosageForm = row.form || row.formtype || row.dosageform || "";
           const manufacturer = row.manufacturer || row.brand || row.company || "";
           const salePrice = parseFloat(row.saleprice || row.sale_price || row.price || row.mrp || "0") || 0;
           const buyPrice = parseFloat(row.buyprice || row.buy_price || row.cost || "0") || 0;
-          const stock = parseInt(row.stock || row.quantity || row.qty || "0") || 0;
+          const stockQty = parseInt(row.stock || row.quantity || row.qty || "0") || 0;
 
           if (!name) { skipped++; continue; }
 
@@ -130,13 +148,15 @@ export const POST = withTenant(async (req: NextRequest) => {
             data: {
               name,
               genericName: genericName || null,
-              category: category || null,
+              category: category || "General",
               strength: strength || null,
-              form: form || null,
+              dosageForm: dosageForm || null,
               manufacturer: manufacturer || null,
               salePrice,
-              buyPrice,
-              stock,
+              purchasePrice: buyPrice,
+              stockQty,
+              batchNo: `IMPORT-${Date.now()}`,
+              expiryDate: new Date("2027-12-31"),
               branchId,
               status: "active",
             },

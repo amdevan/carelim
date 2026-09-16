@@ -87,7 +87,7 @@ function makeId(len = 8) {
 }
 
 export async function POST(req: NextRequest) {
-  const rateLimited = rateLimitResponse(req, RATE_LIMITS.login, "login");
+  const rateLimited = await rateLimitResponse(req, RATE_LIMITS.login, "login");
   if (rateLimited) return rateLimited;
 
   try {

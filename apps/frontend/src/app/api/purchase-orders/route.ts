@@ -42,7 +42,7 @@ export const POST = withTenant(async (req: NextRequest) => {
     };
   });
 
-  const subtotal = itemData.reduce((s, it) => s + it.total, 0);
+  const subtotal = itemData.reduce((s: number, it: { total: number }) => s + it.total, 0);
   const totalDiscount = items.reduce((s: number, it: { unitPrice: number; quantity: number; discountPct: number }, i: number) => {
     const price = it.unitPrice || meds.find(m => m.id === items[i].medicineId)?.purchasePrice || 0;
     return s + price * it.quantity * ((it.discountPct || 0) / 100);

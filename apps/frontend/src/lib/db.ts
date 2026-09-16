@@ -105,13 +105,16 @@ function getRawClient(): PrismaClient {
 }
 
 // ─── Filtered PrismaClient (with $extends middleware) ────────────
-let _filteredClient: PrismaClient | undefined
+let _filteredClient: any | undefined
 function getFilteredClient(): PrismaClient {
   if (!_filteredClient) {
     _filteredClient = createClient().$extends({
       query: {
         $allModels: {
-          async $allOperations({ model, operation, args, query }) {
+          async $allOperations({ model, operation, args: rawArgs, query }) {
+            // Cast args to any — Prisma middleware union types are too broad for static typing
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const args = rawArgs as any
             const tenantId = resolveTenantId()
             const branchId = getCurrentBranchId()
             const branchIds = getCurrentBranchIds()
@@ -218,7 +221,7 @@ function getFilteredClient(): PrismaClient {
 
     if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = _filteredClient as any
   }
-  return _filteredClient
+  return _filteredClient!
 }
 
 // ─── Exports ─────────────────────────────────────────────────────

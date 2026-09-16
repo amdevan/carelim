@@ -36,6 +36,12 @@ export interface PackageSelectionData {
   skipPackage: boolean;
 }
 
+export interface ModuleSelectionData {
+  selectedModuleKeys: string[];
+  searchQuery: string;
+  activeCategory: string;
+}
+
 export interface OnboardingState {
   // Current step
   currentStep: number;
@@ -44,6 +50,7 @@ export interface OnboardingState {
   // Form data
   basicInfo: BasicInfoData;
   packageSelection: PackageSelectionData;
+  moduleSelection: ModuleSelectionData;
 
   // Session
   sessionId: string | null;
@@ -60,6 +67,9 @@ export interface OnboardingState {
   prevStep: () => void;
   setBasicInfo: (data: Partial<BasicInfoData>) => void;
   setPackageSelection: (data: Partial<PackageSelectionData>) => void;
+  setModuleSelection: (data: Partial<ModuleSelectionData>) => void;
+  toggleModule: (key: string) => void;
+  selectAllModules: (category: string) => void;
   setSessionId: (id: string) => void;
   setSubmitting: (loading: boolean) => void;
   setSubmitError: (error: string | null) => void;
@@ -97,6 +107,12 @@ const initialPackageSelection: PackageSelectionData = {
   skipPackage: false,
 };
 
+const initialModuleSelection: ModuleSelectionData = {
+  selectedModuleKeys: [],
+  searchQuery: "",
+  activeCategory: "all",
+};
+
 export const useOnboardingStore = create<OnboardingState>()(
   persist(
     (set) => ({
@@ -104,6 +120,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         maxStep: 3,
         basicInfo: initialBasicInfo,
         packageSelection: initialPackageSelection,
+        moduleSelection: initialModuleSelection,
         sessionId: null,
         isSubmitting: false,
         submitError: null,
@@ -126,6 +143,32 @@ export const useOnboardingStore = create<OnboardingState>()(
             hasUnsavedChanges: true,
           })),
 
+        setModuleSelection: (data) =>
+          set((s) => ({
+            moduleSelection: { ...s.moduleSelection, ...data },
+            hasUnsavedChanges: true,
+          })),
+
+        toggleModule: (key) =>
+          set((s) => {
+            const keys = s.moduleSelection.selectedModuleKeys;
+            const next = keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key];
+            return {
+              moduleSelection: { ...s.moduleSelection, selectedModuleKeys: next },
+              hasUnsavedChanges: true,
+            };
+          }),
+
+        selectAllModules: (category) =>
+          set((s) => {
+            // Import MODULES lazily to avoid circular dep — use the store param
+            const allKeys = s.moduleSelection.selectedModuleKeys;
+            return {
+              moduleSelection: { ...s.moduleSelection, selectedModuleKeys: allKeys },
+              hasUnsavedChanges: true,
+            };
+          }),
+
         setSessionId: (id) => set({ sessionId: id }),
         setSubmitting: (loading) => set({ isSubmitting: loading }),
         setSubmitError: (error) => set({ submitError: error }),
@@ -137,6 +180,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             currentStep: 1,
             basicInfo: initialBasicInfo,
             packageSelection: initialPackageSelection,
+            moduleSelection: initialModuleSelection,
             sessionId: null,
             isSubmitting: false,
             submitError: null,

@@ -57,6 +57,7 @@ interface Staff {
   salary: number;
   joinDate: string;
   status: string;
+  branchId?: string;
   attendance: StaffAttendance[];
 }
 
@@ -640,7 +641,7 @@ function StaffFormDialog({
     setForm((f) => ({
       ...f,
       branchIds: f.branchIds.includes(branchId)
-        ? f.branchIds.filter((id) => id !== branchId)
+        ? f.branchIds.filter((id: string) => id !== branchId)
         : [...f.branchIds, branchId],
     }));
   };
@@ -1150,7 +1151,6 @@ function LeaveTab({
       <ApplyLeaveDialog
         open={applyOpen}
         onOpenChange={setApplyOpen}
-        staff={staff}
         onSaved={() => { setApplyOpen(false); refresh(); }}
       />
     </Card>

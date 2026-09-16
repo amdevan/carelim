@@ -72,6 +72,6 @@ export function withTenant<T extends (...args: any[]) => Promise<NextResponse>>(
           setTenantId(null);
         }
       }
-    );
+    ) as Promise<NextResponse>;
   }) as T;
 }

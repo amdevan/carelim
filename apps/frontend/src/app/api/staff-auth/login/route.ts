@@ -4,7 +4,7 @@ import { verifyPassword, signToken } from "@/lib/auth";
 import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
-  const rateLimited = rateLimitResponse(req, RATE_LIMITS.login, "staff-login");
+  const rateLimited = await rateLimitResponse(req, RATE_LIMITS.login, "staff-login");
   if (rateLimited) return rateLimited;
 
   try {

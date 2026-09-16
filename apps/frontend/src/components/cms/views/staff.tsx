@@ -51,6 +51,7 @@ interface StaffMember {
   designation: string | null;
   joinDate: string;
   status: string;
+  branchId?: string;
 }
 
 const ROLES = ["admin", "doctor", "nurse", "receptionist", "pharmacist", "accountant", "lab", "manager"];
@@ -373,7 +374,7 @@ function StaffFormDialog({
     setForm((f) => ({
       ...f,
       branchIds: f.branchIds.includes(branchId)
-        ? f.branchIds.filter((id) => id !== branchId)
+        ? f.branchIds.filter((id: string) => id !== branchId)
         : [...f.branchIds, branchId],
     }));
   };
