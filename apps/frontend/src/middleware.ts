@@ -124,6 +124,7 @@ const PROTECTED_API_PREFIXES = [
 // API routes that are public (no auth required)
 const PUBLIC_API_ROUTES = [
   "/api/auth/login",
+  "/api/auth/refresh",
   "/api/admin-auth",
   "/api/doctor-auth",
   "/api/onboarding",

@@ -122,6 +122,8 @@ model Patient {
   @@index([tenantId])
   @@index([branchId])
   @@index([tenantId, branchId])
+  @@index([tenantId, status])
+  @@index([name])
 }
 
 model Appointment {

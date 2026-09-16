@@ -2,7 +2,8 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
-const JWT_EXPIRES_IN = "7d";
+const ACCESS_TOKEN_EXPIRES = "15m";
+const REFRESH_TOKEN_EXPIRES = "7d";
 
 // Lazy getter — never throw at import time (breaks Docker builds)
 function getSecret(): string {
@@ -19,6 +20,7 @@ export interface TokenPayload {
   type: "user" | "admin" | "doctor" | "patient" | "staff";
   tenantId?: string;
   branchId?: string;
+  branchIds?: string[];
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -33,10 +35,22 @@ export async function verifyPassword(
 }
 
 export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, getSecret(), { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, getSecret(), { expiresIn: ACCESS_TOKEN_EXPIRES });
+}
+
+export function signRefreshToken(payload: TokenPayload): string {
+  return jwt.sign(payload, getSecret(), { expiresIn: REFRESH_TOKEN_EXPIRES });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
+  try {
+    return jwt.verify(token, getSecret()) as TokenPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function verifyRefreshToken(token: string): TokenPayload | null {
   try {
     return jwt.verify(token, getSecret()) as TokenPayload;
   } catch {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rawDb } from "@/lib/db";
-import { verifyPassword, signToken } from "@/lib/auth";
+import { verifyPassword, signToken, signRefreshToken } from "@/lib/auth";
 import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
 // Role-to-permissions mapping for staff members
@@ -159,15 +159,17 @@ export async function POST(req: NextRequest) {
         branchIds.push(staffRecord.branchId);
       }
 
-      const token = signToken({
+      const tokenPayload = {
         userId: staffRecord.id,
         email: staffRecord.email,
         role: staffRecord.role || "Staff",
-        type: "staff",
+        type: "staff" as const,
         tenantId: tenantId || undefined,
         branchId: staffRecord.branchId || undefined,
         branchIds,
-      } as any);
+      };
+      const token = signToken(tokenPayload);
+      const refreshToken = signRefreshToken(tokenPayload);
 
       await rawDb.staff.update({
         where: { id: staffRecord.id },
@@ -189,6 +191,7 @@ export async function POST(req: NextRequest) {
 
       const response = NextResponse.json({
         token,
+        refreshToken,
         user: {
           id: staffRecord.id,
           name: staffRecord.name,
@@ -208,8 +211,15 @@ export async function POST(req: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60,
+        maxAge: 15 * 60, // 15 minutes
         path: "/",
+      });
+      response.cookies.set("carelim_refresh", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+        path: "/api/auth/refresh",
       });
 
       return response;
@@ -311,13 +321,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate JWT with tenant context
-    const token = signToken({
+    const adminPayload = {
       userId: user!.id,
       email: user!.email,
       role: user!.role?.name || "Administrator",
-      type: "user",
+      type: "user" as const,
       tenantId: tenantId || undefined,
-    });
+    };
+    const token = signToken(adminPayload);
+    const refreshToken = signRefreshToken(adminPayload);
 
     await rawDb.user.update({
       where: { id: user!.id },
@@ -366,6 +378,7 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({
       token,
+      refreshToken,
       user: {
         id: user!.id,
         name: user!.name,
@@ -390,8 +403,15 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60,
+      maxAge: 15 * 60, // 15 minutes
       path: "/",
+    });
+    response.cookies.set("carelim_refresh", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: "/api/auth/refresh",
     });
 
     return response;
