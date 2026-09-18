@@ -2,22 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { rawDb } from "@/lib/db";
 
 /**
- * Public endpoint: look up a patient by phone number.
- * Returns name/email if found, so the booking form can auto-fill.
- * No auth required — this is a public booking flow.
+ * Public endpoint: look up a patient by phone number for the booking flow.
+ * Returns name/email so the booking form can auto-fill.
+ * Scoped to the tenant resolved from the booking link — prevents
+ * cross-tenant patient enumeration.
  */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const phone = searchParams.get("phone");
-    if (!phone || phone.length < 5) {
+    const tenantId = searchParams.get("tenant");
+    if (!phone || phone.length < 5 || !tenantId) {
       return NextResponse.json({ found: false });
     }
 
-    // Search by exact phone match
+    // Exact phone match, scoped to the tenant whose booking page is in use
     const patient = await rawDb.patient.findFirst({
-      where: { phone },
-      select: { id: true, name: true, email: true, phone: true },
+      where: { phone, tenantId },
+      select: { name: true, email: true, phone: true },
     });
 
     if (!patient) {

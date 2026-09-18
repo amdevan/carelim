@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { getCurrentTenantId, getCurrentBranchId, getCurrentBranchIds, getCurrentUserType } from './tenant-context'
 
@@ -86,6 +86,34 @@ function resolveTenantId(): string | null {
   return getCurrentTenantId()
 }
 
+// ─── DMMF-based write-payload sanitizer ──────────────────────────
+// Strips keys from create/update payloads that don't exist on the model.
+// UI panels send extra fields (days, appliedAt, staffName, logoUrl, email…)
+// that previously crashed Prisma with "Unknown argument" 500s.
+let _modelFields: Map<string, Set<string>> | null = null
+function getModelFields(): Map<string, Set<string>> {
+  if (!_modelFields) {
+    _modelFields = new Map()
+    for (const m of Prisma.dmmf.datamodel.models) {
+      _modelFields.set(m.name, new Set(m.fields.map((f: { name: string }) => f.name)))
+    }
+  }
+  return _modelFields
+}
+
+const WRITE_OPS = new Set(['create', 'createMany', 'createManyAndReturn', 'update', 'updateMany', 'upsert'])
+
+function sanitizeData(model: string, data: unknown): unknown {
+  const fields = getModelFields().get(model)
+  if (!fields || !data || typeof data !== 'object') return data
+  if (Array.isArray(data)) return data.map((d) => sanitizeData(model, d))
+  const out: Record<string, unknown> = {}
+  for (const key of Object.keys(data as Record<string, unknown>)) {
+    if (fields.has(key)) out[key] = (data as Record<string, unknown>)[key]
+  }
+  return out
+}
+
 // ─── Create PrismaClient with driver adapter ────────────────────
 function createClient(): PrismaClient {
   const adapter = new PrismaPg({
@@ -94,11 +122,27 @@ function createClient(): PrismaClient {
   return new PrismaClient({ adapter })
 }
 
-// ─── Raw PrismaClient (NO middleware, NO filtering) ──────────────
-let _rawClient: PrismaClient | undefined
+// ─── Raw PrismaClient (NO tenant filtering; unknown-field stripping only) ──
+let _rawClient: any | undefined
 function getRawClient(): PrismaClient {
   if (!_rawClient) {
-    _rawClient = createClient()
+    _rawClient = createClient().$extends({
+      query: {
+        $allModels: {
+          $allOperations({ model, operation, args, query }: any) {
+            const a = args as any
+            if (model && WRITE_OPS.has(operation)) {
+              if (a.data) a.data = sanitizeData(model, a.data)
+              if (operation === 'upsert') {
+                if (a.create) a.create = sanitizeData(model, a.create)
+                if (a.update) a.update = sanitizeData(model, a.update)
+              }
+            }
+            return query(args)
+          },
+        },
+      },
+    })
     if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = _rawClient
   }
   return _rawClient
@@ -115,6 +159,16 @@ function getFilteredClient(): PrismaClient {
             // Cast args to any — Prisma middleware union types are too broad for static typing
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const args = rawArgs as any
+            // Strip fields that don't exist on the model — prevents Prisma
+            // "Unknown argument" 500s when UI panels send extra keys.
+            // Applies to ALL models, before any early return.
+            if (model && WRITE_OPS.has(operation)) {
+              if (args.data) args.data = sanitizeData(model, args.data)
+              if (operation === 'upsert') {
+                if (args.create) args.create = sanitizeData(model, args.create)
+                if (args.update) args.update = sanitizeData(model, args.update)
+              }
+            }
             const tenantId = resolveTenantId()
             const branchId = getCurrentBranchId()
             const branchIds = getCurrentBranchIds()
@@ -166,27 +220,29 @@ function getFilteredClient(): PrismaClient {
               }
             }
 
-            // CREATE — add tenantId to data
+            // CREATE — force the tenantId to the current tenant.
+            // Must OVERWRITE (not skip when present): a client-supplied tenantId
+            // in the request body would otherwise write cross-tenant.
             if (operation === 'create') {
-              if (isTenantModel && args.data && !args.data.tenantId) {
+              if (isTenantModel && args.data) {
                 args.data = { ...args.data, tenantId }
               }
               // For branch models, branchId should already be set by the route
             }
 
-            // CREATE MANY — add tenantId to each data item
+            // CREATE MANY — force tenantId on each data item
             if (operation === 'createMany') {
               if (isTenantModel && args.data) {
                 const data = args.data
                 args.data = Array.isArray(data)
-                  ? data.map((d: any) => (d.tenantId ? d : { ...d, tenantId }))
+                  ? data.map((d: any) => ({ ...d, tenantId }))
                   : { ...data, tenantId }
               }
             }
 
-            // UPSERT — add tenantId to both create and update
+            // UPSERT — force tenantId in create, strip protected fields in update
             if (operation === 'upsert') {
-              if (isTenantModel && args.create && !args.create.tenantId) {
+              if (isTenantModel && args.create) {
                 args.create = { ...args.create, tenantId }
               }
               if (isTenantModel && args.update) {

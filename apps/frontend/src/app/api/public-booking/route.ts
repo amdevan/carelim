@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rawDb as db } from "@/lib/db";
 import { getAuthTenantId } from "@/lib/auth";
-
 /** Resolve tenantId from a booking link slug */
 async function resolveTenantFromSlug(slug: string | null): Promise<string | null> {
   if (!slug) return null;
@@ -145,9 +144,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Config save
+    // Config save — requires authentication (booking submissions above are public)
     const tenantId = getAuthTenantId(req);
-    const configTenantId = tenantId || null;
+    if (!tenantId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    const configTenantId = tenantId;
 
     let existing = null;
     try {
@@ -189,14 +191,16 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PUT — update booking config (also used by admin without tenant context)
+// PUT — update booking config (authenticated only; field-whitelisted)
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
     const tenantId = getAuthTenantId(req);
+    if (!tenantId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
 
-    // For admins without a tenant, store config with null tenantId
-    const configTenantId = tenantId || null;
+    const configTenantId = tenantId;
 
     let existing = null;
     try {
@@ -207,16 +211,37 @@ export async function PUT(req: NextRequest) {
       // Config lookup might fail
     }
 
+    const allowed = {
+      enabled: body.enabled,
+      requireLogin: body.requireLogin,
+      showDepartments: body.showDepartments,
+      showDoctors: body.showDoctors,
+      allowedTimeSlots: body.allowedTimeSlots,
+    };
+
     if (existing) {
       const updated = await db.bookingConfig.update({
         where: { id: existing.id },
-        data: body,
+        data: {
+          enabled: allowed.enabled ?? existing.enabled,
+          requireLogin: allowed.requireLogin ?? existing.requireLogin,
+          showDepartments: allowed.showDepartments ?? existing.showDepartments,
+          showDoctors: allowed.showDoctors ?? existing.showDoctors,
+          allowedTimeSlots: allowed.allowedTimeSlots ?? existing.allowedTimeSlots,
+        },
       });
       return NextResponse.json(updated);
     }
 
     const config = await db.bookingConfig.create({
-      data: { tenantId: configTenantId, ...body },
+      data: {
+        tenantId: configTenantId,
+        enabled: allowed.enabled ?? true,
+        requireLogin: allowed.requireLogin ?? false,
+        showDepartments: allowed.showDepartments ?? true,
+        showDoctors: allowed.showDoctors ?? true,
+        allowedTimeSlots: allowed.allowedTimeSlots ?? "30",
+      },
     });
     return NextResponse.json(config);
   } catch (error) {

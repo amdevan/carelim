@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "";
+const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
+if (!JWT_SECRET) {
+  // Fail fast — an empty secret would make every token verification fail silently
+  throw new Error("JWT_SECRET or NEXTAUTH_SECRET must be set in environment");
+}
 
 async function verifyTokenEdge(token: string): Promise<{ userId: string; email: string; role: string; type: string; tenantId?: string; branchId?: string; branchIds?: string[] } | null> {
   try {
@@ -39,88 +43,6 @@ const DEV_DOMAIN_ROUTES: Record<string, string> = {
   "patient.localhost:3000": "/patient",
 };
 
-// API routes that require authentication
-const PROTECTED_API_PREFIXES = [
-  "/api/patients",
-  "/api/patient/",          // Patient portal routes (singular)
-  "/api/patient/family",
-  "/api/patient/doctors",
-  "/api/doctors",
-  "/api/appointments",
-  "/api/prescriptions",
-  "/api/invoices",
-  "/api/billing",
-  "/api/pharmacy",
-  "/api/laboratory",
-  "/api/radiology",
-  "/api/hr",
-  "/api/staff",
-  "/api/payroll",
-  "/api/leave",
-  "/api/audit",
-  "/api/settings",
-  "/api/inventory",
-  "/api/accounting",
-  "/api/reports",
-  "/api/branches",
-  "/api/tenants",
-  "/api/admin-users",
-  "/api/admin-impersonate",
-  "/api/dashboard",
-  "/api/dental",
-  "/api/ivf",
-  "/api/egg-retrievals",
-  "/api/embryo-transfers",
-  "/api/embryos",
-  "/api/cryobank",
-  "/api/fertility-assessments",
-  "/api/follicular-monitoring",
-  "/api/pregnancy-tracking",
-  "/api/semen-processing",
-  "/api/ivf-cycles",
-  "/api/ivf-consents",
-  "/api/ivf-donors",
-  "/api/ivf-packages",
-  "/api/ivf-protocols",
-  "/api/lab",
-  "/api/radiology-alerts",
-  "/api/radiology-equipment",
-  "/api/radiology-modalities",
-  "/api/radiology-schedules",
-  "/api/radiology-studies",
-  "/api/medicines",
-  "/api/medicine-batches",
-  "/api/suppliers",
-  "/api/supplier-payments",
-  "/api/purchase-orders",
-  "/api/purchase-returns",
-  "/api/sales-returns",
-  "/api/stock-audits",
-  "/api/stock-movements",
-  "/api/stock-transfers",
-  "/api/inventory-items",
-  "/api/inventory-locations",
-  "/api/inventory-movements",
-  "/api/patient-payments",
-  "/api/doctor-commissions",
-  "/api/journal-entries",
-  "/api/bank-transactions",
-  "/api/cash-transactions",
-  "/api/chart-of-accounts",
-  "/api/insurance-claims",
-  "/api/clinical-notes",
-  "/api/doctor-schedule",
-  "/api/crm",
-  "/api/cms",
-  "/api/leads",
-  "/api/support-tickets",
-  "/api/saas",
-  "/api/plans",
-  "/api/add-ons",
-  "/api/roles",
-  "/api/tenant-actions",
-];
-
 // API routes that are public (no auth required)
 const PUBLIC_API_ROUTES = [
   "/api/auth/login",
@@ -129,18 +51,52 @@ const PUBLIC_API_ROUTES = [
   "/api/doctor-auth",
   "/api/onboarding",
   "/api/public/booking",
+  "/api/public/patient-lookup",
+  "/api/public-booking",
+  "/api/public-bookings",
   "/api/patient/auth",
   "/api/staff-auth",
 ];
 
-function isProtectedApiRoute(pathname: string): boolean {
-  // Check if it's a public route first
+// Method-specific public access (everything else on these routes requires auth)
+const PUBLIC_METHOD_ROUTES: Array<{ method: string; pattern: RegExp }> = [
+  // Public booking flow reads a single branch's public info
+  { method: "GET", pattern: /^\/api\/branches\/[^/]+$/ },
+  // SaaS pricing is public (plan management requires auth)
+  { method: "GET", pattern: /^\/api\/plans\/?$/ },
+];
+
+function isProtectedApiRoute(pathname: string, method: string): boolean {
+  // Method-specific public exceptions first
+  for (const { method: m, pattern } of PUBLIC_METHOD_ROUTES) {
+    if (method === m && pattern.test(pathname)) return false;
+  }
+  // Explicit public routes
   if (PUBLIC_API_ROUTES.some((route) => pathname.startsWith(route))) {
     return false;
   }
-  return PROTECTED_API_PREFIXES.some((prefix) =>
-    pathname.startsWith(prefix)
-  );
+  // Default-deny: every other /api route requires authentication
+  return true;
+}
+
+// Platform-admin routes: require a super_admin role claim (not just any valid JWT)
+const SUPER_ADMIN_PREFIXES = [
+  "/api/tenants",
+  "/api/admin-users",
+  "/api/admin-impersonate",
+  "/api/tenant-actions",
+  "/api/saas-dashboard",
+  "/api/saas-invoices",
+  "/api/saas-audit",
+  "/api/saas-settings",
+  "/api/saas-modules",
+  "/api/add-ons",
+  "/api/support-tickets",
+];
+
+function requiresSuperAdmin(pathname: string, method: string): boolean {
+  if (SUPER_ADMIN_PREFIXES.some((route) => pathname.startsWith(route))) return true;
+  return false;
 }
 
 function getTokenFromRequest(request: NextRequest): string | null {
@@ -180,7 +136,7 @@ export async function middleware(request: NextRequest) {
 
   // --- API Auth Protection ---
   if (pathname.startsWith("/api/")) {
-    if (isProtectedApiRoute(pathname)) {
+    if (isProtectedApiRoute(pathname, request.method)) {
       const token = getTokenFromRequest(request);
 
       if (!token) {
@@ -195,6 +151,14 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json(
           { error: "Invalid or expired token" },
           { status: 401 }
+        );
+      }
+
+      // Platform-admin authorization: only super_admins may touch these routes
+      if (requiresSuperAdmin(pathname, request.method) && payload.role !== "super_admin") {
+        return NextResponse.json(
+          { error: "Forbidden: super admin access required" },
+          { status: 403 }
         );
       }
 

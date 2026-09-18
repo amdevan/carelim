@@ -31,30 +31,32 @@ export function withTenant<T extends (...args: any[]) => Promise<NextResponse>>(
 ): T {
   return ((...args: any[]) => {
     const [req] = args;
-    // First try middleware-set headers (fast path)
-    let tenantId = req.headers?.get?.("x-tenant-id") || null;
-    let userId = req.headers?.get?.("x-user-id") || null;
-    let userType = req.headers?.get?.("x-user-type") || null;
-    let branchId = req.headers?.get?.("x-branch-id") || null;
+
+    // ALWAYS decode the signed JWT — never trust client-suppliable headers
+    // like x-tenant-id/x-user-id, which a caller could spoof.
+    let tenantId: string | null = null;
+    let userId: string | null = null;
+    let userType: string | null = null;
+    let branchId: string | null = null;
     let branchIds: string[] = [];
-    const branchIdsHeader = req.headers?.get?.("x-branch-ids");
-    if (branchIdsHeader) {
-      try { branchIds = JSON.parse(branchIdsHeader); } catch { branchIds = []; }
+    const token = getTokenFromRequest(req);
+    if (token) {
+      const payload = verifyToken(token);
+      if (payload) {
+        tenantId = payload.tenantId || null;
+        userId = payload.userId || null;
+        userType = payload.type || null;
+        branchId = payload.branchId || null;
+        branchIds = (payload as any).branchIds || (payload.branchId ? [payload.branchId] : []);
+      }
     }
 
-    // If headers not set by middleware, decode JWT directly (reliable fallback)
+    // Fail closed: middleware guarantees a valid token, but if we somehow
+    // cannot verify one here, do NOT run handlers with unfiltered db access.
     if (!tenantId && !userId) {
-      const token = getTokenFromRequest(req);
-      if (token) {
-        const payload = verifyToken(token);
-        if (payload) {
-          tenantId = payload.tenantId || null;
-          userId = payload.userId || null;
-          userType = payload.type || null;
-          branchId = payload.branchId || null;
-          branchIds = (payload as any).branchIds || (payload.branchId ? [payload.branchId] : []);
-        }
-      }
+      return Promise.resolve(
+        NextResponse.json({ error: "Authentication required" }, { status: 401 })
+      ) as Promise<NextResponse>;
     }
 
     // Set module-level tenantId for Prisma $use middleware
@@ -67,6 +69,13 @@ export function withTenant<T extends (...args: any[]) => Promise<NextResponse>>(
       async () => {
         try {
           return await handler(...args);
+        } catch (error) {
+          // Log server-side, return a generic 500 without leaking internals
+          console.error(`[${req.method || "REQUEST"} ${req.nextUrl?.pathname || ""}]`, error);
+          return NextResponse.json(
+            { error: "Internal server error" },
+            { status: 500 }
+          );
         } finally {
           // Clear tenantId after request completes
           setTenantId(null);

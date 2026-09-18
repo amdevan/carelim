@@ -211,6 +211,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
   const [step, setStep] = useState<"browse" | "book">("browse");
   const [branchLabel, setBranchLabel] = useState<string | null>(null);
   const [isDirectLink, setIsDirectLink] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     patientName: "",
@@ -245,7 +246,8 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
     setPatientLookup((prev) => ({ ...prev, status: "checking" }));
     phoneTimerRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/public/patient-lookup?phone=${encodeURIComponent(fullPhone)}`);
+        const tenantParam = tenantId ? `&tenant=${encodeURIComponent(tenantId)}` : "";
+        const res = await fetch(`/api/public/patient-lookup?phone=${encodeURIComponent(fullPhone)}${tenantParam}`);
         const data = await res.json();
         if (data.found && data.patient) {
           setPatientLookup({ status: "found", name: data.patient.name, email: data.patient.email || "" });
@@ -273,6 +275,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
 
         const res = await fetch(url);
         const data = await res.json();
+        setTenantId(data.tenantId || null);
         setDoctors(data.doctors || []);
         setDepartments(data.departments || []);
 

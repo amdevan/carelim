@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
     email: user.email,
     role: "patient",
     type: "patient",
+    tenantId: user.tenantId || undefined,
   });
 
   await db.patientUser.update({ where: { id: user.id }, data: { lastLogin: new Date() } });

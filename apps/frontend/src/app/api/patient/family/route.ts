@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withTenant } from "@/lib/with-tenant";
+import { getCurrentUserId } from "@/lib/tenant-context";
 import { nanoid } from "nanoid";
 
 // GET - Get family members (patients linked by emergency contact or similar)
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get("userId");
+// Identity comes from the token, never the query string (prevents IDOR).
+export const GET = withTenant(async (_req: NextRequest) => {
+  const userId = getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
 
   const user = await db.patientUser.findUnique({ where: { id: userId } });
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json(familyMembers);
-}
+});
 
 // POST - Add a family member
 export const POST = withTenant(async (req: NextRequest) => {
