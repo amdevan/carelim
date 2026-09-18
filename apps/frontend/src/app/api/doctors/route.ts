@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAuthEmail } from "@/lib/auth";
+import { getAuthEmail, hashPassword } from "@/lib/auth";
 import { withTenant } from "@/lib/with-tenant";
 import { requirePermission } from "@/lib/api-guard";
+
+/** Strip password hash before returning a doctor to any client */
+function toSafe(doctor: Record<string, unknown>) {
+  const { password: _pw, ...safe } = doctor;
+  return safe;
+}
 
 export const GET = withTenant(async (req: NextRequest) => {
   try {
@@ -19,7 +25,7 @@ export const GET = withTenant(async (req: NextRequest) => {
       include: { department: true },
       orderBy: { name: "asc" },
     });
-    return NextResponse.json(doctors);
+    return NextResponse.json((doctors as unknown as Record<string, unknown>[]).map(toSafe));
   } catch (error) {
     console.error("Error fetching doctors:", error);
     return NextResponse.json({ error: "Failed to fetch doctors" }, { status: 500 });
@@ -49,9 +55,14 @@ export const POST = withTenant(async (req: NextRequest) => {
     if (!data.specialization) data.specialization = "General";
     if (!data.licenseNumber) data.licenseNumber = "";
     if (!data.phone) data.phone = "";
+    // password is required by the schema but the UI doesn't collect it —
+    // default login password "Doctor@123"; hash whatever we store
+    data.password = await hashPassword(
+      typeof data.password === "string" && data.password ? data.password : "Doctor@123"
+    );
     const doctor = await db.doctor.create({ data: data as never });
     await db.auditLog.create({ data: { user: getAuthEmail(req), action: "CREATE", module: "Doctor", detail: `Added doctor ${doctor.name}` } });
-    return NextResponse.json(doctor, { status: 201 });
+    return NextResponse.json(toSafe(doctor as unknown as Record<string, unknown>), { status: 201 });
   } catch (error) {
     console.error("Error creating doctor:", error);
     const msg = error instanceof Error ? error.message : "Failed to create doctor";
