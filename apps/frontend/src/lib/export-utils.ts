@@ -103,6 +103,31 @@ export function printHTML(title: string, bodyHTML: string, clinicName?: string) 
   w.document.close();
 }
 
+// Open a label print window with an exact @page size (e.g. 80x60mm thermal labels)
+export function printLabelHTML(title: string, bodyHTML: string, widthMM: number, heightMM: number) {
+  const px = (mm: number) => Math.round(mm * 3.7795); // mm -> CSS px at 96dpi
+  const w = window.open("", "_blank", `width=${px(widthMM) + 48},height=${px(heightMM) + 72}`);
+  if (!w) return;
+  w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+  <meta charset="utf-8"/>
+  <style>
+    @page { size: ${widthMM}mm ${heightMM}mm; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #f1f5f9; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { display: flex; justify-content: center; align-items: flex-start; padding: 16px; }
+    .label-sheet { width: ${widthMM}mm; height: ${heightMM}mm; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+    @media print {
+      html, body { background: #fff; padding: 0; }
+      .label-sheet { box-shadow: none; }
+    }
+  </style></head><body><div class="label-sheet">${bodyHTML}</div>
+  <script>
+    window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };
+  <\/script>
+  </body></html>`);
+  w.document.close();
+}
+
 export function docHeader(code: string, codeLabel: string, dateStr: string, statusBadge = "", clinicName?: string) {
   return `<div class="doc-header">
     <div class="brand">

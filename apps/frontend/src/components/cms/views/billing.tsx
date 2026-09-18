@@ -42,7 +42,7 @@ import {
   FileText, Trash2,
 } from "lucide-react";
 import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
-import { exportToCSV, printHTML, docHeader } from "@/lib/export-utils";
+import { exportToCSV, printHTML, printLabelHTML, docHeader } from "@/lib/export-utils";
 import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
 import { toast } from "sonner";
@@ -184,58 +184,43 @@ function buildOPDCardHTML(inv: Invoice, settings?: Record<string, string>): stri
     }
   }
 
+  const clinicName = settings?.clinic_name || settings?.organization_name || "Health Center";
+
   return `
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; }
-    .opd-card { width: 350px; border: 2px solid #0d9488; border-radius: 8px; overflow: hidden; margin: 20px auto; }
-    .opd-header { background: linear-gradient(135deg, #0d9488, #10b981); color: white; padding: 12px 16px; text-align: center; }
-    .opd-header .logo { height: 28px; margin-bottom: 4px; }
-    .opd-header h2 { font-size: 16px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-    .opd-header .sub { font-size: 10px; opacity: 0.9; margin-top: 2px; text-transform: uppercase; letter-spacing: 2px; }
-    .opd-body { padding: 12px 16px; font-size: 11px; }
-    .opd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
-    .opd-field { display: flex; align-items: baseline; gap: 4px; }
-    .opd-field.full { grid-column: 1 / -1; }
-    .opd-field-label { color: #64748b; font-weight: 600; white-space: nowrap; font-size: 10px; text-transform: uppercase; }
-    .opd-field-label::after { content: ":"; }
-    .opd-field-value { font-weight: 700; color: #1e293b; font-size: 11px; }
-    .opd-name-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; padding: 6px 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin: 4px 0; }
-    .opd-name { font-size: 14px; font-weight: 700; color: #1e293b; }
-    .opd-age-gender { font-size: 11px; font-weight: 600; color: #0d9488; }
-    .opd-barcode-row { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; }
-    .opd-barcode svg { max-width: 140px; height: 32px; }
-    .opd-footer { text-align: center; padding: 6px 16px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 8px; color: #94a3b8; }
-    @media print { .opd-card { margin: 0; border: 2px solid #0d9488; } }
+    .opd-label { width: 80mm; height: 60mm; display: flex; flex-direction: column; font-family: Arial, Helvetica, sans-serif; color: #1e293b; border: 1px solid #0d9488; overflow: hidden; background: #fff; }
+    .opd-head { background: #0d9488; color: #fff; text-align: center; padding: 1.2mm 2mm 1mm; flex: 0 0 auto; }
+    .opd-head .clinic { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .opd-head .sub { font-size: 5.5pt; letter-spacing: 2.5px; opacity: .92; margin-top: .4mm; }
+    .opd-body { flex: 1 1 auto; padding: 1.4mm 2mm 0; min-height: 0; }
+    .opd-patient { font-size: 9.5pt; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .opd-file { font-size: 7pt; color: #475569; margin-top: .3mm; }
+    .opd-file b { color: #0d9488; font-family: 'Courier New', monospace; }
+    .opd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6mm 2mm; margin-top: 1.2mm; }
+    .opd-field { min-width: 0; }
+    .opd-field .k { display: block; color: #64748b; font-size: 5.5pt; text-transform: uppercase; letter-spacing: .3px; line-height: 1.2; }
+    .opd-field .v { display: block; font-weight: 700; font-size: 7.5pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
+    .opd-bar { flex: 0 0 auto; border-top: 1px dashed #cbd5e1; margin: 1.2mm 2mm 0; padding: .8mm 0 1mm; text-align: center; }
+    .opd-bar svg { width: 46mm; height: auto; max-height: 11mm; }
   </style>
-  <div class="opd-card">
-    <div class="opd-header">
-      <div class="sub">Consultation</div>
+  <div class="opd-label">
+    <div class="opd-head">
+      <div class="clinic">${escapeHTML(clinicName)}</div>
+      <div class="sub">OPD CARD</div>
     </div>
     <div class="opd-body">
+      <div class="opd-patient">${escapeHTML(patientName)}</div>
+      <div class="opd-file">File No: <b>${escapeHTML(inv.patient.patientCode)}</b></div>
       <div class="opd-grid">
-        <div class="opd-field"><span class="opd-field-label">Doctor</span><span class="opd-field-value">${doctorName ? `Dr. ${escapeHTML(doctorName)}` : "—"}</span></div>
-        <div class="opd-field"><span class="opd-field-label">Room No</span><span class="opd-field-value">${settings?.room_no || "—"}</span></div>
-        <div class="opd-field"><span class="opd-field-label">File No</span><span class="opd-field-value">${escapeHTML(inv.patient.patientCode)}</span></div>
-        <div class="opd-field"><span class="opd-field-label">Country</span><span class="opd-field-value">NP</span></div>
+        <div class="opd-field"><span class="k">Doctor</span><span class="v">${doctorName ? `Dr. ${escapeHTML(doctorName)}` : "—"}</span></div>
+        <div class="opd-field"><span class="k">Room</span><span class="v">${escapeHTML(settings?.room_no || "—")}</span></div>
+        <div class="opd-field"><span class="k">Phone</span><span class="v">${escapeHTML(inv.patient.phone || "—")}</span></div>
+        <div class="opd-field"><span class="k">Date</span><span class="v">${formatDate(inv.date)}</span></div>
       </div>
-      <div class="opd-name-row">
-        <span class="opd-field-label">Patient</span>
-        <span class="opd-name">${escapeHTML(patientName)}</span>
-      </div>
-      <div class="opd-grid">
-        <div class="opd-field full"><span class="opd-field-label">Address</span><span class="opd-field-value">—</span></div>
-        <div class="opd-field"><span class="opd-field-label">Phone</span><span class="opd-field-value">${escapeHTML(inv.patient.phone || "—")}</span></div>
-        <div class="opd-field"><span class="opd-field-label">Date</span><span class="opd-field-value">${formatDate(inv.date)}</span></div>
-      </div>
-      <div class="opd-barcode-row">
-        <div class="opd-barcode">
-          <svg viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
-            ${generateBarcodeSVG(barcodeVal)}
-            <text x="100" y="38" text-anchor="middle" font-size="7" fill="#64748b" font-family="monospace">${escapeHTML(barcodeVal)}</text>
-          </svg>
-        </div>
-      </div>
+    </div>
+    <div class="opd-bar">
+      ${generateBarcodeSVG(barcodeVal).replace(/ style="[^"]*"/, "")}
     </div>
   </div>`;
 }
@@ -274,8 +259,8 @@ function generateBarcodeSVG(value: string): string {
 }
 
 function printOPDCard(inv: Invoice, settings?: Record<string, string>) {
-  const clinicName = settings?.clinic_name || settings?.organization_name;
-  printHTML(`OPD Card - ${inv.invoiceNo}`, buildOPDCardHTML(inv, settings), clinicName);
+  // Exact 80x60mm label for thermal/label printers (@page size in printLabelHTML)
+  printLabelHTML(`OPD Card - ${inv.invoiceNo}`, buildOPDCardHTML(inv, settings), 80, 60);
 }
 
 export function BillingView() {
