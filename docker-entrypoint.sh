@@ -20,17 +20,17 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
   exit 1
 fi
 
-echo "Database connected. Running schema sync..."
+echo "Database connected. Running migrations..."
 
-# Sync schema with database (idempotent, safe for existing data)
+# Apply pending migrations (idempotent, safe for existing data)
 # Uses prisma.config.ts (Prisma 7+) — no --schema flag needed
 if [ -f /app/node_modules/.bin/prisma ]; then
-  /app/node_modules/.bin/prisma db push --skip-generate 2>&1
+  /app/node_modules/.bin/prisma migrate deploy 2>&1
 else
-  npx prisma db push --skip-generate 2>&1
+  npx prisma migrate deploy 2>&1
 fi
 
-echo "Schema sync complete."
+echo "Migrations complete."
 
 # Verify Prisma client is available
 if [ ! -d /app/node_modules/.prisma/client ]; then
