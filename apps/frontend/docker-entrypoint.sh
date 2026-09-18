@@ -40,6 +40,7 @@ async function migrate() {
 
     const modelsWithTenantId = new Set();
     const modelsWithBranchId = new Set();
+    const modelColumns = {}; // table -> { column -> { type, notNull, def } }
 
     if (schema) {
       // Parse model blocks
@@ -52,6 +53,41 @@ async function migrate() {
         if (body.includes('branchId')) modelsWithBranchId.add(modelName);
       }
       console.log('Parsed schema: ' + modelsWithTenantId.size + ' models need tenantId, ' + modelsWithBranchId.size + ' need branchId');
+
+      // Parse all scalar fields per model so we can sync ANY missing column
+      // (createdAt, updatedAt, and everything else) — not just tenant/branch ids
+      const FIELD_TYPE_SQL = {
+        String: 'TEXT', Int: 'INTEGER', Float: 'DOUBLE PRECISION', Boolean: 'BOOLEAN',
+        DateTime: 'TIMESTAMP(3)', Json: 'JSONB', BigInt: 'BIGINT',
+        Decimal: 'DECIMAL(65,30)', Bytes: 'BYTEA'
+      };
+      const blockRe = /model\s+(\w+)\s*\{([^}]+)\}/g;
+      let bm;
+      while ((bm = blockRe.exec(schema)) !== null) {
+        const cols = {};
+        for (const rawLine of bm[2].split('\n')) {
+          const line = rawLine.trim();
+          if (!line || line.startsWith('//') || line.startsWith('@@')) continue;
+          const fm = line.match(/^(\w+)\s+(\w+)(\?)?(\[\])?\s*(.*)$/);
+          if (!fm) continue;
+          const fname = fm[1], ftype = fm[2], opt = fm[3], arr = fm[4], rest = fm[5] || '';
+          if (arr) continue; // list fields
+          const sqlType = FIELD_TYPE_SQL[ftype];
+          if (!sqlType) continue; // relation or enum
+          if (/@id\b/.test(rest)) continue; // primary keys already exist
+          let def = null;
+          const dm = rest.match(/@default\(([^)]+)\)/);
+          if (dm) {
+            const d = dm[1].trim();
+            if (d === 'now()') def = 'CURRENT_TIMESTAMP';
+            else if (d === 'true' || d === 'false') def = d;
+            else if (d.charCodeAt(0) === 34 && d.charCodeAt(d.length - 1) === 34) def = String.fromCharCode(39) + d.slice(1, -1) + String.fromCharCode(39);
+            else if (/^-?[\d.]+$/.test(d)) def = d;
+          }
+          cols[fname] = { type: sqlType, notNull: !opt && def !== null, def: def };
+        }
+        modelColumns[bm[1]] = cols;
+      }
     }
 
     // Fallback: hardcoded list if schema parsing failed
@@ -109,6 +145,24 @@ async function migrate() {
         await run('ALTER TABLE \"' + table + '\" ADD COLUMN IF NOT EXISTS \"branchId\" TEXT', table + '.branchId');
       }
     }
+
+    // Add ALL missing scalar columns declared in schema (createdAt, updatedAt, etc.)
+    // This keeps the production DB in sync with schema.prisma without migrations
+    let colsAdded = 0;
+    for (const table of Object.keys(modelColumns)) {
+      if (!existingTables.has(table)) continue;
+      for (const col of Object.keys(modelColumns[table])) {
+        if (hasCol(table, col)) continue;
+        const spec = modelColumns[table][col];
+        let sql = 'ALTER TABLE \"' + table + '\" ADD COLUMN IF NOT EXISTS \"' + col + '\" ' + spec.type;
+        if (spec.def) sql += ' DEFAULT ' + spec.def;
+        if (spec.notNull) sql += ' NOT NULL';
+        await run(sql, table + '.' + col);
+        existingCols[table].add(col);
+        colsAdded++;
+      }
+    }
+    console.log('Column sync: ' + colsAdded + ' missing schema columns added');
 
     // Backfill tenantId for all existing rows (NULL → first tenant)
     const tenantRes = await client.query('SELECT id FROM \"Tenant\" LIMIT 1');
@@ -188,9 +242,10 @@ async function migrate() {
       await run('ALTER TABLE \"Tenant\" ADD COLUMN IF NOT EXISTS \"logoUrl\" TEXT', 'Tenant.logoUrl');
     }
 
-    // Drop and recreate AuditLog with tenantId
-    await run('DROP TABLE IF EXISTS \"AuditLog\" CASCADE', 'drop AuditLog');
-    await run('CREATE TABLE \"AuditLog\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"user\" TEXT NOT NULL, \"action\" TEXT NOT NULL, \"module\" TEXT NOT NULL, \"detail\" TEXT, \"ip\" TEXT, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"AuditLog_pkey\" PRIMARY KEY (\"id\"))', 'create AuditLog');
+    // Ensure AuditLog exists with tenantId — non-destructive (never drop:
+    // dropping recreated it on every container start, wiping audit history)
+    await run('CREATE TABLE IF NOT EXISTS \"AuditLog\" (\"id\" TEXT NOT NULL, \"tenantId\" TEXT, \"user\" TEXT NOT NULL, \"action\" TEXT NOT NULL, \"module\" TEXT NOT NULL, \"detail\" TEXT, \"ip\" TEXT, \"createdAt\" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT \"AuditLog_pkey\" PRIMARY KEY (\"id\"))', 'create AuditLog');
+    await run('ALTER TABLE \"AuditLog\" ADD COLUMN IF NOT EXISTS \"tenantId\" TEXT', 'AuditLog.tenantId');
     await run('CREATE INDEX IF NOT EXISTS \"AuditLog_tenantId_idx\" ON \"AuditLog\"(\"tenantId\")', 'AuditLog index');
 
     // Create missing tables
