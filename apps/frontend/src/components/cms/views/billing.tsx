@@ -160,29 +160,27 @@ function printInvoice(inv: Invoice, settings?: Record<string, string>) {
 }
 
 /* ---------- OPD Card HTML builder ---------- */
-function buildOPDCardHTML(inv: Invoice, settings?: Record<string, string>): string {
+const CUID_RE = /^c[a-z0-9]{20,}$/i;
+
+// Extract the doctor token from the consultation item description.
+// Format: "Consultation - Dr. DoctorName" or "Consultation - DoctorName".
+// Legacy invoices may contain a raw doctor ID (CUID) — returned as-is so the
+// caller can resolve it to a real name.
+function extractDoctorToken(inv: Invoice): string {
+  const consultItem = (inv.items || []).find((i) => i.description.toLowerCase().includes("consultation"));
+  if (!consultItem) return "";
+  let extracted = consultItem.description.replace(/^consultation\s*[-–—]\s*/i, "").trim();
+  // Strip "Dr." prefixes first so "Dr. cmt…" IDs are still detected as CUIDs
+  while (extracted.toLowerCase().startsWith("dr.")) {
+    extracted = extracted.substring(3).trim();
+  }
+  if (!extracted || CUID_RE.test(extracted)) return "";
+  return extracted;
+}
+
+function buildOPDCardHTML(inv: Invoice, settings?: Record<string, string>, doctorName = ""): string {
   const barcodeVal = inv.patient.patientCode || inv.invoiceNo;
     const patientName = inv.patient.name || "Patient";
-
-  // Extract doctor name from consultation item description
-  // Format: "Consultation - Dr. DoctorName" or "Consultation - DoctorName"
-  let doctorName = "";
-  const consultItem = (inv.items || []).find((i) => i.description.toLowerCase().includes("consultation"));
-  if (consultItem) {
-    const desc = consultItem.description;
-    // Remove "Consultation" prefix and any dash/en-dash separator
-    let extracted = desc.replace(/^consultation\s*[-–—]\s*/i, "").trim();
-    // If it looks like a CUID, it's not a real name
-    if (extracted.length > 20 && /^c[a-z0-9]{20,}$/i.test(extracted)) {
-      doctorName = "";
-    } else {
-      // Remove all leading "Dr." prefixes (we add it back in display)
-      while (extracted.toLowerCase().startsWith("dr.")) {
-        extracted = extracted.substring(3).trim();
-      }
-      doctorName = extracted;
-    }
-  }
 
   const clinicName = settings?.clinic_name || settings?.organization_name || "Health Center";
 
@@ -258,9 +256,27 @@ function generateBarcodeSVG(value: string): string {
   </svg>`;
 }
 
-function printOPDCard(inv: Invoice, settings?: Record<string, string>) {
+async function printOPDCard(inv: Invoice, settings?: Record<string, string>) {
   // Exact 80x60mm label for thermal/label printers (@page size in printLabelHTML)
-  printLabelHTML(`OPD Card - ${inv.invoiceNo}`, buildOPDCardHTML(inv, settings), 80, 60);
+  let doctorName = extractDoctorToken(inv);
+  if (!doctorName) {
+    // Legacy invoices stored a raw doctor ID in the description — resolve it
+    const consultItem = (inv.items || []).find((i) => i.description.toLowerCase().includes("consultation"));
+    const rawId = (consultItem?.description || "")
+      .replace(/^consultation\s*[-–—]\s*/i, "")
+      .replace(/^dr\.\s*/i, "")
+      .trim();
+    if (CUID_RE.test(rawId)) {
+      try {
+        const r = await fetchAPI(`/api/doctors/${rawId}`);
+        if (r.ok) {
+          const doc = await r.json();
+          if (doc?.name) doctorName = doc.name;
+        }
+      } catch {}
+    }
+  }
+  printLabelHTML(`OPD Card - ${inv.invoiceNo}`, buildOPDCardHTML(inv, settings, doctorName), 80, 60);
 }
 
 export function BillingView() {
@@ -863,10 +879,17 @@ function CreateInvoiceDialog({
   const addIpdItem = () => setIpdItems((p) => [...p, { description: "", qty: 1, rate: 0, amount: 0 }]);
   const removeIpdItem = (idx: number) => setIpdItems((p) => p.filter((_, i) => i !== idx));
 
-  const buildItems = (): InvoiceItem[] => {
+  const buildItems = async (): Promise<InvoiceItem[]> => {
     if (type === "consultation") {
-      const doc = doctors?.find((d) => d.id === doctorName);
-      const displayName = doc ? doc.name : doctorName || "TBD";
+      let doc = doctors?.find((d) => d.id === doctorName);
+      if (!doc && CUID_RE.test(doctorName)) {
+        // Doctors list not loaded yet — resolve the name so we never store a raw ID
+        try {
+          const r = await fetchAPI(`/api/doctors/${doctorName}`);
+          if (r.ok) doc = await r.json();
+        } catch {}
+      }
+      const displayName = doc?.name || "TBD";
       return [{ description: `Consultation - Dr. ${displayName}`, qty: 1, rate: consultationFee, amount: consultationFee }];
     }
     if (type === "pharmacy") {
@@ -921,7 +944,7 @@ function CreateInvoiceDialog({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!patientId) { toast.error("Please select a patient"); return; }
-    const finalItems = buildItems();
+    const finalItems = await buildItems();
     if (finalItems.length === 0) {
       toast.error("Add at least one invoice item"); return;
     }
