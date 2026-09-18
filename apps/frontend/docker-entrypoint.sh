@@ -41,6 +41,8 @@ async function migrate() {
     const modelsWithTenantId = new Set();
     const modelsWithBranchId = new Set();
     const modelColumns = {}; // table -> { column -> { type, notNull, def } }
+    const modelPks = {};     // table -> primary key column name
+    const modelUniques = {}; // table -> [ [field, ...], ... ]
 
     if (schema) {
       // Parse model blocks
@@ -61,20 +63,36 @@ async function migrate() {
         DateTime: 'TIMESTAMP(3)', Json: 'JSONB', BigInt: 'BIGINT',
         Decimal: 'DECIMAL(65,30)', Bytes: 'BYTEA'
       };
+      // Collect enum names so enum-typed columns can map to TEXT
+      const enumNames = new Set();
+      const enumRe = /enum\s+(\w+)\s*\{/g;
+      let em2;
+      while ((em2 = enumRe.exec(schema)) !== null) enumNames.add(em2[1]);
       const blockRe = /model\s+(\w+)\s*\{([^}]+)\}/g;
       let bm;
       while ((bm = blockRe.exec(schema)) !== null) {
         const cols = {};
         for (const rawLine of bm[2].split('\n')) {
           const line = rawLine.trim();
-          if (!line || line.startsWith('//') || line.startsWith('@@')) continue;
+          if (!line || line.startsWith('//')) continue;
+          if (line.startsWith('@@')) {
+            const um = line.match(/@@unique\(\[([^\]]+)\]\)/);
+            if (um) {
+              const fields = um[1].split(',').map(function (s) { return s.trim().split(/\s+/)[0]; }).filter(Boolean);
+              if (fields.length) {
+                if (!modelUniques[bm[1]]) modelUniques[bm[1]] = [];
+                modelUniques[bm[1]].push(fields);
+              }
+            }
+            continue;
+          }
           const fm = line.match(/^(\w+)\s+(\w+)(\?)?(\[\])?\s*(.*)$/);
           if (!fm) continue;
           const fname = fm[1], ftype = fm[2], opt = fm[3], arr = fm[4], rest = fm[5] || '';
           if (arr) continue; // list fields
-          const sqlType = FIELD_TYPE_SQL[ftype];
-          if (!sqlType) continue; // relation or enum
-          if (/@id\b/.test(rest)) continue; // primary keys already exist
+          const sqlType = FIELD_TYPE_SQL[ftype] || (enumNames.has(ftype) ? 'TEXT' : null);
+          if (!sqlType) continue; // relation
+          if (/@id\b/.test(rest)) modelPks[bm[1]] = fname; // record PK; column still included below
           let def = null;
           const dm = rest.match(/@default\(([^)]+)\)/);
           if (dm) {
@@ -131,6 +149,35 @@ async function migrate() {
     function hasCol(table, col) {
       return existingCols[table] && existingCols[table].has(col);
     }
+
+    // Create any MISSING tables from the schema (additive only — never touches
+    // existing tables). Fixes drifted databases that predate models such as
+    // RateLimitCounter, LabPackage, AuditLog, etc.
+    let tablesCreated = 0;
+    for (const table of Object.keys(modelColumns)) {
+      if (existingTables.has(table)) continue;
+      const pk = modelPks[table];
+      if (!pk) continue; // cannot safely create without a primary key
+      const defs = [];
+      for (const col of Object.keys(modelColumns[table])) {
+        const spec = modelColumns[table][col];
+        let d = '"' + col + '" ' + spec.type;
+        if (spec.def) d += ' DEFAULT ' + spec.def;
+        if (spec.notNull) d += ' NOT NULL';
+        defs.push(d);
+      }
+      defs.push('CONSTRAINT "' + table + '_pkey" PRIMARY KEY ("' + pk + '")');
+      await run('CREATE TABLE IF NOT EXISTS "' + table + '" (' + defs.join(', ') + ')', 'create table ' + table);
+      existingTables.add(table);
+      existingCols[table] = new Set(Object.keys(modelColumns[table]));
+      tablesCreated++;
+      const uniques = modelUniques[table] || [];
+      for (const fields of uniques) {
+        const idxName = table + '_' + fields.join('_') + '_key';
+        await run('CREATE UNIQUE INDEX IF NOT EXISTS "' + idxName + '" ON "' + table + '"(' + fields.map(function (f) { return '"' + f + '"'; }).join(', ') + ')', 'unique ' + idxName);
+      }
+    }
+    console.log('Table sync: ' + tablesCreated + ' missing tables created');
 
     // Add tenantId to all tables that need it
     for (const table of modelsWithTenantId) {
