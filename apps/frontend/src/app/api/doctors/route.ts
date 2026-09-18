@@ -65,10 +65,14 @@ export const POST = withTenant(async (req: NextRequest) => {
     return NextResponse.json(toSafe(doctor as unknown as Record<string, unknown>), { status: 201 });
   } catch (error) {
     console.error("Error creating doctor:", error);
-    const msg = error instanceof Error ? error.message : "Failed to create doctor";
+    const msg = error instanceof Error ? error.message : "";
+    // Never echo Prisma error text — it embeds the full args incl. password hash
     if (msg.includes("Unique constraint")) {
       return NextResponse.json({ error: "A doctor with this email already exists" }, { status: 400 });
     }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    if (msg.includes("Foreign key constraint")) {
+      return NextResponse.json({ error: "Invalid departmentId — department not found" }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Failed to create doctor" }, { status: 500 });
   }
 });
