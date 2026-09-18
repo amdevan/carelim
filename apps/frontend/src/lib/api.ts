@@ -14,15 +14,7 @@ export function apiUrl(path: string): string {
   return `${API_BASE_URL}${normalizedPath}`;
 }
 
-/**
- * Wrapper around fetch that automatically prefixes API URLs with the backend base URL
- * and includes auth token from the app store.
- */
-export async function fetchAPI(input: string | URL | Request, init?: RequestInit): Promise<Response> {
-  // Dynamically import store to avoid circular dependency
-  const { useAppStore } = await import("@/store/app-store");
-  const token = useAppStore.getState().token;
-
+function buildHeaders(init?: RequestInit, token?: string | null): Record<string, string> {
   const headers: Record<string, string> = {};
   if (init?.headers) {
     if (init.headers instanceof Headers) {
@@ -36,14 +28,50 @@ export async function fetchAPI(input: string | URL | Request, init?: RequestInit
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
+  return headers;
+}
 
-  const mergedInit: RequestInit = { ...init, headers, credentials: "include" };
-
+function resolveUrl(input: string | URL | Request): string | URL | Request {
   if (typeof input === 'string' && input.startsWith('/api/')) {
-    return fetch(apiUrl(input), mergedInit);
+    return apiUrl(input);
   }
-  if (typeof input === 'string' && input.startsWith('http')) {
-    return fetch(input, mergedInit);
+  return input;
+}
+
+/**
+ * Wrapper around fetch that automatically prefixes API URLs with the backend base URL,
+ * includes auth token from the app store, and retries once after refreshing
+ * an expired access token (401).
+ */
+export async function fetchAPI(input: string | URL | Request, init?: RequestInit, retryCount = 0): Promise<Response> {
+  // Dynamically import store to avoid circular dependency
+  const { useAppStore } = await import("@/store/app-store");
+  const token = useAppStore.getState().token;
+
+  const headers = buildHeaders(init, token);
+  const mergedInit: RequestInit = { ...init, headers, credentials: "include" };
+  const response = await fetch(resolveUrl(input), mergedInit);
+
+  // Access token expired — refresh it and retry once
+  if (response.status === 401 && retryCount < 1) {
+    const refreshRes = await fetch(apiUrl("/api/auth/refresh"), {
+      method: "POST",
+      credentials: "include",
+    });
+
+    if (refreshRes.ok) {
+      const data = await refreshRes.json().catch(() => null);
+      if (data?.token) {
+        useAppStore.setState({ token: data.token });
+      }
+      return fetchAPI(input, init, retryCount + 1);
+    }
+
+    // Refresh failed — session is over, redirect to login
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login";
+    }
   }
-  return fetch(input, mergedInit);
+
+  return response;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { apiUrl } from "@/lib/api";
+import { fetchAPI } from "@/lib/api";
 import { useAppStore } from "@/store/app-store";
 
 export function useFetch<T>(url: string | null) {
@@ -27,12 +27,7 @@ export function useFetch<T>(url: string | null) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
 
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    fetch(apiUrl(finalUrl), { credentials: "include", headers, signal: controller.signal })
+    fetchAPI(finalUrl, { signal: controller.signal })
       .then(async (r) => {
         if (!r.ok) throw new Error(`Request failed: ${r.status}`);
         return r.json();
