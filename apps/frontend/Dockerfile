@@ -17,7 +17,7 @@ WORKDIR /app/apps/frontend
 RUN npx prisma generate
 
 # Push schema to database (requires DATABASE_URL build arg)
-RUN npx prisma db push --accept-data-loss --skip-generate 2>&1 || echo "Warning: prisma db push failed (database may not be reachable at build time)"
+RUN npx prisma db push --accept-data-loss 2>&1 || echo "Warning: prisma db push failed (database may not be reachable at build time)"
 
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build

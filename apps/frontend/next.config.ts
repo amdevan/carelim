@@ -4,6 +4,12 @@ const nextConfig: NextConfig = {
   output: "standalone",
   devIndicators: false,
   reactStrictMode: true,
+  // NO_BUILD_CACHE=1 skips webpack's on-disk cache (~GBs in .next/cache) —
+  // used when building on low-disk machines; builds are slower but fit.
+  webpack: (config) => {
+    if (process.env.NO_BUILD_CACHE) config.cache = false;
+    return config;
+  },
   // Allow the sandbox preview domain and localhost variants to hot-reload /
   // fetch _next/* assets without triggering cross-origin warnings in dev.
   // Next.js matches on hostname (with optional leading dot for subdomain wildcard).
