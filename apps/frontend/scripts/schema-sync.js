@@ -1,0 +1,324 @@
+/*
+ * Database schema sync — runs at container boot before the Next.js server starts.
+ * Invoked by docker-entrypoint.sh and (as a fallback) by src/instrumentation.ts,
+ * so it executes no matter which start command the host platform uses.
+ * Idempotent: additive-only (IF NOT EXISTS everywhere), safe on every boot.
+ */
+const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
+
+async function migrate() {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const client = await pool.connect();
+  try {
+    let ok = 0, fail = 0;
+
+    async function run(sql, label) {
+      try {
+        await client.query(sql);
+        ok++;
+      } catch(e) {
+        fail++;
+        if (!e.message.includes('already exists') && !e.message.includes('does not exist') && !e.message.includes('cannot drop')) {
+          console.error('FAIL:', label || sql.substring(0, 60), '->', e.message.substring(0, 120));
+        }
+      }
+    }
+
+    // Parse Prisma schema to find models with tenantId and branchId
+    let schema = '';
+    try {
+      schema = fs.readFileSync('/app/prisma/schema.prisma', 'utf8');
+    } catch {
+      try {
+        schema = fs.readFileSync(path.join(process.cwd(), 'prisma/schema.prisma'), 'utf8');
+      } catch {
+        console.log('Could not read schema.prisma, using hardcoded lists');
+      }
+    }
+
+    const modelsWithTenantId = new Set();
+    const modelsWithBranchId = new Set();
+    const modelColumns = {}; // table -> { column -> { type, notNull, def } }
+    const modelPks = {};     // table -> primary key column name
+    const modelUniques = {}; // table -> [ [field, ...], ... ]
+
+    if (schema) {
+      // Parse model blocks
+      const modelRegex = /model\s+(\w+)\s*\{([^}]+)\}/g;
+      let match;
+      while ((match = modelRegex.exec(schema)) !== null) {
+        const modelName = match[1];
+        const body = match[2];
+        if (body.includes('tenantId')) modelsWithTenantId.add(modelName);
+        if (body.includes('branchId')) modelsWithBranchId.add(modelName);
+      }
+      console.log('Parsed schema: ' + modelsWithTenantId.size + ' models need tenantId, ' + modelsWithBranchId.size + ' need branchId');
+
+      // Parse all scalar fields per model so we can sync ANY missing column
+      // (createdAt, updatedAt, and everything else) — not just tenant/branch ids
+      const FIELD_TYPE_SQL = {
+        String: 'TEXT', Int: 'INTEGER', Float: 'DOUBLE PRECISION', Boolean: 'BOOLEAN',
+        DateTime: 'TIMESTAMP(3)', Json: 'JSONB', BigInt: 'BIGINT',
+        Decimal: 'DECIMAL(65,30)', Bytes: 'BYTEA'
+      };
+      // Collect enum names so enum-typed columns can map to TEXT
+      const enumNames = new Set();
+      const enumRe = /enum\s+(\w+)\s*\{/g;
+      let em2;
+      while ((em2 = enumRe.exec(schema)) !== null) enumNames.add(em2[1]);
+      const blockRe = /model\s+(\w+)\s*\{([^}]+)\}/g;
+      let bm;
+      while ((bm = blockRe.exec(schema)) !== null) {
+        const cols = {};
+        for (const rawLine of bm[2].split('\n')) {
+          const line = rawLine.trim();
+          if (!line || line.startsWith('//')) continue;
+          if (line.startsWith('@@')) {
+            const um = line.match(/@@unique\(\[([^\]]+)\]\)/);
+            if (um) {
+              const fields = um[1].split(',').map(function (s) { return s.trim().split(/\s+/)[0]; }).filter(Boolean);
+              if (fields.length) {
+                if (!modelUniques[bm[1]]) modelUniques[bm[1]] = [];
+                modelUniques[bm[1]].push(fields);
+              }
+            }
+            continue;
+          }
+          const fm = line.match(/^(\w+)\s+(\w+)(\?)?(\[\])?\s*(.*)$/);
+          if (!fm) continue;
+          const fname = fm[1], ftype = fm[2], opt = fm[3], arr = fm[4], rest = fm[5] || '';
+          if (arr) continue; // list fields
+          const sqlType = FIELD_TYPE_SQL[ftype] || (enumNames.has(ftype) ? 'TEXT' : null);
+          if (!sqlType) continue; // relation
+          if (/@id\b/.test(rest)) modelPks[bm[1]] = fname; // record PK; column still included below
+          let def = null;
+          const dm = rest.match(/@default\(([^)]+)\)/);
+          if (dm) {
+            const d = dm[1].trim();
+            if (d === 'now()') def = 'CURRENT_TIMESTAMP';
+            else if (d === 'true' || d === 'false') def = d;
+            else if (d.charCodeAt(0) === 34 && d.charCodeAt(d.length - 1) === 34) def = String.fromCharCode(39) + d.slice(1, -1) + String.fromCharCode(39);
+            else if (/^-?[\d.]+$/.test(d)) def = d;
+          }
+          cols[fname] = { type: sqlType, notNull: !opt && def !== null, def: def };
+        }
+        modelColumns[bm[1]] = cols;
+      }
+    }
+
+    // Fallback: hardcoded list if schema parsing failed
+    if (modelsWithTenantId.size === 0) {
+      ['Patient','Doctor','Appointment','Prescription','Medicine','PharmacySale','Invoice',
+       'LabTest','LabOrder','LabTestMaster','LabResult','LabSample','LabPackage','LabDepartment',
+       'LabQualityControl','LabEquipment','LabInventory','LabSupplier',
+       'RadiologyStudy','RadiologyTest','RadiologyModality','RadiologyEquipment','RadiologyTemplate','RadiologyAlert','RadiologySchedule',
+       'Expense','PatientPayment','ClinicalNote','Staff','Department','Supplier','Setting',
+       'AuditLog','Account','JournalEntry','CashTransaction','BankTransaction',
+       'DoctorCommission','InsuranceClaim','SupplierPayment','Referral',
+       'InventoryItem','InventoryBatch','InventoryMovement','StockTransfer','StockAudit','PurchaseOrder',
+       'PatientSource','CareCoordinator','LeaveRequest','StaffAttendance','Payroll',
+       'Organization','ClinicSettings','BookingConfig','BookingLink','PublicBooking',
+       'Role','Permission','RolePermission','SaaSInvoice','TenantModule','UsageTracking','SupportTicket','SaaSAuditLog',
+       'IVFCycle','FertilityAssessment','TreatmentProtocol','DentalExamination','DentalTreatmentPlan',
+       'MSLead','Campaign','CRMContact','CRMDeal','EmailTemplate',
+       'PatientUser','PatientDocument','Odontogram','DentalLabOrder',
+      ].forEach(m => modelsWithTenantId.add(m));
+    }
+
+    if (modelsWithBranchId.size === 0) {
+      ['Patient','Doctor','Appointment','Prescription','Medicine','PharmacySale','Invoice',
+       'LabTest','LabOrder','RadiologyStudy','Expense','PatientPayment','ClinicalNote',
+       'Staff','Department','BookingLink',
+      ].forEach(m => modelsWithBranchId.add(m));
+    }
+
+    // Get all existing tables
+    const tablesRes = await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+    const existingTables = new Set(tablesRes.rows.map(r => r.tablename));
+
+    // Get all existing columns per table
+    const colsRes = await client.query("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public'");
+    const existingCols = {};
+    for (const row of colsRes.rows) {
+      if (!existingCols[row.table_name]) existingCols[row.table_name] = new Set();
+      existingCols[row.table_name].add(row.column_name);
+    }
+
+    function hasCol(table, col) {
+      return existingCols[table] && existingCols[table].has(col);
+    }
+
+    // Create any MISSING tables from the schema (additive only — never touches
+    // existing tables). Fixes drifted databases that predate models such as
+    // RateLimitCounter, LabPackage, AuditLog, etc.
+    let tablesCreated = 0;
+    for (const table of Object.keys(modelColumns)) {
+      if (existingTables.has(table)) continue;
+      const pk = modelPks[table];
+      if (!pk) continue; // cannot safely create without a primary key
+      const defs = [];
+      for (const col of Object.keys(modelColumns[table])) {
+        const spec = modelColumns[table][col];
+        let d = '"' + col + '" ' + spec.type;
+        if (spec.def) d += ' DEFAULT ' + spec.def;
+        if (spec.notNull) d += ' NOT NULL';
+        defs.push(d);
+      }
+      defs.push('CONSTRAINT "' + table + '_pkey" PRIMARY KEY ("' + pk + '")');
+      await run('CREATE TABLE IF NOT EXISTS "' + table + '" (' + defs.join(', ') + ')', 'create table ' + table);
+      existingTables.add(table);
+      existingCols[table] = new Set(Object.keys(modelColumns[table]));
+      tablesCreated++;
+      const uniques = modelUniques[table] || [];
+      for (const fields of uniques) {
+        const idxName = table + '_' + fields.join('_') + '_key';
+        await run('CREATE UNIQUE INDEX IF NOT EXISTS "' + idxName + '" ON "' + table + '"(' + fields.map(function (f) { return '"' + f + '"'; }).join(', ') + ')', 'unique ' + idxName);
+      }
+    }
+    console.log('Table sync: ' + tablesCreated + ' missing tables created');
+
+    // Add tenantId to all tables that need it
+    for (const table of modelsWithTenantId) {
+      if (existingTables.has(table) && !hasCol(table, 'tenantId')) {
+        await run('ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS "tenantId" TEXT', table + '.tenantId');
+      }
+    }
+
+    // Add branchId to all tables that need it
+    for (const table of modelsWithBranchId) {
+      if (existingTables.has(table) && !hasCol(table, 'branchId')) {
+        await run('ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS "branchId" TEXT', table + '.branchId');
+      }
+    }
+
+    // Add ALL missing scalar columns declared in schema (createdAt, updatedAt, etc.)
+    // This keeps the production DB in sync with schema.prisma without migrations
+    let colsAdded = 0;
+    for (const table of Object.keys(modelColumns)) {
+      if (!existingTables.has(table)) continue;
+      for (const col of Object.keys(modelColumns[table])) {
+        if (hasCol(table, col)) continue;
+        const spec = modelColumns[table][col];
+        let sql = 'ALTER TABLE "' + table + '" ADD COLUMN IF NOT EXISTS "' + col + '" ' + spec.type;
+        if (spec.def) sql += ' DEFAULT ' + spec.def;
+        if (spec.notNull) sql += ' NOT NULL';
+        await run(sql, table + '.' + col);
+        existingCols[table].add(col);
+        colsAdded++;
+      }
+    }
+    console.log('Column sync: ' + colsAdded + ' missing schema columns added');
+
+    // Backfill tenantId for all existing rows (NULL → first tenant)
+    const tenantRes = await client.query('SELECT id FROM "Tenant" LIMIT 1');
+    if (tenantRes.rows.length > 0) {
+      const defaultTenantId = tenantRes.rows[0].id;
+      console.log('Backfilling tenantId with: ' + defaultTenantId);
+      let backfilled = 0;
+      for (const table of modelsWithTenantId) {
+        if (existingTables.has(table) && hasCol(table, 'tenantId')) {
+          // Count NULLs first
+          const countRes = await client.query('SELECT COUNT(*) as cnt FROM "' + table + '" WHERE "tenantId" IS NULL');
+          const nullCount = parseInt(countRes.rows[0].cnt);
+          if (nullCount > 0) {
+            const res = await client.query('UPDATE "' + table + '" SET "tenantId" = \'' + defaultTenantId + '\' WHERE "tenantId" IS NULL');
+            console.log(table + ': backfilled ' + res.rowCount + ' rows (was ' + nullCount + ' NULL)');
+            backfilled += res.rowCount;
+          }
+        }
+      }
+      // Backfill branchId — set to first branch of the tenant
+      const branchRes = await client.query('SELECT id FROM "Branch" WHERE "tenantId" = \'' + defaultTenantId + '\' LIMIT 1');
+      if (branchRes.rows.length > 0) {
+        const defaultBranchId = branchRes.rows[0].id;
+        console.log('Backfilling branchId with: ' + defaultBranchId);
+        for (const table of modelsWithBranchId) {
+          if (existingTables.has(table) && hasCol(table, 'branchId')) {
+            const res = await client.query('UPDATE "' + table + '" SET "branchId" = \'' + defaultBranchId + '\' WHERE "branchId" IS NULL');
+            if (res.rowCount > 0) console.log(table + ': backfilled branchId for ' + res.rowCount + ' rows');
+          }
+        }
+      }
+      console.log('Total tenantId backfilled: ' + backfilled + ' rows');
+    } else {
+      console.log('No tenant found, skipping backfill');
+    }
+
+    // Create tenantId indexes for all tenant models (performance)
+    for (const table of modelsWithTenantId) {
+      if (existingTables.has(table) && hasCol(table, 'tenantId')) {
+        await run('CREATE INDEX IF NOT EXISTS "' + table + '_tenantId_idx" ON "' + table + '"("tenantId")', table + '.tenantId_idx');
+      }
+    }
+
+    // Create branchId indexes for all branch models (performance)
+    for (const table of modelsWithBranchId) {
+      if (existingTables.has(table) && hasCol(table, 'branchId')) {
+        await run('CREATE INDEX IF NOT EXISTS "' + table + '_branchId_idx" ON "' + table + '"("branchId")', table + '.branchId_idx');
+      }
+    }
+
+    // User table - ensure all needed columns exist
+    const userCols = ['tenantId', 'roleId', 'branchId', 'status', 'lastLogin', 'phone', 'password', 'createdAt', 'name', 'email'];
+    for (const col of userCols) {
+      if (existingTables.has('User') && !hasCol('User', col)) {
+        const def = col === 'status' ? " DEFAULT 'active'" : col === 'password' ? " DEFAULT 'medcore123'" : '';
+        await run('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "' + col + '" TEXT' + def, 'User.' + col);
+      }
+    }
+
+    // Staff table
+    const staffCols = ['tenantId', 'branchId', 'password', 'status', 'lastLogin', 'department', 'designation', 'salary', 'joinDate', 'phone', 'name', 'email', 'role'];
+    for (const col of staffCols) {
+      if (existingTables.has('Staff') && !hasCol('Staff', col)) {
+        const type = col === 'salary' ? 'DOUBLE PRECISION DEFAULT 0' : col === 'joinDate' || col === 'lastLogin' ? 'TIMESTAMP(3)' : 'TEXT';
+        const def = col === 'status' ? " DEFAULT 'active'" : col === 'password' ? " DEFAULT 'medcore123'" : '';
+        await run('ALTER TABLE "Staff" ADD COLUMN IF NOT EXISTS "' + col + '" ' + type + def, 'Staff.' + col);
+      }
+    }
+
+    // Branch table
+    if (existingTables.has('Branch') && !hasCol('Branch', 'clinicType')) {
+      await run("ALTER TABLE \"Branch\" ADD COLUMN IF NOT EXISTS \"clinicType\" TEXT DEFAULT 'General'", 'Branch.clinicType');
+    }
+
+    // Tenant table
+    if (existingTables.has('Tenant') && !hasCol('Tenant', 'logoUrl')) {
+      await run('ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "logoUrl" TEXT', 'Tenant.logoUrl');
+    }
+
+    // Ensure AuditLog exists with tenantId — non-destructive (never drop:
+    // dropping recreated it on every container start, wiping audit history)
+    await run('CREATE TABLE IF NOT EXISTS "AuditLog" ("id" TEXT NOT NULL, "tenantId" TEXT, "user" TEXT NOT NULL, "action" TEXT NOT NULL, "module" TEXT NOT NULL, "detail" TEXT, "ip" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id"))', 'create AuditLog');
+    await run('ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS "tenantId" TEXT', 'AuditLog.tenantId');
+    await run('CREATE INDEX IF NOT EXISTS "AuditLog_tenantId_idx" ON "AuditLog"("tenantId")', 'AuditLog index');
+
+    // Create missing tables
+    const createTables = [
+      'CREATE TABLE IF NOT EXISTS "BookingLink" ("id" TEXT NOT NULL, "tenantId" TEXT, "branchId" TEXT, "configId" TEXT, "doctorId" TEXT, "doctorName" TEXT, "department" TEXT, "label" TEXT, "url" TEXT NOT NULL, "slug" TEXT NOT NULL, "active" BOOLEAN NOT NULL DEFAULT true, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "BookingLink_pkey" PRIMARY KEY ("id"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "BookingLink_slug_key" ON "BookingLink"("slug");',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "BookingLink_tenantId_slug_key" ON "BookingLink"("tenantId", "slug");',
+      'CREATE TABLE IF NOT EXISTS "BookingConfig" ("id" TEXT NOT NULL, "tenantId" TEXT NOT NULL, "slotDuration" INTEGER NOT NULL DEFAULT 30, "maxBookingsPerSlot" INTEGER NOT NULL DEFAULT 5, "allowWalkIn" BOOLEAN NOT NULL DEFAULT true, "requirePhone" BOOLEAN NOT NULL DEFAULT false, "enableWaitlist" BOOLEAN NOT NULL DEFAULT false, "workingHours" JSONB, "holidays" JSONB, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "BookingConfig_pkey" PRIMARY KEY ("id"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "BookingConfig_tenantId_key" ON "BookingConfig"("tenantId");',
+      'CREATE TABLE IF NOT EXISTS "Role" ("id" TEXT NOT NULL, "name" TEXT NOT NULL, "description" TEXT, "isSystem" BOOLEAN NOT NULL DEFAULT false, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "Role_pkey" PRIMARY KEY ("id"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "Role_name_key" ON "Role"("name");',
+      'CREATE TABLE IF NOT EXISTS "Permission" ("id" TEXT NOT NULL, "module" TEXT NOT NULL, "action" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "Permission_pkey" PRIMARY KEY ("id"));',
+      'CREATE TABLE IF NOT EXISTS "RolePermission" ("roleId" TEXT NOT NULL, "permissionId" TEXT NOT NULL, CONSTRAINT "RolePermission_pkey" PRIMARY KEY ("roleId","permissionId"));',
+      'CREATE TABLE IF NOT EXISTS "StaffBranch" ("id" TEXT NOT NULL, "staffId" TEXT NOT NULL, "branchId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "StaffBranch_pkey" PRIMARY KEY ("id"));',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "StaffBranch_staffId_branchId_key" ON "StaffBranch"("staffId", "branchId");',
+    ];
+
+    for (const sql of createTables) {
+      await run(sql, 'create: ' + sql.substring(20, 50));
+    }
+
+    console.log('Schema sync complete: ' + ok + ' ok, ' + fail + ' failed');
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+migrate().catch(e => { console.error('Schema sync error:', e.message); process.exit(0); });

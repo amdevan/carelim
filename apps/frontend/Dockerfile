@@ -50,6 +50,9 @@ COPY --from=builder /app/node_modules/pg ./node_modules/pg
 # Copy Prisma schema for runtime use
 COPY --from=builder /app/apps/frontend/prisma ./prisma
 
+# Copy schema-sync script (run by entrypoint and instrumentation fallback)
+COPY --from=builder /app/apps/frontend/scripts ./scripts
+
 # Copy entrypoint
 COPY apps/frontend/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
