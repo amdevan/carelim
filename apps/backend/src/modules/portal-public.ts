@@ -61,6 +61,20 @@ function parseLocalDate(dateStr: string): Date {
   return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
 
+/** True when the date+time slot (24h "HH:MM") is already over relative to
+ * server local time — public booking is real-time only, so slots for today
+ * that have passed (and past dates) must never be shown or booked. */
+function isSlotInPast(dateStr: string, time: string): boolean {
+  if (!dateStr || !time) return false;
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  if (dateStr > todayStr) return false;
+  if (dateStr < todayStr) return true;
+  const [h, m] = time.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return false;
+  return h * 60 + m <= now.getHours() * 60 + now.getMinutes();
+}
+
 function generateTimeSlots(start: string, end: string, durationMinutes: number): string[] {
   const slots: string[] = [];
   const [startH, startM] = start.split(":").map(Number);
@@ -1249,7 +1263,10 @@ async function publicBookingGet(req: Request, res: Response) {
         };
       });
 
-      return res.json({ slots: slotsWithAvailability, dayName });
+      // Real-time only: today's already-passed times are not bookable
+      const realTimeSlots = slotsWithAvailability.filter((s) => !isSlotInPast(dateStr, s.time));
+
+      return res.json({ slots: realTimeSlots, dayName });
     }
 
     // Default: return context info for the booking page
@@ -1287,6 +1304,11 @@ async function publicBookingPost(req: Request, res: Response) {
 
     if (!doctorId || !date || !time || !patientName || !patientPhone) {
       return fail(res, 400, "doctorId, date, time, patientName, and patientPhone are required");
+    }
+
+    // Real-time only: reject past dates and today's already-passed times
+    if (isSlotInPast(date, time)) {
+      return fail(res, 400, "Selected time has already passed. Please choose an upcoming slot.");
     }
 
     // Resolve tenant/branch from link slug
@@ -1511,6 +1533,10 @@ async function publicBookingAltPost(req: Request, res: Response) {
 
     // Booking submission (has patientName)
     if (body.patientName) {
+      // Real-time only: reject past dates and today's already-passed times
+      if (body.date && body.time && isSlotInPast(body.date, body.time)) {
+        return fail(res, 400, "Selected time has already passed. Please choose an upcoming slot.");
+      }
       const tenantId = getAuthTenantId(req) || (await resolveTenantFromSlug(body.linkSlug || null));
 
       const doctor = body.doctorId
