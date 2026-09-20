@@ -1775,14 +1775,17 @@ model SaaSInvoice {
 }
 
 model PlatformModule {
-  id          String         @id @default(cuid())
-  name        String         @unique
-  description String?
-  category    String         @default("healthcare")
-  icon        String?
-  isActive    Boolean        @default(true)
-  createdAt   DateTime       @default(now())
-  tenants     TenantModule[]
+  id           String         @id @default(cuid())
+  name         String         @unique
+  description  String?
+  category     String         @default("healthcare")
+  icon         String?
+  price        Float          @default(0)
+  rating       Float          @default(0)
+  installCount Int            @default(0)
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  tenants      TenantModule[]
 }
 
 model TenantModule {

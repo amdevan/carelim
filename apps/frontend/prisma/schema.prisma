@@ -1721,6 +1721,9 @@ model PlatformModule {
   description String?
   category String @default("healthcare")
   icon String?
+  price Float @default(0)
+  rating Float @default(0)
+  installCount Int @default(0)
   isActive Boolean @default(true)
   createdAt DateTime @default(now())
   tenants TenantModule[]

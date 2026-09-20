@@ -17,16 +17,15 @@ services:
       timeout: 5s
       retries: 5
 
+  # Main application: clinic CMS + all APIs + patient/doctor/booking portals
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: apps/frontend/Dockerfile
     container_name: carelim-frontend
     depends_on:
       db:
         condition: service_healthy
-      backend:
-        condition: service_started
     ports:
       - "3000:3000"
     environment:
@@ -35,11 +34,12 @@ services:
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-${JWT_SECRET}}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
-      - NEXT_PUBLIC_API_URL=http://backend:4000
     networks:
       - carelim-net
     restart: unless-stopped
 
+  # Standalone Express API (health + admin login). Optional — the frontend
+  # has its own built-in API routes and does not depend on this service.
   backend:
     build:
       context: .
@@ -55,11 +55,11 @@ services:
       - PORT=4000
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public}
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
-      - FRONTEND_URL=http://frontend:3000
     networks:
       - carelim-net
     restart: unless-stopped
 
+  # SaaS super-admin panel (manages all tenants)
   saas:
     build:
       context: .
@@ -68,19 +68,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      backend:
-        condition: service_started
     ports:
       - "3001:3001"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public}
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
-      - NEXT_PUBLIC_API_URL=http://backend:4000
     networks:
       - carelim-net
     restart: unless-stopped
 
+  # CRM mini-app
   carelim-ms:
     build:
       context: .
@@ -89,19 +87,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      backend:
-        condition: service_started
     ports:
       - "3002:3002"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public}
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
-      - NEXT_PUBLIC_API_URL=http://backend:4000
     networks:
       - carelim-net
     restart: unless-stopped
 
+  # Marketing / marketplace site
   marketplace:
     build:
       context: .
@@ -110,15 +106,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      backend:
-        condition: service_started
     ports:
       - "3003:3003"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-carelim}:${POSTGRES_PASSWORD:-carelim123}@db:5432/${POSTGRES_DB:-carelim}?schema=public}
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
-      - NEXT_PUBLIC_API_URL=http://backend:4000
     networks:
       - carelim-net
     restart: unless-stopped

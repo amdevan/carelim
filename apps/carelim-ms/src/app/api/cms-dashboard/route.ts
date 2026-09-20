@@ -5,15 +5,15 @@ export async function GET() {
   try {
     const [totalLeads, activeCampaigns, totalPatients, totalRevenue] = await Promise.all([
       prisma.mSLead.count(),
-      prisma.campaign.count({ where: { isActive: true } }),
+      prisma.campaign.count({ where: { status: "active" } }),
       prisma.patient.count(),
-      prisma.invoice.aggregate({ _sum: { totalAmount: true } }),
+      prisma.invoice.aggregate({ _sum: { total: true } }),
     ]);
     return NextResponse.json({
       totalLeads,
       activeCampaigns,
       totalPatients,
-      totalRevenue: totalRevenue._sum.totalAmount || 0,
+      totalRevenue: totalRevenue._sum.total || 0,
     });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch dashboard data" }, { status: 500 });
