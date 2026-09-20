@@ -16,9 +16,9 @@
 import { Router, Request, Response } from "express";
 import { db, rawDb } from "../lib/prisma";
 import { createPatientWithSerialCode } from "../lib/patient-code";
-import { hashPassword, verifyPassword, signToken } from "../lib/auth";
+import { hashPassword, verifyPassword, signToken, verifyToken, extractToken } from "../lib/auth";
 import { fail, wrap } from "../lib/http";
-import { getCurrentUserId } from "../lib/tenant-context";
+import { getCurrentTenantId, getCurrentUserId } from "../lib/tenant-context";
 
 // ─── shared helpers ─────────────────────────────────────────────────────────
 
@@ -43,10 +43,16 @@ function isProd() {
   return process.env.NODE_ENV === "production";
 }
 
-/** Frontend getAuthTenantId(request) — reads the x-tenant-id header. */
+/** Tenant of the authenticated caller, if any. The booking routers are mounted
+ * before `authenticate`, so the AsyncLocalStorage context is usually absent —
+ * fall back to verifying the JWT (Authorization header / carelim_token cookie)
+ * directly, which is what the admin CMS sends when it calls these endpoints. */
 function getAuthTenantId(req: Request): string | null {
-  const v = req.headers["x-tenant-id"];
-  return typeof v === "string" && v.length > 0 ? v : null;
+  const ctxTenantId = getCurrentTenantId();
+  if (ctxTenantId) return ctxTenantId;
+  const token = extractToken({ headers: req.headers as Record<string, string | undefined> });
+  if (!token) return null;
+  return verifyToken(token)?.tenantId ?? null;
 }
 
 /** Parse a date string (YYYY-MM-DD) as a local date, not UTC */
@@ -1110,6 +1116,16 @@ async function resolveContext(slug: string | null): Promise<LinkContext> {
   } catch {
     // BookingLink table might not exist yet
   }
+  // The admin booking page generates preview links as /book/{tenantId}, so a
+  // bare tenant ID is also a valid slug.
+  if (!result.tenantId) {
+    try {
+      const tenant = await rawDb.tenant.findUnique({ where: { id: slug }, select: { id: true } });
+      if (tenant) result.tenantId = tenant.id;
+    } catch {
+      // Tenant lookup might fail
+    }
+  }
   return result;
 }
 
@@ -1413,6 +1429,13 @@ async function resolveTenantFromSlug(slug: string | null): Promise<string | null
     if (link?.config?.tenantId) return link.config.tenantId;
   } catch {
     // BookingLink table might not exist
+  }
+  // /book/{tenantId} preview links resolve the tenant directly.
+  try {
+    const tenant = await rawDb.tenant.findUnique({ where: { id: slug }, select: { id: true } });
+    if (tenant) return tenant.id;
+  } catch {
+    // Tenant lookup might fail
   }
   return null;
 }
