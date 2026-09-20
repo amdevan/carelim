@@ -27,6 +27,7 @@ import { DentalView } from "@/components/cms/views/dental";
 import { IvfView } from "@/components/cms/views/ivf";
 import { TelemedicineView } from "@/components/cms/views/telemedicine";
 import { ClinicalNotesView } from "@/components/cms/views/clinical-notes";
+import { ProceduresView } from "@/components/cms/views/procedures";
 import { StaffView } from "@/components/cms/views/staff";
 import { LeaveView } from "@/components/cms/views/leave";
 import { PublicBookingView } from "@/components/cms/views/public-booking";
@@ -69,6 +70,7 @@ const VIEWS: Record<string, React.ReactNode> = {
   ivf: <IvfView />,
   telemedicine: <TelemedicineView />,
   "clinical-notes": <ClinicalNotesView />,
+  procedures: <ProceduresView />,
   staff: <StaffView />,
   leave: <LeaveView />,
   "public-booking": <PublicBookingView />,

@@ -1719,6 +1719,7 @@ model Tenant {
   odontograms           Odontogram[]
   dentalTreatmentPlans  DentalTreatmentPlan[]
   dentalProcedures      DentalProcedure[]
+  procedures            Procedure[]
   dentalImages          DentalImage[]
   dentalLabOrders       DentalLabOrder[]
   orthodonticCases      OrthodonticCase[]
@@ -2257,6 +2258,32 @@ model DentalProcedure {
   status          String   @default("completed") // scheduled | in_progress | completed | cancelled
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
+
+  @@unique([tenantId, procNo])
+}
+
+/// Generic clinical procedure log for General clinic type (mirrors
+/// DentalProcedure minus dental-specific fields: teeth, treatment plan).
+model Procedure {
+  id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  procNo        String
+  patientId     String
+  doctorId      String?
+  assistantId   String?
+  appointmentId String?
+  procedureName String
+  category      String? // minor_surgery | injection | dressing | therapy | physiotherapy | diagnostic | other
+  procedureDate DateTime @default(now())
+  fee           Float    @default(0)
+  duration      Int      @default(0) // minutes
+  notes         String?
+  complications String?
+  invoiceId     String?  // -> Invoice.id (auto-created)
+  status        String   @default("completed") // scheduled | in_progress | completed | cancelled
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
 
   @@unique([tenantId, procNo])
 }

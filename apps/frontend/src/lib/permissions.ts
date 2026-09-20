@@ -37,6 +37,7 @@ export const NAV_KEY_TO_MODULE: Record<string, string> = {
   "tenant-settings": "Settings",
 
   // Dental (map to EMR module for permissions)
+  "procedures": "EMR",
   "dental-odontogram": "EMR",
   "dental-examination": "EMR",
   "dental-treatment": "EMR",
@@ -88,7 +89,7 @@ export function hasPermission(permissions: string[], module: string, action: str
  */
 export function canViewNavKey(permissions: string[], navKey: string): boolean {
   if (permissions.includes("*.*")) return true;
-  const module = NAV_KEY_TO_MODULE[navKey];
-  if (!module) return true; // Unknown module = allow (safety fallback)
-  return permissions.includes(`${module}.view`);
+  const permissionModule = NAV_KEY_TO_MODULE[navKey];
+  if (!permissionModule) return true; // Unknown module = allow (safety fallback)
+  return permissions.includes(`${permissionModule}.view`);
 }

@@ -103,6 +103,7 @@ import {
   cryobankRouter,
   semenProcessingRouter,
 } from "./modules/ivf";
+import { proceduresRouter } from "./modules/procedures";
 import {
   staffRouter,
   rolesRouter,
@@ -272,6 +273,7 @@ api.use("/appointments", appointmentsRouter());
 api.use("/prescriptions", prescriptionsRouter());
 api.use("/prescription-print", prescriptionPrintRouter());
 api.use("/clinical-notes", clinicalNotesRouter());
+api.use("/procedures", proceduresRouter());
 api.use("/insurance-claims", insuranceClaimsRouter());
 api.use("/doctor-commissions", doctorCommissionsRouter());
 api.use("/doctor-schedule", doctorScheduleRouter());

@@ -36,6 +36,7 @@ const TENANT_MODELS = new Set([
   "eggRetrieval", "semenProcessing", "embryo", "embryoTransfer",
   "cryobankStorage", "pregnancyFollowup", "donorProfile", "iVFConsent", "iVFPackage",
   "dentalExamination", "odontogram", "dentalTreatmentPlan", "dentalProcedure",
+  "procedure",
   "dentalImage", "dentalLabOrder", "orthodonticCase", "implantCase", "dentalFollowup",
   "patientSource", "appointmentExtension", "referral", "patientActivityLog",
   "careCoordinator", "mSLead", "campaign", "commissionSettlement",

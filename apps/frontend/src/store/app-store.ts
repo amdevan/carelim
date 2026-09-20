@@ -45,6 +45,7 @@ export type ViewKey =
   | "ivf"
   | "telemedicine"
   | "clinical-notes"
+  | "procedures"
   | "staff"
   | "leave"
   | "public-booking"
@@ -94,6 +95,7 @@ export const navItems: NavItem[] = [
   { key: "doctors", label: "Doctors", icon: Stethoscope, group: "Clinical" },
   { key: "emr", label: "EMR & Prescription", icon: FileText, group: "Clinical" },
   { key: "clinical-notes", label: "Clinical Notes", icon: ClipboardList, group: "Clinical" },
+  { key: "procedures", label: "Procedures", icon: Activity, group: "Clinical" },
   // Dental-specific items
   { key: "dental-odontogram", label: "Odontogram", icon: Smile, group: "Dental Clinical" },
   { key: "dental-examination", label: "Clinical Examination", icon: Stethoscope, group: "Dental Clinical" },
@@ -145,7 +147,7 @@ export const navGroups = ["Overview", "Clinical", "Dental Clinical", "Dental Ima
 
 /** Modules shown per clinic business type. General is the base — Dental/IVF include all General modules + their specialty. */
 export const CLINIC_TYPE_MODULES: Record<string, ViewKey[]> = {
-  General: ["dashboard", "appointments", "patients", "doctors", "emr", "clinical-notes", "laboratory", "radiology", "pharmacy", "inventory", "billing", "accounting", "reports", "insurance", "hr", "staff", "leave", "audit", "settings", "public-booking", "notifications", "branches", "crm", "tenant-settings"],
+  General: ["dashboard", "appointments", "patients", "doctors", "emr", "clinical-notes", "procedures", "laboratory", "radiology", "pharmacy", "inventory", "billing", "accounting", "reports", "insurance", "hr", "staff", "leave", "audit", "settings", "public-booking", "notifications", "branches", "crm", "tenant-settings"],
   Dental: ["dashboard", "appointments", "patients", "doctors", "emr", "clinical-notes", "dental-odontogram", "dental-examination", "dental-treatment", "dental-procedures", "dental-imaging", "dental-lab", "dental-ortho", "dental-implant", "dental-followup", "dental-reports", "laboratory", "radiology", "pharmacy", "inventory", "billing", "accounting", "reports", "insurance", "hr", "staff", "leave", "audit", "settings", "public-booking", "notifications", "branches", "crm", "tenant-settings"],
   IVF: ["dashboard", "appointments", "patients", "doctors", "emr", "clinical-notes", "ivf-couples", "ivf-cycles", "ivf-protocols", "ivf-stimulation", "ivf-follicular", "ivf-opu", "ivf-andrology", "ivf-embryology", "ivf-cryobank", "ivf-transfer", "ivf-pregnancy", "ivf-donors", "ivf-consents", "ivf-packages", "ivf-reports", "laboratory", "radiology", "pharmacy", "inventory", "billing", "accounting", "reports", "insurance", "hr", "staff", "leave", "audit", "settings", "public-booking", "notifications", "branches", "crm", "tenant-settings"],
 };
