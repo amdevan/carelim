@@ -78,24 +78,21 @@ interface Department {
   name: string;
 }
 
-/** Generate time slots from a doctor's schedule (24h start/end) with 30-min intervals */
-function generateTimeSlots(startTime: string, endTime: string): string[] {
-  const slots: string[] = [];
-  const [startH, startM] = startTime.split(":").map(Number);
-  const [endH, endM] = endTime.split(":").map(Number);
-  let current = startH * 60 + startM;
-  const end = endH * 60 + endM;
+/** Slot returned by /api/public/booking?action=slots (24h "HH:MM" times) */
+interface SlotInfo {
+  time: string;
+  available: boolean;
+  booked: number;
+  capacity: number;
+}
 
-  while (current < end) {
-    const h = Math.floor(current / 60);
-    const m = current % 60;
-    // Convert to 12-hour format with AM/PM
-    const period = h >= 12 ? "PM" : "AM";
-    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    slots.push(`${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`);
-    current += 30;
-  }
-  return slots;
+/** 24h "HH:MM" → 12h display with AM/PM */
+function formatTime12(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return t;
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
 const ACCENT_COLORS = [
@@ -212,6 +209,9 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
   const [branchLabel, setBranchLabel] = useState<string | null>(null);
   const [isDirectLink, setIsDirectLink] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [slots, setSlots] = useState<SlotInfo[]>([]);
+  const [slotsKey, setSlotsKey] = useState("");
+  const [slotsMessage, setSlotsMessage] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     patientName: "",
@@ -317,6 +317,36 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
     }
     load();
   }, [slug, branchParam, doctorParam]);
+
+  // Fetch the doctor's exact schedule slots (DoctorScheduleSlot + booked
+  // availability) from the backend whenever the selected date/doctor changes
+  useEffect(() => {
+    if (!form.date || !selectedDoctor) return;
+    const key = `${form.date}|${selectedDoctor.id}`;
+    let cancelled = false;
+    fetch(`/api/public/booking?action=slots&doctorId=${selectedDoctor.id}&date=${form.date}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Failed to load slots"))))
+      .then((data) => {
+        if (cancelled || !selectedDoctor || key !== `${form.date}|${selectedDoctor.id}`) return;
+        setSlots(data.slots || []);
+        setSlotsMessage(data.message || null);
+        setSlotsKey(key);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSlots([]);
+        setSlotsMessage("Failed to load available times");
+        setSlotsKey(key);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.date, selectedDoctor]);
+
+  // Derived loading flag: while the fetched slots belong to a previous
+  // date/doctor selection, the schedule is still loading
+  const slotsLoading =
+    !!form.date && !!selectedDoctor && slotsKey !== `${form.date}|${selectedDoctor.id}`;
 
   const filteredDoctors = useMemo(() => {
     if (deptFilter === "all") return doctors;
@@ -425,7 +455,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
               </div>
               <div className="flex items-center gap-2 text-white/70">
                 <Clock className="w-4 h-4 text-emerald-400" />
-                <span>{form.time}</span>
+                <span>{formatTime12(form.time)}</span>
               </div>
             </div>
             <div className="flex items-center justify-center gap-2 text-xs text-white/40">
@@ -698,36 +728,40 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                     <Clock className="w-3.5 h-3.5 text-violet-400" /> Select Time
                   </Label>
                   {(() => {
-                    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
                     const fullDayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
                     let selectedDate: Date | null = null;
                     if (form.date) {
                       const [y, m, d] = form.date.split("-").map(Number);
                       selectedDate = new Date(y, m - 1, d);
                     }
-                    const dayName = selectedDate ? dayNames[selectedDate.getDay()] : null;
                     const fullDayName = selectedDate ? fullDayNames[selectedDate.getDay()] : "";
                     const workingDaysList = selectedDoctor?.workingDays?.split(",").map((d) => d.trim()) || [];
-                    const isWorkingDay = !dayName || workingDaysList.length === 0 || workingDaysList.includes(dayName);
 
-                    const docStart = selectedDoctor?.startTime || "09:00";
-                    const docEnd = selectedDoctor?.endTime || "17:00";
-                    const slots = isWorkingDay ? generateTimeSlots(docStart, docEnd) : [];
+                    if (slotsLoading) {
+                      return (
+                        <div className="flex items-center justify-center gap-2 py-8 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+                          <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
+                          <span className="text-xs text-white/40">Loading schedule&hellip;</span>
+                        </div>
+                      );
+                    }
 
-                    if (!isWorkingDay) {
+                    if (slots.length === 0) {
                       return (
                         <div className="text-center py-8 rounded-xl border border-rose-500/20 bg-rose-500/5">
                           <Clock className="w-8 h-8 mx-auto mb-2 text-rose-400/50" />
                           <p className="text-sm font-medium text-rose-300/80">Not Available</p>
                           <p className="text-xs text-rose-300/50 mt-1">
-                            {selectedDoctor?.name} doesn&apos;t work on {fullDayName}s
+                            {slotsMessage || `${selectedDoctor?.name || "Doctor"} has no slots on ${fullDayName || "this day"}`}
                           </p>
-                          <div className="flex items-center justify-center gap-1 mt-2">
-                            <span className="text-[10px] text-white/30">Available:</span>
-                            {workingDaysList.map((d) => (
-                              <span key={d} className="px-1.5 py-0.5 rounded bg-white/[0.05] text-[10px] text-white/40">{d.slice(0, 3)}</span>
-                            ))}
-                          </div>
+                          {workingDaysList.length > 0 && (
+                            <div className="flex items-center justify-center gap-1 mt-2">
+                              <span className="text-[10px] text-white/30">Available:</span>
+                              {workingDaysList.map((d) => (
+                                <span key={d} className="px-1.5 py-0.5 rounded bg-white/[0.05] text-[10px] text-white/40">{d.slice(0, 3)}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -737,16 +771,19 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                           {slots.map((slot) => (
                             <button
-                              key={slot}
+                              key={slot.time}
                               type="button"
-                              onClick={() => setForm({ ...form, time: slot })}
+                              disabled={!slot.available}
+                              onClick={() => setForm({ ...form, time: slot.time })}
                               className={`relative px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                                form.time === slot
+                                form.time === slot.time
                                   ? "bg-violet-600 text-white shadow-lg shadow-violet-500/25 border border-violet-500 scale-[1.02]"
-                                  : "border border-white/[0.08] bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/70 hover:border-white/[0.12]"
+                                  : slot.available
+                                    ? "border border-white/[0.08] bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/70 hover:border-white/[0.12]"
+                                    : "border border-white/[0.05] bg-white/[0.02] text-white/20 line-through cursor-not-allowed"
                               }`}
                             >
-                              {slot}
+                              {formatTime12(slot.time)}
                             </button>
                           ))}
                         </div>
