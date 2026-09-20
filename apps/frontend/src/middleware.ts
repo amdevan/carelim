@@ -43,6 +43,43 @@ const DEV_DOMAIN_ROUTES: Record<string, string> = {
   "patient.localhost:3000": "/patient",
 };
 
+// Panel pages that must only be reachable from their own domain/subdomain.
+// /admin (SaaS super-admin), /doctor and /carelim-ms use env-configured
+// domains (ADMIN_HOST / DOCTOR_HOST / MS_HOST); /dental /ivf /prescription
+// /patient use the DOMAIN_ROUTES mapping above. Accessing them from any
+// other host redirects to the panel's own URL (or the app home).
+const RESTRICTED_PANELS = ["/admin", "/doctor", "/carelim-ms", "/dental", "/ivf", "/prescription", "/patient"];
+
+function isAllowedPanelHost(panel: string, bareHost: string, fullHost: string): boolean {
+  const envHost = panel === "/admin" ? process.env.ADMIN_HOST
+    : panel === "/doctor" ? process.env.DOCTOR_HOST
+    : panel === "/carelim-ms" ? process.env.MS_HOST
+    : undefined;
+  if (envHost) {
+    const envBare = envHost.toLowerCase().split(":")[0];
+    if (bareHost === envBare || fullHost === envHost.toLowerCase()) return true;
+  }
+  for (const [host, route] of Object.entries(DOMAIN_ROUTES)) {
+    if ((route === panel || route.startsWith(panel + "/")) && host.split(":")[0] === bareHost) return true;
+  }
+  for (const [host, route] of Object.entries(DEV_DOMAIN_ROUTES)) {
+    if ((route === panel || route.startsWith(panel + "/")) && host === fullHost) return true;
+  }
+  return false;
+}
+
+function panelOwnUrl(panel: string): string | null {
+  const envHost = panel === "/admin" ? process.env.ADMIN_HOST
+    : panel === "/doctor" ? process.env.DOCTOR_HOST
+    : panel === "/carelim-ms" ? process.env.MS_HOST
+    : undefined;
+  if (envHost) return `https://${envHost}`;
+  for (const [host, route] of Object.entries(DOMAIN_ROUTES)) {
+    if (route === panel || route.startsWith(panel + "/")) return `https://${host}`;
+  }
+  return null;
+}
+
 // API routes that are public (no auth required)
 const PUBLIC_API_ROUTES = [
   "/api/auth/login",
@@ -196,11 +233,32 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // --- Page Routes: Panels only reachable from their own domain ---
+  const firstSeg = "/" + (pathname.split("/")[1] || "");
+  if (RESTRICTED_PANELS.includes(firstSeg)) {
+    const fullHost = hostname.toLowerCase();
+    const bareHost = fullHost.split(":")[0];
+    const devOverride =
+      process.env.NODE_ENV !== "production" &&
+      (bareHost === "localhost" || bareHost === "127.0.0.1" || bareHost.endsWith(".localhost"));
+    if (!devOverride && !isAllowedPanelHost(firstSeg, bareHost, fullHost)) {
+      return NextResponse.redirect(panelOwnUrl(firstSeg) || new URL("/", request.url));
+    }
+  }
+
   // --- Page Routes: Subdomain Rewriting ---
+  // Helper: prefix the module path, but never double-prefix a path that is
+  // already the module's own path (e.g. /dental on dental.<domain>).
+  const applyRoutePath = (routePath: string) => {
+    url.pathname = url.pathname === "/" || url.pathname === routePath || url.pathname.startsWith(routePath + "/")
+      ? url.pathname === "/" ? routePath : url.pathname
+      : `${routePath}${url.pathname}`;
+  };
+
   // Check production domains first
   const routePath = DOMAIN_ROUTES[hostname];
   if (routePath) {
-    url.pathname = url.pathname === "/" ? routePath : `${routePath}${url.pathname}`;
+    applyRoutePath(routePath);
     const response = NextResponse.rewrite(url);
     for (const [key, value] of Object.entries(securityHeaders)) {
       response.headers.set(key, value);
@@ -211,7 +269,7 @@ export async function middleware(request: NextRequest) {
   // Check development domains
   const devRoutePath = DEV_DOMAIN_ROUTES[hostname];
   if (devRoutePath) {
-    url.pathname = url.pathname === "/" ? devRoutePath : `${devRoutePath}${url.pathname}`;
+    applyRoutePath(devRoutePath);
     const response = NextResponse.rewrite(url);
     for (const [key, value] of Object.entries(securityHeaders)) {
       response.headers.set(key, value);
