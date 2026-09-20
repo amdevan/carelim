@@ -17,7 +17,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # Main application: clinic CMS + all APIs + patient/doctor/booking portals
+  # Main application: clinic CMS + patient/doctor/booking portals.
+  # Its /api/* is a thin proxy to the backend service (the real API).
   frontend:
     build:
       context: .
@@ -26,6 +27,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      backend:
+        condition: service_started
     ports:
       - "3000:3000"
     environment:
@@ -34,12 +37,13 @@ services:
       - JWT_SECRET=${JWT_SECRET:?Please set JWT_SECRET}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-${JWT_SECRET}}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - INTERNAL_API_URL=http://backend:4000
     networks:
       - carelim-net
     restart: unless-stopped
 
-  # Standalone Express API (health + admin login). Optional — the frontend
-  # has its own built-in API routes and does not depend on this service.
+  # Standalone Express API — the real backend (auth, tenants, doctors,
+  # dashboard, ...). All frontend /api/* traffic is proxied here.
   backend:
     build:
       context: .

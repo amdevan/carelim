@@ -3,6 +3,13 @@ import cors from "cors";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
+import { authRouter } from "./modules/auth";
+import { adminAuthHandler } from "./modules/admin-auth";
+import { doctorsRouter } from "./modules/doctors";
+import { tenantsRouter } from "./modules/tenants";
+import { dashboardRouter } from "./modules/dashboard";
+import { authenticate, requireSuperAdmin } from "./middleware/auth";
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -15,13 +22,17 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 // --- Middleware ---
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
-  credentials: true,
-}));
+app.set("trust proxy", 1);
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "10mb" }));
 
-// --- Health check ---
+// --- Public routes ---
+// Health check
 app.get("/api/health", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -31,42 +42,26 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
-// --- Auth routes ---
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
-    }
+// Auth (login/refresh verify their own rate limits and tokens)
+app.use("/api/auth", authRouter());
 
-    const user = await prisma.adminUser.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
+// SaaS platform login (AdminUser) — public, self rate-limited
+app.post("/api/admin-auth", adminAuthHandler());
 
-    const bcrypt = await import("bcryptjs");
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
+// --- Protected routes: every request below requires a valid JWT and runs
+// inside AsyncLocalStorage tenant context (Prisma auto-filters by tenant) ---
+const api = express.Router();
+api.use(authenticate);
 
-    const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
-    if (!jwtSecret) {
-      console.error("FATAL: JWT_SECRET or NEXTAUTH_SECRET must be set");
-      return res.status(500).json({ error: "Server configuration error" });
-    }
-    const jwt = await import("jsonwebtoken");
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role, type: "admin" },
-      jwtSecret,
-      { expiresIn: "7d" }
-    );
+api.use("/tenants", requireSuperAdmin, tenantsRouter());
+api.use("/doctors", doctorsRouter());
+api.use("/dashboard", dashboardRouter());
 
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
-  } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
+app.use("/api", api);
+
+// --- 404 for unknown API routes ---
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "Not found" });
 });
 
 // --- Error handler ---
@@ -86,7 +81,7 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
 // --- Start ---
 app.listen(PORT, () => {
-  console.log(`Carelim Backend running on port ${PORT}`);
+  console.log(`Carelim Backend (full API) running on port ${PORT}`);
 });
 
 export default app;

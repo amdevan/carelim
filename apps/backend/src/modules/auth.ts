@@ -1,14 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { rawDb } from "@/lib/db";
-import { verifyPassword, signToken, signRefreshToken } from "@/lib/auth";
-import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
+/**
+ * Auth module — full port of frontend /api/auth/login and /api/auth/refresh.
+ * Responses (shape + cookies) are identical to what the Next routes returned,
+ * so existing clients work unmodified.
+ */
+import { Router, Request, Response } from "express";
+import { rawDb } from "../lib/prisma";
+import { verifyPassword, signToken, signRefreshToken, verifyRefreshToken, TokenPayload } from "../lib/auth";
+import { fail, clientIp, wrap } from "../lib/http";
+import { checkRateLimit, rateLimitByIp, RATE_LIMITS } from "../lib/rate-limit";
 
 // Role-to-permissions mapping for staff members
 function getStaffPermissions(role: string | null): string[] {
   const r = (role || "").toLowerCase();
-
-  // Modules: Dashboard, Patient, Doctor, Appointment, Prescription, EMR,
-  // Pharmacy, Laboratory, Radiology, Billing, Inventory, Reports, HR, Settings, Audit
 
   const all = [
     "Dashboard.view", "Patient.view", "Patient.create", "Patient.edit",
@@ -23,8 +26,7 @@ function getStaffPermissions(role: string | null): string[] {
   switch (r) {
     case "admin":
     case "manager":
-      return all; // Full access
-
+      return all;
     case "doctor":
       return [
         "Dashboard.view", "Patient.view", "Patient.create", "Patient.edit",
@@ -34,7 +36,6 @@ function getStaffPermissions(role: string | null): string[] {
         "Laboratory.view", "Radiology.view",
         "Billing.view", "Reports.view",
       ];
-
     case "nurse":
       return [
         "Dashboard.view", "Patient.view", "Patient.create", "Patient.edit",
@@ -42,7 +43,6 @@ function getStaffPermissions(role: string | null): string[] {
         "Prescription.view", "EMR.view", "EMR.create",
         "Laboratory.view", "Radiology.view",
       ];
-
     case "receptionist":
       return [
         "Dashboard.view", "Patient.view", "Patient.create", "Patient.edit",
@@ -50,7 +50,6 @@ function getStaffPermissions(role: string | null): string[] {
         "Billing.view", "Billing.create",
         "Prescription.view",
       ];
-
     case "pharmacist":
       return [
         "Dashboard.view", "Patient.view", "Doctor.view",
@@ -59,15 +58,13 @@ function getStaffPermissions(role: string | null): string[] {
         "Billing.view", "Billing.create",
         "Prescription.view",
       ];
-
     case "accountant":
       return [
         "Dashboard.view",
         "Billing.view", "Billing.create",
         "Inventory.view",
-        "Reports.view", "Reports.view",
+        "Reports.view",
       ];
-
     case "lab":
       return [
         "Dashboard.view", "Patient.view", "Doctor.view",
@@ -75,9 +72,7 @@ function getStaffPermissions(role: string | null): string[] {
         "Radiology.view", "Radiology.create",
         "EMR.view",
       ];
-
     default:
-      // Unknown role — dashboard only
       return ["Dashboard.view"];
   }
 }
@@ -86,18 +81,29 @@ function makeId(len = 8) {
   return Math.random().toString(36).substring(2, 2 + len);
 }
 
-export async function POST(req: NextRequest) {
-  const rateLimited = await rateLimitResponse(req, RATE_LIMITS.login, "login");
-  if (rateLimited) return rateLimited;
+function isProd() {
+  return process.env.NODE_ENV === "production";
+}
+
+function setAuthCookies(res: Response, token: string, refreshToken: string) {
+  res.append(
+    "Set-Cookie",
+    `carelim_token=${token}; HttpOnly; Path=/; Max-Age=900; SameSite=Lax${isProd() ? "; Secure" : ""}`
+  );
+  res.append(
+    "Set-Cookie",
+    `carelim_refresh=${refreshToken}; HttpOnly; Path=/api/auth/refresh; Max-Age=604800; SameSite=Lax${isProd() ? "; Secure" : ""}`
+  );
+}
+
+async function login(req: Request, res: Response) {
+  const rl = await checkRateLimit(`login:${rateLimitByIp(req)}`, RATE_LIMITS.login);
+  if (!rl.allowed) return fail(res, 429, "Too many attempts. Try again later.");
 
   try {
-    const { email, password } = await req.json();
-
+    const { email, password } = req.body || {};
     if (!email || !password) {
-      return NextResponse.json(
-        { error: "Email and password are required" },
-        { status: 400 }
-      );
+      return fail(res, 400, "Email and password are required");
     }
 
     // User model is NOT in TENANT_MODELS, so this query is unfiltered
@@ -117,53 +123,31 @@ export async function POST(req: NextRequest) {
         where: { email },
         include: { branch: { select: { tenantId: true } } },
       });
-      if (!staffRecord) {
-        return NextResponse.json(
-          { error: "Invalid credentials" },
-          { status: 401 }
-        );
-      }
+      if (!staffRecord) return fail(res, 401, "Invalid credentials");
       isStaff = true;
     }
 
-    // Verify password
     const targetUser = user || staffRecord;
     const valid = await verifyPassword(password, targetUser.password);
-    if (!valid) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
-    }
+    if (!valid) return fail(res, 401, "Invalid credentials");
 
-    if (targetUser.status !== "active") {
-      return NextResponse.json(
-        { error: "Account disabled" },
-        { status: 403 }
-      );
-    }
+    if (targetUser.status !== "active") return fail(res, 403, "Account disabled");
 
-    // Resolve tenantId and generate response based on User vs Staff
     if (isStaff && staffRecord) {
-      // Staff login — simpler path, no auto-provisioning
       const tenantId = staffRecord.branch?.tenantId || staffRecord.tenantId || null;
 
-      // Look up all assigned branches for this staff member
       const staffBranches = await rawDb.staffBranch.findMany({
         where: { staffId: staffRecord.id },
         select: { branchId: true },
       });
-      const branchIds = staffBranches.map((sb) => sb.branchId);
-      // Fallback: if no StaffBranch records, use the primary branchId
-      if (branchIds.length === 0 && staffRecord.branchId) {
-        branchIds.push(staffRecord.branchId);
-      }
+      const branchIds: string[] = staffBranches.map((sb: { branchId: string }) => sb.branchId);
+      if (branchIds.length === 0 && staffRecord.branchId) branchIds.push(staffRecord.branchId);
 
-      const tokenPayload = {
+      const tokenPayload: TokenPayload = {
         userId: staffRecord.id,
         email: staffRecord.email,
         role: staffRecord.role || "Staff",
-        type: "staff" as const,
+        type: "staff",
         tenantId: tenantId || undefined,
         branchId: staffRecord.branchId || undefined,
         branchIds,
@@ -182,14 +166,13 @@ export async function POST(req: NextRequest) {
           action: "LOGIN",
           module: "Auth",
           detail: `Staff member ${staffRecord.name} logged in`,
-          ip: req.headers.get("x-forwarded-for") || "127.0.0.1",
+          ip: clientIp(req),
         },
       });
 
-      // Generate permissions based on staff role
       const permissions = getStaffPermissions(staffRecord.role);
-
-      const response = NextResponse.json({
+      setAuthCookies(res, token, refreshToken);
+      return res.json({
         token,
         refreshToken,
         user: {
@@ -206,36 +189,17 @@ export async function POST(req: NextRequest) {
           permissions,
         },
       });
-
-      response.cookies.set("carelim_token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 15 * 60, // 15 minutes
-        path: "/",
-      });
-      response.cookies.set("carelim_refresh", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60, // 7 days
-        path: "/api/auth/refresh",
-      });
-
-      return response;
     }
 
     // User login — full path with auto-provisioning
     let tenantId = user!.branch?.tenantId || user!.tenantId || null;
     if (!tenantId) {
-      // Organization IS in TENANT_MODELS, but no tenant context → filtering skipped
       const org = await rawDb.organization.findFirst({
         where: { adminUserId: user!.id },
         select: { tenantId: true, id: true, name: true },
       });
       tenantId = org?.tenantId || null;
 
-      // Auto-provision tenant if user has an org but no tenant
       if (!tenantId && org) {
         const trialEndsAt = new Date();
         trialEndsAt.setDate(trialEndsAt.getDate() + 14);
@@ -274,7 +238,6 @@ export async function POST(req: NextRequest) {
         tenantId = tenant.id;
       }
 
-      // If still no tenant (no org either), create one from scratch
       if (!tenantId) {
         const trialEndsAt = new Date();
         trialEndsAt.setDate(trialEndsAt.getDate() + 14);
@@ -320,12 +283,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Generate JWT with tenant context
-    const adminPayload = {
+    const adminPayload: TokenPayload = {
       userId: user!.id,
       email: user!.email,
       role: user!.role?.name || "Administrator",
-      type: "user" as const,
+      type: "user",
       tenantId: tenantId || undefined,
     };
     const token = signToken(adminPayload);
@@ -342,25 +304,25 @@ export async function POST(req: NextRequest) {
         action: "LOGIN",
         module: "Auth",
         detail: "User logged in",
-        ip: req.headers.get("x-forwarded-for") || "127.0.0.1",
+        ip: clientIp(req),
       },
     });
 
-    // Re-fetch user to get updated branchId
     const updatedUser = await rawDb.user.findUnique({
       where: { id: user!.id },
       select: { branchId: true },
     });
 
-    // Fetch branch clinicType if user has a branch
     let branchClinicType: string | null = null;
     const resolvedBranchId = updatedUser?.branchId || user!.branchId;
     if (resolvedBranchId) {
-      const branchRec = await rawDb.branch.findUnique({ where: { id: resolvedBranchId }, select: { clinicType: true } });
+      const branchRec = await rawDb.branch.findUnique({
+        where: { id: resolvedBranchId },
+        select: { clinicType: true },
+      });
       branchClinicType = branchRec?.clinicType || "General";
     }
 
-    // Fetch tenant branding (clinic name, logo, colors)
     let clinicName: string | null = null;
     let logoUrl: string | null = null;
     let primaryColor: string | null = null;
@@ -376,7 +338,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const response = NextResponse.json({
+    setAuthCookies(res, token, refreshToken);
+    return res.json({
       token,
       refreshToken,
       user: {
@@ -394,65 +357,59 @@ export async function POST(req: NextRequest) {
         primaryColor,
         permissions:
           user!.role?.permissions.map(
-            (rp) => `${rp.permission.module}.${rp.permission.action}`
+            (rp: { permission: { module: string; action: string } }) =>
+              `${rp.permission.module}.${rp.permission.action}`
           ) || [],
       },
     });
-
-    response.cookies.set("carelim_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 15 * 60, // 15 minutes
-      path: "/",
-    });
-    response.cookies.set("carelim_refresh", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-      path: "/api/auth/refresh",
-    });
-
-    return response;
   } catch (error: any) {
-    console.error("Login route error:", {
-      name: error?.name,
-      message: error?.message,
-      code: error?.code,
+    console.error("Login error:", { name: error?.name, message: error?.message, code: error?.code });
+    if (error?.name === "PrismaClientValidationError") return fail(res, 400, "Invalid request");
+    if (error?.name === "PrismaClientKnownRequestError") {
+      if (error?.code === "P2025") return fail(res, 404, "Record not found");
+      return fail(res, 500, "Database error");
+    }
+    if (error?.name === "PrismaClientUnknownRequestError") return fail(res, 503, "Database connection error");
+    return fail(res, 500, "Authentication failed");
+  }
+}
+
+async function refresh(req: Request, res: Response) {
+  try {
+    const refreshToken = req.headers["cookie"]
+      ?.toString()
+      .match(/(?:^|;\s*)carelim_refresh=([^;]+)/)?.[1];
+
+    if (!refreshToken) return fail(res, 401, "Refresh token required");
+
+    const payload = verifyRefreshToken(refreshToken);
+    if (!payload) return fail(res, 401, "Invalid or expired refresh token");
+
+    const newAccessToken = signToken({
+      userId: payload.userId,
+      email: payload.email,
+      role: payload.role,
+      type: payload.type,
+      tenantId: payload.tenantId,
+      branchId: payload.branchId,
+      branchIds: (payload as { branchIds?: string[] }).branchIds,
     });
 
-    if (error?.name === "PrismaClientValidationError") {
-      return NextResponse.json(
-        { error: "Invalid request" },
-        { status: 400 }
-      );
-    }
-
-    if (error?.name === "PrismaClientKnownRequestError") {
-      const prismaCode = error?.code;
-      if (prismaCode === "P2025") {
-        return NextResponse.json(
-          { error: "Record not found" },
-          { status: 404 }
-        );
-      }
-      return NextResponse.json(
-        { error: "Database error" },
-        { status: 500 }
-      );
-    }
-
-    if (error?.name === "PrismaClientUnknownRequestError") {
-      return NextResponse.json(
-        { error: "Database connection error" },
-        { status: 503 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Authentication failed" },
-      { status: 500 }
+    const secure = isProd() ? "; Secure" : "";
+    res.append(
+      "Set-Cookie",
+      `carelim_token=${newAccessToken}; HttpOnly; Path=/; Max-Age=900; SameSite=Lax${secure}`
     );
+    return res.json({ token: newAccessToken });
+  } catch (error) {
+    console.error("Token refresh error:", error);
+    return fail(res, 500, "Token refresh failed");
   }
+}
+
+export function authRouter(): Router {
+  const r = Router();
+  r.post("/login", wrap(login));
+  r.post("/refresh", wrap(refresh));
+  return r;
 }
