@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "next build --webpack",
-    "start": "next start -p 3001"
+    "build": "next build --webpack && mkdir -p .next/standalone/apps/saas/.next && cp -r .next/static .next/standalone/apps/saas/.next/ && cp -r public .next/standalone/apps/saas/",
+    "start": "NODE_ENV=production node .next/standalone/apps/saas/server.js"
   },
   "dependencies": {
     "@carelim/database": "*",
