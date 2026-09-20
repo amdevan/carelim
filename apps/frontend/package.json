@@ -4,9 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
-    "backend": "node backend/server.js",
-    "build": "next build --webpack && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/public/",
-    "start": "NODE_ENV=production node .next/standalone/server.js",
+    "build": "next build --webpack && mkdir -p .next/standalone/apps/frontend/.next && cp -r .next/static .next/standalone/apps/frontend/.next/ && cp -r public .next/standalone/apps/frontend/",
+    "start": "NODE_ENV=production node .next/standalone/apps/frontend/server.js",
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
