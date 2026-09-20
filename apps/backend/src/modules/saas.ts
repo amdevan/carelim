@@ -16,6 +16,7 @@
 import { Router, Request, Response } from "express";
 import { randomBytes } from "crypto";
 import { db, rawDb } from "../lib/prisma";
+import { createPatientWithSerialCode } from "../lib/patient-code";
 import { fail, wrap } from "../lib/http";
 import { hashPassword, signToken } from "../lib/auth";
 import { getCurrentUserEmail } from "../lib/tenant-context";
@@ -396,18 +397,15 @@ async function importCsv(req: Request, res: Response) {
 
           if (!name) { skipped++; continue; }
 
-          await db.patient.create({
-            data: {
-              name,
-              patientCode: `PAT-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-              phone,
-              email: email || null,
-              gender: (gender || null) as never,
-              bloodGroup: bloodGroup || null,
-              address: address || null,
-              branchId,
-              status: "active",
-            },
+          await createPatientWithSerialCode(db, {
+            name,
+            phone,
+            email: email || null,
+            gender: (gender || null) as never,
+            bloodGroup: bloodGroup || null,
+            address: address || null,
+            branchId,
+            status: "active",
           });
           imported++;
           break;

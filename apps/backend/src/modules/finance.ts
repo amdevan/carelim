@@ -31,11 +31,14 @@ async function getNextSequenceNumber(
   latestQuery: () => Promise<{ code: string }[]>
 ): Promise<string> {
   const latest = await latestQuery();
-  let nextNum = 1;
-  if (latest.length > 0) {
-    const match = latest[0].code.match(new RegExp(`${escapeRegex(prefix)}(\\d+)`));
-    if (match) nextNum = parseInt(match[1], 10) + 1;
-  }
+  // Only consider codes that are exactly `prefix + digits`. Legacy rows with
+  // random/alphanumeric suffixes (e.g. INV-VTPNMHHG) sort above serials and
+  // must not poison the sequence (they made creation collide forever).
+  const nums = latest
+    .map(r => r.code.match(new RegExp(`^${escapeRegex(prefix)}(\\d+)$`)))
+    .filter((m): m is RegExpMatchArray => !!m)
+    .map(m => parseInt(m[1], 10));
+  const nextNum = (nums.length > 0 ? Math.max(...nums) : 0) + 1;
   return `${prefix}${String(nextNum).padStart(5, "0")}`;
 }
 
@@ -142,8 +145,6 @@ async function createInvoice(req: Request, res: Response) {
     let invoiceNo = await getNextSequenceNumber("INV-", () =>
       db.invoice.findMany({
         where: { invoiceNo: { startsWith: "INV-" } },
-        orderBy: { invoiceNo: "desc" },
-        take: 1,
         select: { invoiceNo: true },
       }).then(rows => rows.map(r => ({ code: r.invoiceNo })))
     );
@@ -163,8 +164,6 @@ async function createInvoice(req: Request, res: Response) {
         invoiceNo = await getNextSequenceNumber("INV-", () =>
           db.invoice.findMany({
             where: { invoiceNo: { startsWith: "INV-" } },
-            orderBy: { invoiceNo: "desc" },
-            take: 1,
             select: { invoiceNo: true },
           }).then(rows => rows.map(r => ({ code: r.invoiceNo })))
         );
@@ -176,11 +175,9 @@ async function createInvoice(req: Request, res: Response) {
       try {
         const tests = await db.labTestMaster.findMany({ where: { id: { in: testIds } } });
         if (tests.length > 0) {
-          let labOrderNo = await getNextSequenceNumber("LAB-", () =>
+          let labOrderNo = await getNextSequenceNumber("LAB-ORD-", () =>
             db.labOrder.findMany({
-              where: { orderNo: { startsWith: "LAB-" } },
-              orderBy: { orderNo: "desc" },
-              take: 1,
+              where: { orderNo: { startsWith: "LAB-ORD-" } },
               select: { orderNo: true },
             }).then(rows => rows.map(r => ({ code: r.orderNo })))
           );
@@ -211,11 +208,9 @@ async function createInvoice(req: Request, res: Response) {
               },
             }),
             async () => {
-              labOrderNo = await getNextSequenceNumber("LAB-", () =>
+              labOrderNo = await getNextSequenceNumber("LAB-ORD-", () =>
                 db.labOrder.findMany({
-                  where: { orderNo: { startsWith: "LAB-" } },
-                  orderBy: { orderNo: "desc" },
-                  take: 1,
+                  where: { orderNo: { startsWith: "LAB-ORD-" } },
                   select: { orderNo: true },
                 }).then(rows => rows.map(r => ({ code: r.orderNo })))
               );

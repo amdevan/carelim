@@ -19,9 +19,12 @@ export function useFetch<T>(url: string | null) {
 
   useEffect(() => {
     if (!url) return;
-    // Auto-append branchId to URL for branch-scoped data
+    // Auto-append branchId to URL for branch-scoped data.
+    // Skip if the caller already put branchId in the URL — a duplicate param
+    // would make Express parse it as an array and break Prisma filters.
     const separator = url.includes("?") ? "&" : "?";
-    const finalUrl = branchId ? `${url}${separator}branchId=${branchId}` : url;
+    const finalUrl =
+      branchId && !url.includes("branchId=") ? `${url}${separator}branchId=${branchId}` : url;
     const controller = new AbortController();
     let active = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect

@@ -2,6 +2,7 @@
 import { fetchAPI } from "@/lib/api";
 import { useAppStore } from "@/store/app-store";
 import { Barcode } from "@/components/ui/barcode";
+import JsBarcode from "jsbarcode";
 
 import { useFetch } from "@/lib/use-fetch";
 import { useState, useMemo, useCallback, useEffect } from "react";
@@ -70,7 +71,7 @@ interface Invoice {
   status: string;
   paymentMethod: string | null;
   date: string;
-  patient: { id: string; patientCode: string; name: string; phone: string };
+  patient: { id: string; patientCode: string; name: string; phone: string; age?: number; dob?: string | null; gender?: string; address?: string | null };
   items: InvoiceItem[];
 }
 
@@ -178,82 +179,81 @@ function extractDoctorToken(inv: Invoice): string {
   return extracted;
 }
 
-function buildOPDCardHTML(inv: Invoice, settings?: Record<string, string>, doctorName = ""): string {
+function buildOPDCardHTML(inv: Invoice, settings?: Record<string, string>, doctorName = "", fileNo = ""): string {
   const barcodeVal = inv.patient.patientCode || inv.invoiceNo;
-    const patientName = inv.patient.name || "Patient";
+  const patientName = inv.patient.name || "Patient";
+  const p = inv.patient;
 
-  const clinicName = settings?.clinic_name || settings?.organization_name || "Health Center";
+  // Age/gender pair, e.g. "29Y/M" — uses stored age, falls back to DOB
+  const ageYears = p.age && p.age > 0
+    ? p.age
+    : p.dob ? Math.floor((Date.now() - new Date(p.dob).getTime()) / 31557600000) : null;
+  const genderLetter = p.gender ? p.gender.charAt(0).toUpperCase() : "";
+  const ageGender = [ageYears ? `${ageYears}Y` : "", genderLetter].filter(Boolean).join("/");
+
+  // "20 sept 2026" date + "10:40 AM" time, as on the label design
+  const d = new Date(inv.date);
+  const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sept", "oct", "nov", "dec"];
+  const dateStr = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  let h = d.getHours();
+  const ap = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  const timeStr = `${h}:${String(d.getMinutes()).padStart(2, "0")} ${ap}`;
+
+  // Card title = the service line ("Consultation"), fallback to invoice type
+  const consultItem = (inv.items || []).find((i) => i.description.toLowerCase().includes("consultation"));
+  const title = consultItem
+    ? "Consultation"
+    : inv.type ? inv.type.charAt(0).toUpperCase() + inv.type.slice(1) : "OPD Card";
 
   return `
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    .opd-label { width: 80mm; height: 60mm; display: flex; flex-direction: column; font-family: Arial, Helvetica, sans-serif; color: #1e293b; border: 1px solid #0d9488; overflow: hidden; background: #fff; }
-    .opd-head { background: #0d9488; color: #fff; text-align: center; padding: 1.2mm 2mm 1mm; flex: 0 0 auto; }
-    .opd-head .clinic { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .opd-head .sub { font-size: 5.5pt; letter-spacing: 2.5px; opacity: .92; margin-top: .4mm; }
-    .opd-body { flex: 1 1 auto; padding: 1.4mm 2mm 0; min-height: 0; }
-    .opd-patient { font-size: 9.5pt; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .opd-file { font-size: 7pt; color: #475569; margin-top: .3mm; }
-    .opd-file b { color: #0d9488; font-family: 'Courier New', monospace; }
-    .opd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6mm 2mm; margin-top: 1.2mm; }
-    .opd-field { min-width: 0; }
-    .opd-field .k { display: block; color: #64748b; font-size: 5.5pt; text-transform: uppercase; letter-spacing: .3px; line-height: 1.2; }
-    .opd-field .v { display: block; font-weight: 700; font-size: 7.5pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
-    .opd-bar { flex: 0 0 auto; border-top: 1px dashed #cbd5e1; margin: 1.2mm 2mm 0; padding: .8mm 0 1mm; text-align: center; }
-    .opd-bar svg { width: 46mm; height: auto; max-height: 11mm; }
+    .opd-label { width: 80mm; height: 60mm; display: flex; flex-direction: column; font-family: Arial, Helvetica, sans-serif; color: #000; background: #fff; border: 1px solid #111; overflow: hidden; padding: 3mm 3.5mm 2mm; }
+    .opd-title { text-align: center; font-size: 11.5pt; font-weight: 700; margin-bottom: 2mm; }
+    .opd-rows { flex: 1 1 auto; font-size: 9pt; line-height: 1.6; }
+    .opd-rows .row { display: flex; justify-content: space-between; gap: 2mm; }
+    .opd-rows .rt { white-space: nowrap; text-align: right; }
+    .opd-bar { flex: 0 0 auto; text-align: center; padding-top: 1mm; }
+    .opd-bar svg { width: 58mm; height: auto; max-height: 13mm; }
   </style>
   <div class="opd-label">
-    <div class="opd-head">
-      <div class="clinic">${escapeHTML(clinicName)}</div>
-      <div class="sub">OPD CARD</div>
-    </div>
-    <div class="opd-body">
-      <div class="opd-patient">${escapeHTML(patientName)}</div>
-      <div class="opd-file">File No: <b>${escapeHTML(inv.patient.patientCode)}</b></div>
-      <div class="opd-grid">
-        <div class="opd-field"><span class="k">Doctor</span><span class="v">${doctorName ? `Dr. ${escapeHTML(doctorName)}` : "—"}</span></div>
-        <div class="opd-field"><span class="k">Room</span><span class="v">${escapeHTML(settings?.room_no || "—")}</span></div>
-        <div class="opd-field"><span class="k">Phone</span><span class="v">${escapeHTML(inv.patient.phone || "—")}</span></div>
-        <div class="opd-field"><span class="k">Date</span><span class="v">${formatDate(inv.date)}</span></div>
-      </div>
+    <div class="opd-title">${escapeHTML(title)}</div>
+    <div class="opd-rows">
+      <div class="row"><span>Doctor: ${doctorName ? `Dr. ${escapeHTML(doctorName)}` : "—"}</span><span class="rt">${escapeHTML(settings?.room_no ? `Room No. ${settings.room_no}` : "")}</span></div>
+      <div class="row"><span>File No: ${escapeHTML(fileNo || "—")}</span><span class="rt">Patient ID: ${escapeHTML(p.patientCode)}</span></div>
+      <div class="row"><span>Patient: ${escapeHTML(patientName)}</span><span class="rt">${escapeHTML(ageGender)}</span></div>
+      <div class="row"><span>Address: ${escapeHTML(p.address || "—")}</span></div>
+      <div class="row"><span>Date: ${escapeHTML(dateStr)}</span><span class="rt">${escapeHTML(timeStr)}</span></div>
     </div>
     <div class="opd-bar">
-      ${generateBarcodeSVG(barcodeVal).replace(/ style="[^"]*"/, "")}
+      ${generateBarcodeSVG(barcodeVal)}
     </div>
   </div>`;
 }
 
 function generateBarcodeSVG(value: string): string {
-  // CODE128 encoding for clear thermal printer output
-  let bars = "";
-  const barPatterns: Record<string, string> = {
-    "0": "11011001100", "1": "11001101100", "2": "11001100110", "3": "10010011000", "4": "10010001100",
-    "5": "10001001100", "6": "10011001000", "7": "10011000100", "8": "10001100100", "9": "11001001000",
-    "A": "11001000100", "B": "11000100100", "C": "11001000100", "D": "10110011100", "E": "10011011100",
-    "F": "10011001110", "G": "10111001100", "H": "10011101100", "I": "10011100110", "J": "11001110010",
-    "K": "11001011100", "L": "11001001110", "M": "11011100100", "N": "11001110100", "O": "11101101110",
-    "P": "11101001100", "Q": "11100101100", "R": "11100100110", "S": "11101100100", "T": "11100110100",
-    "U": "11100110010", "V": "11011011000", "W": "11011000110", "X": "11000110110", "Y": "10100011000",
-    "Z": "10001011000", "-": "10001000110", ".": "11101101110", " ": "10010110000",
-    "$": "10010111000", "/": "10110011000", "+": "10011011000", "%": "11011010000", "*": "11010111010",
-  };
-  const startCode = "11010000100";
-  const endCode = "1100011101011";
-  const encoded = value.toUpperCase().split("").map(c => barPatterns[c] || "10111010000").join("");
-  const allBars = startCode + encoded + endCode;
-  let cx = 0;
-  for (let i = 0; i < allBars.length; i++) {
-    if (allBars[i] === "1") {
-      bars += `<rect x="${cx}" y="0" width="1.5" height="28" fill="#000"/>`;
-    }
-    cx += 1.5;
+  // Real CODE128 via jsbarcode (same library as the UI Barcode component) —
+  // guarantees scannable, uniform bars for thermal label printers.
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  try {
+    JsBarcode(svg, value, {
+      format: "CODE128",
+      width: 2,
+      height: 52,
+      displayValue: true,
+      fontSize: 13,
+      font: "monospace",
+      textMargin: 2,
+      margin: 0,
+      background: "#ffffff",
+      lineColor: "#000000",
+    });
+  } catch {
+    return "";
   }
-  const totalWidth = cx;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} 36" style="width:${totalWidth * 0.55}px;height:36px;">
-    <rect x="0" y="0" width="${totalWidth}" height="36" fill="white"/>
-    ${bars}
-    <text x="${totalWidth / 2}" y="35" text-anchor="middle" font-size="7" fill="#000" font-family="'Courier New',monospace" font-weight="bold">${escapeHTML(value)}</text>
-  </svg>`;
+  svg.removeAttribute("style");
+  return svg.outerHTML;
 }
 
 async function printOPDCard(inv: Invoice, settings?: Record<string, string>) {
@@ -276,15 +276,32 @@ async function printOPDCard(inv: Invoice, settings?: Record<string, string>) {
       } catch {}
     }
   }
-  printLabelHTML(`OPD Card - ${inv.invoiceNo}`, buildOPDCardHTML(inv, settings, doctorName), 80, 60);
+  // OPD file number = the visit token (Appointment.tokenNo) from the same-day
+  // appointment for this patient; prefer the one matching the consulted doctor.
+  let fileNo = "";
+  try {
+    const d = new Date(inv.date);
+    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const r = await fetchAPI(`/api/appointments?date=${ymd}`);
+    if (r.ok) {
+      const appts = (await r.json()) as { patient?: { id: string }; doctor?: { name?: string }; tokenNo?: number }[];
+      const norm = (s: string) => s.replace(/^dr\.\s*/i, "").trim().toLowerCase();
+      const mine = appts.filter((a) => a.patient?.id === inv.patient.id);
+      const visit =
+        (doctorName ? mine.find((a) => norm(a.doctor?.name || "") === norm(doctorName)) : undefined) || mine[0];
+      if (visit?.tokenNo) fileNo = String(visit.tokenNo);
+    }
+  } catch {}
+  printLabelHTML(`OPD Card - ${inv.invoiceNo}`, buildOPDCardHTML(inv, settings, doctorName, fileNo), 80, 60);
 }
 
 export function BillingView() {
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
   const branchId = useAppStore((s) => s.branchId);
+  // useFetch auto-appends branchId — don't duplicate it here
   const { data: invoices, loading, error } = useFetch<Invoice[]>(
-    refreshKey ? `/api/invoices?_r=${refreshKey}&branchId=${branchId || ""}` : `/api/invoices?branchId=${branchId || ""}`,
+    refreshKey ? `/api/invoices?_r=${refreshKey}` : "/api/invoices",
   );
   const { data: settings } = useFetch<Record<string, string>>("/api/settings");
   const [q, setQ] = useState("");

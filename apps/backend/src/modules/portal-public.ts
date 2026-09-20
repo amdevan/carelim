@@ -15,6 +15,7 @@
  */
 import { Router, Request, Response } from "express";
 import { db, rawDb } from "../lib/prisma";
+import { createPatientWithSerialCode } from "../lib/patient-code";
 import { hashPassword, verifyPassword, signToken } from "../lib/auth";
 import { fail, wrap } from "../lib/http";
 import { getCurrentUserId } from "../lib/tenant-context";
@@ -214,17 +215,13 @@ async function patientRegister(req: Request, res: Response) {
 
   const hashedPassword = await hashPassword(password);
 
-  // Create a Patient record first
-  const patientCount = await rawDb.patient.count();
-  const patient = await rawDb.patient.create({
-    data: {
-      patientCode: `PT-${String(patientCount + 1).padStart(5, "0")}`,
-      name,
-      email,
-      phone: phone || "",
-      gender: "male",
-      status: "active",
-    },
+  // Create a Patient record first (serial file number)
+  const patient = await createPatientWithSerialCode(rawDb, {
+    name,
+    email,
+    phone: phone || "",
+    gender: "male",
+    status: "active",
   });
 
   // Tag patient as coming from Carelim Mobile App
@@ -440,18 +437,14 @@ async function createFamilyMember(req: Request, res: Response) {
   const { userId, name, phone, gender, dob, bloodGroup, relationship } = body;
   if (!userId || !name) return fail(res, 400, "userId and name required");
 
-  const count = await db.patient.count();
-  const patient = await db.patient.create({
-    data: {
-      patientCode: `PT-${nanoId(8).toUpperCase()}`,
-      name,
-      phone: phone || "",
-      gender: gender || "male",
-      dob: dob ? new Date(dob) : null,
-      bloodGroup: bloodGroup || null,
-      status: "active",
-      emergencyName: relationship || null,
-    },
+  const patient = await createPatientWithSerialCode(db, {
+    name,
+    phone: phone || "",
+    gender: gender || "male",
+    dob: dob ? new Date(dob) : null,
+    bloodGroup: bloodGroup || null,
+    status: "active",
+    emergencyName: relationship || null,
   });
 
   return res.status(201).json(patient);
@@ -1288,11 +1281,9 @@ async function publicBookingPost(req: Request, res: Response) {
     const patientWhere: any = { phone: patientPhone };
     if (tenantId) patientWhere.tenantId = tenantId;
 
-    let patient = await rawDb.patient.findFirst({ where: patientWhere });
+    let patient = await rawDb.patient.findFirst({ where: patientWhere }) as any;
     if (!patient) {
-      const patientCode = `PT-${Date.now().toString(36).toUpperCase()}`;
       const patientData: any = {
-        patientCode,
         name: patientName,
         phone: patientPhone,
         email: patientEmail || undefined,
@@ -1301,7 +1292,7 @@ async function publicBookingPost(req: Request, res: Response) {
       };
       if (tenantId) patientData.tenantId = tenantId;
 
-      patient = await rawDb.patient.create({ data: patientData });
+      patient = await createPatientWithSerialCode(rawDb, patientData);
     }
 
     // Count existing appointments for token number

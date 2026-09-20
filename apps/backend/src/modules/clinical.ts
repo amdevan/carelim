@@ -9,6 +9,7 @@
 import { Router, Request, Response } from "express";
 import { randomBytes } from "crypto";
 import { db } from "../lib/prisma";
+import { createPatientWithSerialCode } from "../lib/patient-code";
 import { fail, wrap } from "../lib/http";
 import { requirePermission } from "../middleware/permissions";
 import { getCurrentUserEmail } from "../lib/tenant-context";
@@ -82,24 +83,24 @@ async function createPatient(req: Request, res: Response) {
       bloodPressure, temperature, pulse, weight, height, bmi, allergies,
       chronicConditions, emergencyContact, emergencyName, insuranceProvider,
       insuranceNumber, status, branchId } = body;
-    const patient = await db.patient.create({
-      data: {
-        name, email: email || null, phone, gender: gender || "male",
-        dob: dob ? new Date(dob) : null, age: age || 0, bloodGroup: bloodGroup || null,
-        address: address || null, photo: photo || null,
-        bloodPressure: bloodPressure || null, temperature: temperature || null,
-        pulse: pulse || null, weight: weight || null, height: height || null,
-        bmi: bmi || null, allergies: allergies || null,
-        chronicConditions: chronicConditions || null,
-        emergencyContact: emergencyContact || null, emergencyName: emergencyName || null,
-        insuranceProvider: insuranceProvider || null, insuranceNumber: insuranceNumber || null,
-        status: status || "active",
-        branchId: branchId || null,
-        // Use nanoId for globally unique patientCode (since @unique is global across tenants)
-        patientCode: body.patientCode || `PT-${nanoId(8).toUpperCase()}`,
-        registeredAt: new Date(),
-      },
-    });
+    const data = {
+      name, email: email || null, phone, gender: gender || "male",
+      dob: dob ? new Date(dob) : null, age: age || 0, bloodGroup: bloodGroup || null,
+      address: address || null, photo: photo || null,
+      bloodPressure: bloodPressure || null, temperature: temperature || null,
+      pulse: pulse || null, weight: weight || null, height: height || null,
+      bmi: bmi || null, allergies: allergies || null,
+      chronicConditions: chronicConditions || null,
+      emergencyContact: emergencyContact || null, emergencyName: emergencyName || null,
+      insuranceProvider: insuranceProvider || null, insuranceNumber: insuranceNumber || null,
+      status: status || "active",
+      branchId: branchId || null,
+      registeredAt: new Date(),
+    };
+    // Serial file number (PT-00001…) unless the client provided one explicitly
+    const patient = body.patientCode
+      ? await db.patient.create({ data: { ...data, patientCode: body.patientCode } })
+      : await createPatientWithSerialCode(db, data);
     await db.auditLog.create({ data: { user: authEmail(), action: "CREATE", module: "Patient", detail: `Registered patient ${patient.name}` } });
     res.status(201).json(patient);
   } catch (error) {
