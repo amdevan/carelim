@@ -8,6 +8,7 @@ import { AsyncLocalStorage } from "async_hooks";
 export interface TenantStore {
   tenantId: string | null;
   userId: string | null;
+  userEmail: string | null;
   userType: string | null;
   userRole: string | null;
   branchId: string | null;
@@ -22,6 +23,10 @@ export function getCurrentTenantId(): string | null {
 
 export function getCurrentUserId(): string | null {
   return tenantStorage.getStore()?.userId ?? null;
+}
+
+export function getCurrentUserEmail(): string | null {
+  return tenantStorage.getStore()?.userEmail ?? null;
 }
 
 export function getCurrentUserType(): string | null {

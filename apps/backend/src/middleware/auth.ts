@@ -25,6 +25,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
     {
       tenantId: payload.tenantId || null,
       userId: payload.userId || null,
+      userEmail: payload.email || null,
       userType: payload.type || null,
       userRole: payload.role || null,
       branchId: payload.branchId || null,
