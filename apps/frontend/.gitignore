@@ -38,9 +38,6 @@ next-env.d.ts
 *.db
 *.db-journal
 
-# uploads
-upload/
-
 # IDE
 .vscode/
 .idea/

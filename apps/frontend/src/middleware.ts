@@ -60,6 +60,8 @@ const PUBLIC_API_ROUTES = [
 
 // Method-specific public access (everything else on these routes requires auth)
 const PUBLIC_METHOD_ROUTES: Array<{ method: string; pattern: RegExp }> = [
+  // Uploaded files (logos) — public read; IDs are unguessable cuids
+  { method: "GET", pattern: /^\/api\/files\/[^/]+$/ },
   // Public booking flow reads a single branch's public info
   { method: "GET", pattern: /^\/api\/branches\/[^/]+$/ },
   // SaaS pricing is public (plan management requires auth)

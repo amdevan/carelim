@@ -1637,6 +1637,15 @@ model StockAuditItem {
 }
 
 // ===== Carelim SaaS Super Admin =====
+// Binary files (logos, uploads) stored in DB so they survive container redeploys
+model UploadedFile {
+  id        String   @id @default(cuid())
+  mime      String
+  size      Int
+  data      String   @db.Text
+  createdAt DateTime @default(now())
+}
+
 model Tenant {
   id                    String                 @id @default(cuid())
   name                  String
