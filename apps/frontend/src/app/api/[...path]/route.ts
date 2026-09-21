@@ -50,6 +50,15 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
   req.headers.forEach((value, key) => {
     if (!SKIP_HEADERS.has(key.toLowerCase())) headers.set(key, value);
   });
+  // Force identity encoding on this intra-server hop. The backend's
+  // compression middleware gzips responses >=1KB when the client negotiates
+  // it, and undici's fetch then decompresses transparently — but in the
+  // node:22-alpine production runtime that decompressed stream can arrive
+  // empty through NextResponse (observed: successful logins returned 200
+  // with a zero-byte body). Identity keeps the body raw end-to-end, which
+  // is proven to flow through the whole chain. Compression for real
+  // browsers is Traefik/CDN territory, not this hop's job.
+  headers.set("accept-encoding", "identity");
 
   const method = req.method.toUpperCase();
   let body: ArrayBuffer | undefined;
