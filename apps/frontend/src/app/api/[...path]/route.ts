@@ -6,7 +6,12 @@ import { NextRequest, NextResponse } from "next/server";
 // Next.js route handler is forwarded here to the backend. Local handlers take
 // precedence over this catch-all; as endpoints migrate to the backend their
 // local files are deleted and traffic flows through this proxy automatically.
-const BACKEND_URL = process.env.INTERNAL_API_URL || "http://localhost:4000";
+// Normalize common misconfigurations: trailing slash or trailing /api would
+// double-prefix proxied paths (e.g. /api/api/onboarding).
+const BACKEND_URL = (process.env.INTERNAL_API_URL || "http://localhost:4000")
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/api$/, "");
 
 // Hop-by-hop / transport headers that must not be forwarded
 const SKIP_HEADERS = new Set([
@@ -47,7 +52,30 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
   try {
     backendRes = await fetch(target, { method, headers, body, redirect: "manual" });
   } catch {
-    return NextResponse.json({ error: "Backend unavailable" }, { status: 502 });
+    return NextResponse.json(
+      { error: `Backend unavailable at ${BACKEND_URL} — check INTERNAL_API_URL on the frontend service` },
+      { status: 502 }
+    );
+  }
+
+  // The Express API always answers JSON. A non-JSON error response means the
+  // URL points at the wrong service (e.g. a Next.js app returning its HTML
+  // 404 page) — surface a diagnostic instead of leaking HTML to the client.
+  const contentType = backendRes.headers.get("content-type") || "";
+  if (backendRes.status >= 400 && !contentType.includes("application/json")) {
+    const text = await backendRes.text().catch(() => "");
+    const snippet = text
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 140);
+    return NextResponse.json(
+      {
+        error: `Internal API at ${BACKEND_URL} answered with non-JSON ${backendRes.status} — INTERNAL_API_URL points at the wrong service (it must be the Express backend container)`,
+        snippet,
+      },
+      { status: 502 }
+    );
   }
 
   // Pass through status + headers. Set-Cookie must be re-appended one by one
