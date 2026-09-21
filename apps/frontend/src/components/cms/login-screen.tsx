@@ -36,10 +36,19 @@ export function LoginScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        signal: AbortSignal.timeout(20000),
       });
-      const data = await res.json();
+      // Parse defensively — proxy/reverse-proxy failures can return non-JSON
+      // (e.g. an HTML 502/504 page); show the real cause instead of masking it
+      const text = await res.text();
+      let data: { error?: string; token?: string; user?: any } = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { error: `Server error (${res.status})` };
+      }
       if (!res.ok) {
-        toast.error("Login failed", { description: data.error || "Invalid credentials" });
+        toast.error("Login failed", { description: data.error || `Server error (${res.status})` });
         return;
       }
       localStorage.setItem("cms-user", JSON.stringify(data.user));
@@ -58,8 +67,13 @@ export function LoginScreen() {
         });
       }
       toast.success("Welcome back!", { description: `Signed in as ${data.user.name || email}` });
-    } catch {
-      toast.error("Login failed", { description: "Unable to reach the server. Please try again." });
+    } catch (e) {
+      const timedOut = e instanceof DOMException && e.name === "AbortError";
+      toast.error("Login failed", {
+        description: timedOut
+          ? "Request timed out. The server may be down — please try again."
+          : "Unable to reach the server. Please try again.",
+      });
     } finally {
       setLoading(false);
     }

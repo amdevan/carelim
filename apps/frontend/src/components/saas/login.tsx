@@ -58,20 +58,34 @@ export function SaasLogin({ onLogin }: SaasLoginProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        signal: AbortSignal.timeout(20000),
       });
 
-      const data = await res.json();
+      // Parse defensively — proxy/reverse-proxy failures can return non-JSON
+      // (e.g. an HTML 502/504 page); show the real cause instead of masking it
+      const text = await res.text();
+      let data: Partial<AdminUser> & { error?: string } = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { error: `Server error (${res.status})` };
+      }
 
       if (!res.ok) {
-        toast.error("Invalid credentials", { description: data.error || "Please check your email and password" });
+        toast.error("Invalid credentials", { description: data.error || `Server error (${res.status})` });
         setLoading(false);
         return;
       }
 
-      onLogin(data);
+      onLogin(data as AdminUser);
       toast.success("Welcome to Carelim OS", { description: `Signed in as ${data.name}` });
-    } catch {
-      toast.error("Connection failed", { description: "Unable to reach the server. Please try again." });
+    } catch (e) {
+      const timedOut = e instanceof DOMException && e.name === "AbortError";
+      toast.error("Connection failed", {
+        description: timedOut
+          ? "Request timed out. The server may be down — please try again."
+          : "Unable to reach the server. Please try again.",
+      });
     } finally {
       setLoading(false);
     }
