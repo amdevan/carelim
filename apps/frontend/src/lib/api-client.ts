@@ -23,9 +23,9 @@ export async function apiFetch(
       return apiFetch(url, options, retryCount + 1);
     }
 
-    // Refresh failed — redirect to login
+    // Refresh failed — go to the login screen (root page)
     if (typeof window !== "undefined") {
-      window.location.href = "/login";
+      window.location.href = "/";
     }
   }
 

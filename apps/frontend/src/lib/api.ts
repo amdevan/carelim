@@ -67,9 +67,9 @@ export async function fetchAPI(input: string | URL | Request, init?: RequestInit
       return fetchAPI(input, init, retryCount + 1);
     }
 
-    // Refresh failed — session is over, redirect to login
+    // Refresh failed — session is over, go to the login screen (root page)
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.href = "/login";
+      window.location.href = "/";
     }
   }
 
