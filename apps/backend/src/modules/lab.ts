@@ -9,7 +9,7 @@
  */
 import { Router, Request, Response } from "express";
 import { randomBytes } from "crypto";
-import { db } from "../lib/prisma";
+import { db, rawDb } from "../lib/prisma";
 import { fail, wrap } from "../lib/http";
 import { getCurrentUserEmail } from "../lib/tenant-context";
 
@@ -106,8 +106,10 @@ async function createLabOrder(req: Request, res: Response) {
     const body = req.body || {};
     const { testIds, patientId, doctorId, priority, clinicalNotes, discount } = body;
 
+    // labOrder is a branch model — null-branch auto lab orders are invisible
+    // to the tenant middleware, so the serial scan must use rawDb.
     let orderNo = await getNextSequenceNumber("LAB-ORD-", () =>
-      db.labOrder.findMany({
+      rawDb.labOrder.findMany({
         where: { orderNo: { startsWith: "LAB-ORD-" } },
         select: { orderNo: true },
       }).then(rows => rows.map(r => ({ code: r.orderNo })))
@@ -143,7 +145,7 @@ async function createLabOrder(req: Request, res: Response) {
       }),
       async () => {
         orderNo = await getNextSequenceNumber("LAB-ORD-", () =>
-          db.labOrder.findMany({
+          rawDb.labOrder.findMany({
             where: { orderNo: { startsWith: "LAB-ORD-" } },
             select: { orderNo: true },
           }).then(rows => rows.map(r => ({ code: r.orderNo })))

@@ -10,10 +10,10 @@
  */
 import { Router, Request, Response } from "express";
 import { randomBytes } from "crypto";
-import { db } from "../lib/prisma";
+import { db, rawDb } from "../lib/prisma";
 import { fail, wrap } from "../lib/http";
 import { requirePermission } from "../middleware/permissions";
-import { getCurrentUserEmail } from "../lib/tenant-context";
+import { getCurrentUserEmail, getCurrentTenantId, getCurrentBranchIds, getCurrentUserType } from "../lib/tenant-context";
 
 // ─── Inlined frontend lib/id-generator.ts helpers (identical behavior) ──
 const MAX_RETRIES = 5;
@@ -118,14 +118,33 @@ async function buildLeaveCreateData(body: Record<string, unknown>) {
 // Invoices — /api/invoices and /api/invoices/[id]
 // ════════════════════════════════════════════════════════════════
 
+// Tenant-safe scope for rawDb invoice reads/updates. Invoice has no tenantId —
+// the tenant middleware resolves it via branch.tenantId only, which hides
+// null-branch auto-invoices (created by Procedures/Dental/Lab modules) from
+// every read and update. Manual invoices link a branch; auto-invoices link
+// only a patient, so the tenant must be matched through either path.
+// Staff branch isolation mirrors the middleware behavior.
+function invoiceTenantScope(): Record<string, unknown> {
+  const tenantId = getCurrentTenantId();
+  if (!tenantId) return {};
+  const scope: Record<string, unknown> = {
+    OR: [{ branch: { tenantId } }, { patient: { tenantId } }],
+  };
+  if (getCurrentUserType() === "staff") {
+    const branchIds = getCurrentBranchIds();
+    if (branchIds.length > 0) scope.branchId = { in: branchIds };
+  }
+  return scope;
+}
+
 async function listInvoices(req: Request, res: Response) {
   try {
     const status = req.query.status as string | undefined;
     const branchId = req.query.branchId as string | undefined;
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { ...invoiceTenantScope() };
     if (status) where.status = status;
     if (branchId) where.branchId = branchId;
-    const invoices = await db.invoice.findMany({
+    const invoices = await rawDb.invoice.findMany({
       where,
       include: { patient: true, items: true },
       orderBy: { date: "desc" },
@@ -142,8 +161,11 @@ async function createInvoice(req: Request, res: Response) {
     const body = req.body || {};
     const { items, testIds, ...data } = body;
 
+    // invoiceNo is globally unique and the tenant middleware resolves Invoice
+    // via branch.tenantId — null-branch auto-invoices would be invisible to a
+    // db-level scan, causing a serial collision. Scan ALL invoices via rawDb.
     let invoiceNo = await getNextSequenceNumber("INV-", () =>
-      db.invoice.findMany({
+      rawDb.invoice.findMany({
         where: { invoiceNo: { startsWith: "INV-" } },
         select: { invoiceNo: true },
       }).then(rows => rows.map(r => ({ code: r.invoiceNo })))
@@ -162,7 +184,7 @@ async function createInvoice(req: Request, res: Response) {
       },
       async () => {
         invoiceNo = await getNextSequenceNumber("INV-", () =>
-          db.invoice.findMany({
+          rawDb.invoice.findMany({
             where: { invoiceNo: { startsWith: "INV-" } },
             select: { invoiceNo: true },
           }).then(rows => rows.map(r => ({ code: r.invoiceNo })))
@@ -176,7 +198,7 @@ async function createInvoice(req: Request, res: Response) {
         const tests = await db.labTestMaster.findMany({ where: { id: { in: testIds } } });
         if (tests.length > 0) {
           let labOrderNo = await getNextSequenceNumber("LAB-ORD-", () =>
-            db.labOrder.findMany({
+            rawDb.labOrder.findMany({
               where: { orderNo: { startsWith: "LAB-ORD-" } },
               select: { orderNo: true },
             }).then(rows => rows.map(r => ({ code: r.orderNo })))
@@ -209,7 +231,7 @@ async function createInvoice(req: Request, res: Response) {
             }),
             async () => {
               labOrderNo = await getNextSequenceNumber("LAB-ORD-", () =>
-                db.labOrder.findMany({
+                rawDb.labOrder.findMany({
                   where: { orderNo: { startsWith: "LAB-ORD-" } },
                   select: { orderNo: true },
                 }).then(rows => rows.map(r => ({ code: r.orderNo })))
@@ -233,7 +255,10 @@ async function createInvoice(req: Request, res: Response) {
 async function getInvoice(req: Request, res: Response) {
   try {
     const id = req.params.id as string;
-    const inv = await db.invoice.findUnique({ where: { id }, include: { patient: true, items: true } });
+    const inv = await rawDb.invoice.findFirst({
+      where: { id, ...invoiceTenantScope() },
+      include: { patient: true, items: true },
+    });
     if (!inv) return fail(res, 404, "Not found");
     res.json(inv);
   } catch (error) {
@@ -248,7 +273,7 @@ async function updateInvoice(req: Request, res: Response) {
     const body = req.body || {};
 
     // Recalculate due from total and paid
-    const current = await db.invoice.findUnique({ where: { id } });
+    const current = await rawDb.invoice.findFirst({ where: { id, ...invoiceTenantScope() } });
     if (!current) return fail(res, 404, "Not found");
 
     const newPaid = body.paid !== undefined ? body.paid : current.paid;
@@ -270,7 +295,7 @@ async function updateInvoice(req: Request, res: Response) {
     if (body.notes !== undefined) data.notes = body.notes;
     if (body.paymentMethod !== undefined) data.paymentMethod = body.paymentMethod;
 
-    const inv = await db.invoice.update({ where: { id }, data: data as never });
+    const inv = await rawDb.invoice.update({ where: { id }, data: data as never });
     if (body.paid !== undefined) {
       await db.auditLog.create({ data: { user: getCurrentUserEmail() || "system@carelim.health", action: "PAYMENT", module: "Billing", detail: `Payment for invoice ${inv.invoiceNo}` } });
     }
@@ -284,7 +309,9 @@ async function updateInvoice(req: Request, res: Response) {
 async function deleteInvoice(req: Request, res: Response) {
   try {
     const id = req.params.id as string;
-    await db.invoice.delete({ where: { id } });
+    const existing = await rawDb.invoice.findFirst({ where: { id, ...invoiceTenantScope() } });
+    if (!existing) return fail(res, 404, "Not found");
+    await rawDb.invoice.delete({ where: { id } });
     res.json({ ok: true });
   } catch (error) {
     console.error("Error deleting invoice:", error);
@@ -493,9 +520,9 @@ async function getAccountingDashboard(req: Request, res: Response) {
   const endOfPrevMonth = startOfMonth;
 
   const [invoices, monthInvoices, prevMonthInvoices, expenses, monthExpenses, prevMonthExpenses, patientPayments, todayPayments, supplierPayments, commissions, claims, cashTxns, bankTxns, journalEntries, pharmacySales, labOrders, radiologyTests] = await Promise.all([
-    db.invoice.findMany({ where: branchFilter }),
-    db.invoice.findMany({ where: { ...branchFilter, date: { gte: startOfMonth } } }),
-    db.invoice.findMany({ where: { ...branchFilter, date: { gte: startOfPrevMonth, lt: endOfPrevMonth } } }),
+    rawDb.invoice.findMany({ where: { ...invoiceTenantScope(), ...branchFilter } }),
+    rawDb.invoice.findMany({ where: { ...invoiceTenantScope(), ...branchFilter, date: { gte: startOfMonth } } }),
+    rawDb.invoice.findMany({ where: { ...invoiceTenantScope(), ...branchFilter, date: { gte: startOfPrevMonth, lt: endOfPrevMonth } } }),
     db.expense.findMany({ where: branchFilter }),
     db.expense.findMany({ where: { ...branchFilter, date: { gte: startOfMonth } } }),
     db.expense.findMany({ where: { ...branchFilter, date: { gte: startOfPrevMonth, lt: endOfPrevMonth } } }),
@@ -560,7 +587,7 @@ async function getAccountingDashboard(req: Request, res: Response) {
   for (let i = 5; i >= 0; i--) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
     const dn = new Date(today.getFullYear(), today.getMonth() - i + 1, 1);
-    const mInvs = await db.invoice.findMany({ where: { date: { gte: d, lt: dn } } });
+    const mInvs = await rawDb.invoice.findMany({ where: { ...invoiceTenantScope(), date: { gte: d, lt: dn } } });
     const mExps = await db.expense.findMany({ where: { date: { gte: d, lt: dn } } });
     const rev = mInvs.reduce((s, inv) => s + inv.total, 0);
     const exp = mExps.reduce((s, e) => s + e.amount, 0);

@@ -7,7 +7,7 @@
  */
 import { Router, Request, Response } from "express";
 import { randomBytes } from "crypto";
-import { db } from "../lib/prisma";
+import { db, rawDb } from "../lib/prisma";
 import { fail, wrap } from "../lib/http";
 
 // ─── Inlined helpers (frontend lib/id-generator.ts + nanoid) ──────
@@ -588,8 +588,10 @@ async function createProcedure(req: Request, res: Response) {
   const total = cost + tax;
 
   // Auto-create invoice via Billing module
+  // Scan ALL invoices via rawDb — invoiceNo is globally unique and null-branch
+  // auto-invoices are invisible to the branch-filtered tenant middleware.
   let invoiceNo = await getNextSequenceNumber("INV-", () =>
-    db.invoice.findMany({
+    rawDb.invoice.findMany({
       where: { invoiceNo: { startsWith: "INV-" } },
       select: { invoiceNo: true },
     }).then((rows) => rows.map((r) => ({ code: r.invoiceNo })))
@@ -615,7 +617,7 @@ async function createProcedure(req: Request, res: Response) {
       }),
     async () => {
       invoiceNo = await getNextSequenceNumber("INV-", () =>
-        db.invoice.findMany({
+        rawDb.invoice.findMany({
           where: { invoiceNo: { startsWith: "INV-" } },
           select: { invoiceNo: true },
         }).then((rows) => rows.map((r) => ({ code: r.invoiceNo })))
@@ -714,8 +716,11 @@ async function deleteProcedure(req: Request, res: Response) {
   const id = req.params.id as string;
   const proc = await db.dentalProcedure.findUnique({ where: { id } });
   // Optionally null out the linked invoice instead of deleting it (keep financial trail)
+  // rawDb bypasses the branch filter — auto-invoices have branchId null, and the
+  // tenant middleware resolves Invoice via branch.tenantId (update would no-op).
+  // Tenant safety: proc was fetched via the tenant-scoped db.
   if (proc?.invoiceId) {
-    await db.invoice.update({ where: { id: proc.invoiceId }, data: { status: "refunded" } }).catch(() => {});
+    await rawDb.invoice.update({ where: { id: proc.invoiceId }, data: { status: "refunded" } }).catch(() => {});
   }
   await db.dentalProcedure.delete({ where: { id } });
   res.json({ ok: true });
