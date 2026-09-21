@@ -119,11 +119,23 @@ export default function OnboardingPage() {
           packageSelection,
           skipPackage: packageSelection.skipPackage,
         }),
+        signal: AbortSignal.timeout(60000),
       });
 
+      // Parse defensively — proxy/reverse-proxy failures can return non-JSON
+      // (e.g. an HTML 502/504 page); surface the real cause, not a generic message
       const text = await response.text();
       let result: any = {};
-      try { result = text ? JSON.parse(text) : {}; } catch { throw new Error("Server returned an invalid response. Please try again."); }
+      try {
+        result = text ? JSON.parse(text) : {};
+      } catch {
+        const snippet = text.replace(/<[^>]*>/g, " ").trim().slice(0, 120);
+        throw new Error(
+          snippet
+            ? `Server error (${response.status}): ${snippet}`
+            : `Server error (${response.status}). Please try again.`
+        );
+      }
 
       if (!response.ok) {
         throw new Error(result.error || `Server error (${response.status}). Please try again.`);
@@ -136,8 +148,12 @@ export default function OnboardingPage() {
       nextStep();
       toast.success("Organization created successfully!");
     } catch (error: any) {
-      setSubmitError(error.message || "An unexpected error occurred");
-      toast.error(error.message || "Failed to create organization");
+      const timedOut = error instanceof DOMException && error.name === "AbortError";
+      const message = timedOut
+        ? "Request timed out. The server may be overloaded — please try again."
+        : error.message || "An unexpected error occurred";
+      setSubmitError(message);
+      toast.error(message || "Failed to create organization");
     } finally {
       setSubmitting(false);
     }
