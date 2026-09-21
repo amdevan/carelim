@@ -4,6 +4,15 @@ const nextConfig: NextConfig = {
   output: "standalone",
   devIndicators: false,
   reactStrictMode: true,
+  async rewrites() {
+    return [
+      // Safety net for stale clients: builds compiled while
+      // NEXT_PUBLIC_API_URL was misconfigured request paths like
+      // /app.carelim.com/api/* — route them to the real API instead of
+      // serving the 404 page, so old cached bundles keep working.
+      { source: "/app.carelim.com/api/:path*", destination: "/api/:path*" },
+    ];
+  },
   // NO_BUILD_CACHE=1 skips webpack's on-disk cache (~GBs in .next/cache) —
   // used when building on low-disk machines; builds are slower but fit.
   webpack: (config) => {
