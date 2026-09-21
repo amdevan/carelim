@@ -260,6 +260,7 @@ export async function middleware(request: NextRequest) {
   if (routePath) {
     applyRoutePath(routePath);
     const response = NextResponse.rewrite(url);
+    response.headers.set("Cache-Control", "no-store, must-revalidate");
     for (const [key, value] of Object.entries(securityHeaders)) {
       response.headers.set(key, value);
     }
@@ -271,14 +272,20 @@ export async function middleware(request: NextRequest) {
   if (devRoutePath) {
     applyRoutePath(devRoutePath);
     const response = NextResponse.rewrite(url);
+    response.headers.set("Cache-Control", "no-store, must-revalidate");
     for (const [key, value] of Object.entries(securityHeaders)) {
       response.headers.set(key, value);
     }
     return response;
   }
 
-  // Default: serve the main app (CMS) with security headers
+  // Default: serve the main app (CMS) with security headers.
+  // HTML documents are never cached — stale HTML referencing pruned build
+  // chunks after a redeploy breaks hydration (404 chunks, dead buttons).
+  // Static assets under /_next/static are excluded from the middleware
+  // matcher and keep their immutable caching.
   const response = NextResponse.next();
+  response.headers.set("Cache-Control", "no-store, must-revalidate");
   for (const [key, value] of Object.entries(securityHeaders)) {
     response.headers.set(key, value);
   }
