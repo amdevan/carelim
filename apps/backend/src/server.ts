@@ -414,6 +414,16 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // --- Start ---
 app.listen(PORT, () => {
   console.log(`Carelim Backend (full API) running on port ${PORT}`);
+  // Log the DB target (host + database only, never credentials) so a
+  // backend/frontend split-database misconfiguration is visible in logs.
+  try {
+    const dbUrl = new URL(process.env.DATABASE_URL || "");
+    if (dbUrl.hostname) {
+      console.log(`Database: ${dbUrl.hostname}:${dbUrl.port || "5432"}${dbUrl.pathname}`);
+    }
+  } catch {
+    // Malformed DATABASE_URL — Prisma will surface its own error
+  }
 });
 
 export default app;

@@ -7,6 +7,8 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/ packages/
 COPY apps/backend/ apps/backend/
+# schema-sync script is shared with the frontend (runs at backend boot)
+COPY apps/frontend/scripts ./apps/frontend/scripts
 
 # Install dependencies
 RUN npm install --include=dev
@@ -39,6 +41,13 @@ COPY --from=builder /app/apps/backend/node_modules ./node_modules
 # Copy Prisma schema and client (needed at runtime)
 COPY --from=builder /app/packages/database/prisma ./prisma
 
+# Copy schema-sync script (runs at boot via entrypoint)
+COPY --from=builder /app/apps/frontend/scripts ./scripts
+
+# Copy entrypoint (schema sync + server start)
+COPY apps/backend/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
+
 EXPOSE 4000
 
-CMD ["node", "dist/server.js"]
+CMD ["./docker-entrypoint.sh"]
