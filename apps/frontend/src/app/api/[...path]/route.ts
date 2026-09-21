@@ -35,7 +35,16 @@ const SKIP_HEADERS = new Set([
 
 async function proxy(req: NextRequest): Promise<NextResponse> {
   const url = req.nextUrl;
-  const target = `${BACKEND_URL}${url.pathname}${url.search}`;
+  // Stale clients (bundles built while NEXT_PUBLIC_API_URL was misconfigured)
+  // send paths with the host baked in, e.g. /app.carelim.com/api/plans.
+  // Strip any leading hostname-looking segments so the backend always
+  // receives the clean /api/* path. API paths never start with a dotted
+  // segment, so this cannot affect legitimate routes.
+  const segs = url.pathname.split("/").filter(Boolean);
+  let start = 0;
+  while (start < segs.length && segs[start].includes(".")) start += 1;
+  const cleanPath = "/" + segs.slice(start).join("/");
+  const target = `${BACKEND_URL}${cleanPath}${url.search}`;
 
   const headers = new Headers();
   req.headers.forEach((value, key) => {
