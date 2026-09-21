@@ -33,14 +33,14 @@ import {
   CheckCircle2, XCircle, ListChecks, LogIn, Stethoscope, Download,
   Calendar as CalendarIcon, Megaphone, Clock, User, Hash, AlertTriangle,
 } from "lucide-react";
-import { formatRs, statusColors, statusLabel } from "@/lib/format";
+import { formatRs, formatAge, statusColors, statusLabel } from "@/lib/format";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { useAppStore } from "@/store/app-store";
 
 interface Patient {
   id: string; patientCode: string; name: string; phone: string;
-  age: number; gender: string; bloodGroup: string | null;
+  age: number; gender: string; bloodGroup: string | null; dob?: string | null;
 }
 interface Department {
   id: string; name: string; color: string | null;
@@ -473,7 +473,7 @@ function AppointmentRow({
         <div>
           <p className="font-medium text-sm">{appt.patient.name}</p>
           <p className="text-[11px] text-muted-foreground font-mono">
-            {appt.patient.patientCode} · {appt.patient.age}y · <span className="capitalize">{appt.patient.gender}</span>
+            {appt.patient.patientCode} · {formatAge(appt.patient)} · <span className="capitalize">{appt.patient.gender}</span>
           </p>
         </div>
       </TableCell>
@@ -1133,7 +1133,7 @@ function BookAppointmentDialog({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{selectedPatient.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{selectedPatient.patientCode} · {selectedPatient.phone} · {selectedPatient.gender}, {selectedPatient.age}y</p>
+                    <p className="text-[11px] text-muted-foreground">{selectedPatient.patientCode} · {selectedPatient.phone} · {selectedPatient.gender}, {formatAge(selectedPatient)}</p>
                   </div>
                   <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => setForm({ ...form, patientId: "" })}>
                     Change

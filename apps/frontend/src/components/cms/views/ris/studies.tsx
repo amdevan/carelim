@@ -26,7 +26,7 @@ import { PatientSearch } from "@/components/ui/patient-search";
 import {
   Search, Plus, Download, Scan, Image as ImageIcon, FileText, Play, CheckCircle2, Send,
 } from "lucide-react";
-import { formatRs, formatDate, statusLabel } from "@/lib/format";
+import { formatRs, formatDate, formatAge, statusLabel } from "@/lib/format";
 import { exportToCSV, printHTML, docHeader } from "@/lib/export-utils";
 import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
@@ -40,7 +40,7 @@ interface Study {
   scheduledAt: string | null; performedAt: string | null; reportedAt: string | null; releasedAt: string | null;
   technicianName: string | null; radiologistName: string | null; contrastUsed: boolean;
   clinicalHistory: string | null; imageCount: number; createdAt: string;
-  patient: { id: string; patientCode: string; name: string; age: number; gender: string };
+  patient: { id: string; patientCode: string; name: string; age: number; dob?: string | null; gender: string };
   modality: { id: string; name: string; code: string; baseFee: number; contrastFee: number };
   images: { id: string; imageUrl: string; thumbnailUrl: string | null; instanceNumber: number; description: string | null }[];
   report: { id: string; examination: string | null; findings: string | null; impression: string | null; technique: string | null; status: string; radiologistName: string | null } | null;
@@ -174,7 +174,7 @@ export function RisStudies() {
                     <TableCell className="font-mono text-[10px]">{s.studyUid.substring(0, 20)}…</TableCell>
                     <TableCell>
                       <p className="text-sm font-medium">{s.patient.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{s.patient.patientCode} · {s.patient.age}y</p>
+                      <p className="text-[10px] text-muted-foreground">{s.patient.patientCode} · {formatAge(s.patient)}</p>
                     </TableCell>
                     <TableCell><Badge className="text-[10px] bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-300">{s.modality.name}</Badge></TableCell>
                     <TableCell className="text-sm hidden md:table-cell">{s.bodyPart}</TableCell>
@@ -429,7 +429,7 @@ function StudyDetail({ study }: { study: Study }) {
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="rounded-lg border px-3 py-2"><p className="text-[10px] text-muted-foreground">Patient</p><p className="font-medium">{study.patient.name}</p></div>
           <div className="rounded-lg border px-3 py-2"><p className="text-[10px] text-muted-foreground">Patient ID</p><p className="font-medium font-mono">{study.patient.patientCode}</p></div>
-          <div className="rounded-lg border px-3 py-2"><p className="text-[10px] text-muted-foreground">Age / Gender</p><p className="font-medium">{study.patient.age}y · {study.patient.gender}</p></div>
+          <div className="rounded-lg border px-3 py-2"><p className="text-[10px] text-muted-foreground">Age / Gender</p><p className="font-medium">{formatAge(study.patient)} · {study.patient.gender}</p></div>
           <div className="rounded-lg border px-3 py-2"><p className="text-[10px] text-muted-foreground">Priority</p><p className="font-medium capitalize">{study.priority}</p></div>
           <div className="rounded-lg border px-3 py-2"><p className="text-[10px] text-muted-foreground">Technician</p><p className="font-medium">{study.technicianName || "—"}</p></div>
           <div className="rounded-lg border px-3 py-2"><p className="text-[10px] text-muted-foreground">Radiologist</p><p className="font-medium">{study.radiologistName || "—"}</p></div>

@@ -184,12 +184,16 @@ function buildOPDCardHTML(inv: Invoice, settings?: Record<string, string>, docto
   const patientName = inv.patient.name || "Patient";
   const p = inv.patient;
 
-  // Age/gender pair, e.g. "29Y/M" — uses stored age, falls back to DOB
-  const ageYears = p.age && p.age > 0
-    ? p.age
-    : p.dob ? Math.floor((Date.now() - new Date(p.dob).getTime()) / 31557600000) : null;
+  // Age/gender pair, e.g. "29Y/M" — months for infants under 1 year, else stored age with DOB fallback
+  const dobDate = p.dob ? new Date(p.dob) : null;
+  const dobMonths = dobDate && !isNaN(dobDate.getTime())
+    ? (new Date().getFullYear() - dobDate.getFullYear()) * 12 + (new Date().getMonth() - dobDate.getMonth())
+    : null;
+  const ageStr = dobMonths !== null && dobMonths >= 0 && dobMonths < 12
+    ? `${Math.max(dobMonths, 0)}m`
+    : `${(p.age && p.age > 0) || dobMonths === null ? p.age || 0 : Math.max(Math.floor(dobMonths / 12), 0)}Y`;
   const genderLetter = p.gender ? p.gender.charAt(0).toUpperCase() : "";
-  const ageGender = [ageYears ? `${ageYears}Y` : "", genderLetter].filter(Boolean).join("/");
+  const ageGender = [ageStr !== "0Y" ? ageStr : "", genderLetter].filter(Boolean).join("/");
 
   // "20 sept 2026" date + "10:40 AM" time, as on the label design
   const d = new Date(inv.date);

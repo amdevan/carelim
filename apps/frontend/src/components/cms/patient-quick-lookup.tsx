@@ -8,10 +8,11 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Search, Phone, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatAge } from "@/lib/format";
 
 interface Patient {
   id: string; patientCode: string; name: string; phone: string;
-  age: number; gender: string; bloodGroup: string | null;
+  age: number; gender: string; bloodGroup: string | null; dob?: string | null;
 }
 
 interface PatientQuickLookupProps {
@@ -93,7 +94,7 @@ export function PatientQuickLookup({ onSelect, children }: PatientQuickLookupPro
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="flex items-center gap-0.5"><Phone className="w-3 h-3" /> {p.phone}</span>
                   <span>·</span>
-                  <span>{p.age}y · <span className="capitalize">{p.gender}</span></span>
+                  <span>{formatAge(p)} · <span className="capitalize">{p.gender}</span></span>
                   {p.bloodGroup && (
                     <span className="text-rose-600 font-medium">{p.bloodGroup}</span>
                   )}

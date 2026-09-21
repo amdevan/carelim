@@ -9,6 +9,23 @@ export const formatDate = (d: Date | string) =>
 export const formatDateTime = (d: Date | string) =>
   new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
+/** Patient age label — months for infants under 1 year (derived from dob), else years. */
+export const formatAge = (p?: { age?: number | null; dob?: string | Date | null } | null): string => {
+  if (!p) return "—";
+  const dob = p.dob ? new Date(p.dob) : null;
+  if (dob && !isNaN(dob.getTime())) {
+    const now = new Date();
+    const months =
+      (now.getFullYear() - dob.getFullYear()) * 12 +
+      (now.getMonth() - dob.getMonth()) -
+      (now.getDate() < dob.getDate() ? 1 : 0);
+    if (months >= 0 && months < 12) return `${months}mo`;
+    // Stored age is blank/0 for infants registered by months only — derive from dob
+    if (months >= 12 && !p.age) return `${Math.floor(months / 12)}y`;
+  }
+  return `${p.age ?? 0}y`;
+};
+
 export const timeAgo = (d: Date | string) => {
   const diff = Date.now() - new Date(d).getTime();
   const mins = Math.floor(diff / 60000);

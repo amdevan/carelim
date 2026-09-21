@@ -1,5 +1,6 @@
 "use client";
 import { fetchAPI } from "@/lib/api";
+import { formatAge } from "@/lib/format";
 import { useAppStore } from "@/store/app-store";
 import { useFetch } from "@/lib/use-fetch";
 import { usePagination, useSort } from "@/lib/use-pagination";
@@ -63,7 +64,7 @@ interface Prescription {
   clinicalData: string | null;
   status: string;
   createdAt: string;
-  patient: { id: string; patientCode: string; name: string; age: number; gender: string };
+  patient: { id: string; patientCode: string; name: string; age: number; gender: string; dob?: string | null };
   doctor: {
     id: string;
     name: string;
@@ -366,7 +367,7 @@ function buildPrescriptionHTML(p: DisplayPrescription): string {
   const patientInfo = `
     <div class="info-grid-2col">
       <div class="info-cell"><span class="label">Patient</span> ${escapeHTML(p.patient?.name || "—")} <span class="dim">(${escapeHTML(p.patient?.patientCode || "—")})</span></div>
-      <div class="info-cell"><span class="label">Age / Gender</span> ${p.patient?.age ?? "—"} yrs / ${escapeHTML(p.patient?.gender || "—")}</div>
+      <div class="info-cell"><span class="label">Age / Gender</span> ${formatAge(p.patient)} / ${escapeHTML(p.patient?.gender || "—")}</div>
       <div class="info-cell"><span class="label">Doctor</span> ${escapeHTML(p.doctor?.name || "—")}${deptName ? ` <span class="dim">(${escapeHTML(deptName)})</span>` : ""}</div>
       <div class="info-cell"><span class="label">Date</span> ${formatDate(p.createdAt)}</div>
     </div>`;
@@ -2183,7 +2184,7 @@ function PrescriptionCard({
             <p className="text-xs text-muted-foreground">
               <span className="font-mono">{p.patient?.patientCode}</span>
               {" · "}
-              {p.patient?.age}y
+              {formatAge(p.patient)}
               {" · "}
               <span className="capitalize">{p.patient?.gender}</span>
             </p>
@@ -2363,7 +2364,7 @@ function PrescriptionDetailDialog({
               <p className="text-xs font-semibold text-muted-foreground uppercase">Patient</p>
               <p className="text-sm font-medium">{p.patient?.name}</p>
               <p className="text-xs text-muted-foreground">
-                {p.patient?.patientCode} · {p.patient?.age}y · {p.patient?.gender}
+                {p.patient?.patientCode} · {formatAge(p.patient)} · {p.patient?.gender}
               </p>
             </div>
             <div className="rounded-lg bg-muted/40 p-3 space-y-1">

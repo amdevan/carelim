@@ -35,7 +35,7 @@ import {
   Calendar, FileText, Receipt, FlaskConical, Download, Printer, GitBranch,
   Eye, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Scan, StickyNote, AlertTriangle,
 } from "lucide-react";
-import { formatRs, formatDate, statusColors, statusLabel, timeAgo } from "@/lib/format";
+import { formatRs, formatDate, formatAge, statusColors, statusLabel, timeAgo } from "@/lib/format";
 import { toast } from "sonner";
 import { useAppStore } from "@/store/app-store";
 
@@ -272,7 +272,7 @@ export function PatientsView() {
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm">{p.phone}</TableCell>
                       <TableCell className="hidden sm:table-cell text-sm">
-                        {p.age}y · <span className="capitalize">{p.gender}</span>
+                        {formatAge(p)} · <span className="capitalize">{p.gender}</span>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         {p.bloodGroup && (
@@ -434,7 +434,7 @@ function PatientDetail({ patient }: { patient: Patient }) {
         <div><div class="label">Phone</div><div>${patient.phone}</div></div>
         <div><div class="label">Email</div><div>${patient.email || "—"}</div></div>
         <div><div class="label">Gender</div><div><span style="text-transform:capitalize">${patient.gender}</span></div></div>
-        <div><div class="label">Age</div><div>${patient.age} years</div></div>
+        <div><div class="label">Age</div><div>${formatAge(patient)}</div></div>
         <div><div class="label">Date of Birth</div><div>${patient.dob ? formatDate(patient.dob) : "—"}</div></div>
         <div><div class="label">Blood Group</div><div>${patient.bloodGroup || "—"}</div></div>
         <div><div class="label">Address</div><div>${patient.address || "—"}</div></div>
@@ -497,7 +497,7 @@ function PatientDetail({ patient }: { patient: Patient }) {
             <SheetDescription className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
               <span className="font-mono">{patient.patientCode}</span>
               <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {patient.phone}</span>
-              <span>{patient.age}y · <span className="capitalize">{patient.gender}</span></span>
+              <span>{formatAge(patient)} · <span className="capitalize">{patient.gender}</span></span>
               {patient.bloodGroup && (
                 <Badge variant="outline" className="text-rose-600 border-rose-200">{patient.bloodGroup}</Badge>
               )}
@@ -789,7 +789,7 @@ function RegisterDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{p.name}</p>
                         <p className="text-[11px] text-muted-foreground">
-                          {p.patientCode} · {p.phone} · {p.gender}, {p.age}y
+                          {p.patientCode} · {p.phone} · {p.gender}, {formatAge(p)}
                         </p>
                       </div>
                       <Badge variant="outline" className="text-[9px] shrink-0">{p.bloodGroup || "—"}</Badge>
@@ -945,7 +945,8 @@ function EditPatientDialog({
         emergencyName: form.emergencyName || null,
         allergies: form.allergies || null,
         chronicConditions: form.chronicConditions || null,
-        dob: Number(form.age) ? new Date(new Date().getFullYear() - Number(form.age), 0, 1) : null,
+        // Preserve dob (infants registered by months only) when age is untouched/0
+        dob: Number(form.age) ? new Date(new Date().getFullYear() - Number(form.age), 0, 1) : patient.dob ?? null,
         branchId,
       };
       const res = await fetchAPI(`/api/patients/${patient.id}`, {

@@ -2,6 +2,7 @@
 import { fetchAPI } from "@/lib/api";
 
 import { useFetch } from "@/lib/use-fetch";
+import { formatAge } from "@/lib/format";
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -53,7 +54,7 @@ import {
 // ============================================================
 // Shared types & helpers
 // ============================================================
-interface Patient { id: string; name: string; patientCode: string; age?: number; phone: string; gender?: string; }
+interface Patient { id: string; name: string; patientCode: string; age?: number; dob?: string | null; phone: string; gender?: string; }
 interface Doctor { id: string; name: string; specialization?: string; }
 
 const TREATMENT_TYPES = [
@@ -162,7 +163,7 @@ export function DentalPatients() {
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-[11px] text-muted-foreground">{p.patientCode}</TableCell>
-                      <TableCell className="text-xs">{p.age || "—"}y</TableCell>
+                      <TableCell className="text-xs">{p.age || p.dob ? formatAge(p) : "—"}</TableCell>
                       <TableCell className="text-xs">{p.phone}</TableCell>
                       <TableCell className="text-center"><Badge variant="outline" className="text-[10px]">{examCount[p.id] || 0}</Badge></TableCell>
                       <TableCell className="text-center"><Badge variant="outline" className="text-[10px]">{procCount[p.id] || 0}</Badge></TableCell>

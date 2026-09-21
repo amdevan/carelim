@@ -30,7 +30,7 @@ import {
   UserCheck, Activity, Stethoscope,
 } from "lucide-react";
 import { escapeHTML, SortHeader, InfoTile as SheetInfoTile } from "./utils";
-import { formatDate, formatDateTime, timeAgo } from "@/lib/format";
+import { formatDate, formatDateTime, formatAge, timeAgo } from "@/lib/format";
 import { exportToCSV, printHTML, docHeader } from "@/lib/export-utils";
 import { usePagination } from "@/lib/use-pagination";
 import { Pagination } from "@/components/cms/pagination";
@@ -90,7 +90,7 @@ interface LabResult {
   createdAt: string;
   order: {
     orderNo: string;
-    patient: { patientCode: string; name: string; age: number; gender: string; phone?: string };
+    patient: { patientCode: string; name: string; age: number; dob?: string | null; gender: string; phone?: string };
     samples?: { sampleCode: string; testId: string | null }[];
   };
   parameters: LabResultParameter[];
@@ -224,7 +224,7 @@ function printLabReport(result: LabResult, testName: string) {
     <div class="info-grid">
       <div><div class="label">Patient Name</div><div><strong>${escapeHTML(result.order.patient.name)}</strong></div></div>
       <div><div class="label">Patient ID</div><div style="font-family: monospace;">${escapeHTML(result.order.patient.patientCode)}</div></div>
-      <div><div class="label">Age / Gender</div><div>${result.order.patient.age} yrs / ${escapeHTML(result.order.patient.gender)}</div></div>
+      <div><div class="label">Age / Gender</div><div>${formatAge(result.order.patient)} / ${escapeHTML(result.order.patient.gender)}</div></div>
       <div><div class="label">Phone</div><div>${escapeHTML(result.order.patient.phone || "—")}</div></div>
       <div><div class="label">Order No</div><div style="font-family: monospace;">${escapeHTML(result.order.orderNo)}</div></div>
       <div><div class="label">Report Date</div><div>${escapeHTML(formatDate(result.createdAt))}</div></div>
@@ -787,7 +787,7 @@ function EnterResultDialog({
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Age / Gender</p>
-            <p>{result.order.patient.age} / {result.order.patient.gender}</p>
+            <p>{formatAge(result.order.patient)} / {result.order.patient.gender}</p>
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Order Date</p>
@@ -1178,7 +1178,7 @@ function ResultViewSheet({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <SheetInfoTile label="Patient" value={result.order.patient.name} icon={<User className="w-3.5 h-3.5" />} />
             <SheetInfoTile label="Patient ID" value={result.order.patient.patientCode} mono />
-            <SheetInfoTile label="Age / Gender" value={`${result.order.patient.age} / ${result.order.patient.gender}`} icon={<Activity className="w-3.5 h-3.5" />} />
+            <SheetInfoTile label="Age / Gender" value={`${formatAge(result.order.patient)} / ${result.order.patient.gender}`} icon={<Activity className="w-3.5 h-3.5" />} />
             <SheetInfoTile label="Technician" value={result.technicianName || "—"} icon={<UserCheck className="w-3.5 h-3.5" />} />
             <SheetInfoTile label="Created" value={formatDate(result.createdAt)} icon={<Clock className="w-3.5 h-3.5" />} />
             <SheetInfoTile label="Phone" value={result.order.patient.phone || "—"} />

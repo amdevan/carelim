@@ -34,7 +34,7 @@ import {
   CalendarCheck, Mail, Award,
   Brain, FileCheck, Target, CircleDot, LayoutGrid,
 } from "lucide-react";
-import { formatRs, formatDate, formatDateTime, statusColors, statusLabel } from "@/lib/format";
+import { formatRs, formatDate, formatDateTime, formatAge, statusColors, statusLabel } from "@/lib/format";
 
 // ============================================================================
 // Types
@@ -596,7 +596,7 @@ function RequestsView() {
 
 function PatientsView() {
   const [search, setSearch] = useState("");
-  const [patients, setPatients] = useState(PATIENTS);
+  const [patients, setPatients] = useState<(typeof PATIENTS[number] & { dob?: string | null })[]>(PATIENTS);
 
   useEffect(() => {
     fetch("/api/patients")
@@ -608,6 +608,7 @@ function PatientsView() {
             name: (p.name as string) || "Unknown",
             code: (p.patientCode as string) || "",
             age: (p.age as number) || 0,
+            dob: (p.dob as string) || null,
             gender: (p.gender as string) || "unknown",
             phone: (p.phone as string) || "",
             lastVisit: p.createdAt ? new Date(p.createdAt as string).toISOString().split("T")[0] : "",
@@ -632,7 +633,7 @@ function PatientsView() {
               <Avatar className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 shrink-0"><AvatarFallback className="bg-transparent text-white text-xs font-bold">{p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</AvatarFallback></Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">{p.name}</p>
-                <p className="text-[11px] text-muted-foreground">{p.code} · {p.age}y · {p.gender}</p>
+                <p className="text-[11px] text-muted-foreground">{p.code} · {formatAge(p)} · {p.gender}</p>
                 <div className="flex flex-wrap gap-1 mt-1.5">{p.conditions.map((c) => <Badge key={c} className="text-[9px] bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300">{c}</Badge>)}</div>
                 <p className="text-[10px] text-muted-foreground mt-1.5">Last: {formatDate(p.lastVisit)} · {p.visits} visits</p>
               </div>

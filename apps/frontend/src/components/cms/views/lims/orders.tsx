@@ -28,7 +28,7 @@ import {
   Eye, Syringe, Barcode, User, Printer,
   Wallet, ClipboardList, Activity,
 } from "lucide-react";
-import { formatRs, formatDate, timeAgo, statusColors, statusLabel } from "@/lib/format";
+import { formatRs, formatDate, formatAge, timeAgo, statusColors, statusLabel } from "@/lib/format";
 import { escapeHTML, buildBarcodeBars } from "./utils";
 import { printHTML } from "@/lib/export-utils";
 
@@ -130,6 +130,7 @@ interface LabOrder {
     name: string;
     phone: string;
     age?: number;
+    dob?: string | null;
     gender?: string;
   };
   items: LabOrderItem[];
@@ -485,7 +486,7 @@ function OrderDetail({ order }: { order: LabOrder }) {
             <p className="text-xs text-muted-foreground">{order.patient.phone}</p>
             {(order.patient.age || order.patient.gender) && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                {order.patient.age ? `${order.patient.age} yrs` : ""} {order.patient.gender ? `· ${order.patient.gender}` : ""}
+                {order.patient.age || order.patient.dob ? formatAge(order.patient) : ""} {order.patient.gender ? `· ${order.patient.gender}` : ""}
               </p>
             )}
           </div>
@@ -781,7 +782,7 @@ function CollectSampleDialog({ order, open, onClose, onCollected }: CollectDialo
     const sampleCode = `${order.orderNo.replace("LAB-", "S-")}-${idx + 1}`;
     const barcode = sampleCode;
     const sex = order.patient.gender === "male" ? "M" : order.patient.gender === "female" ? "F" : order.patient.gender || "-";
-    const age = (order.patient.age ?? 0) > 0 ? order.patient.age : "-";
+    const age = (order.patient.age ?? 0) > 0 || order.patient.dob ? formatAge(order.patient) : "-";
     const labelHTML = `
       <style>
         .lbl-wrap { width: 320px; margin: 0 auto; border: 2px solid #0d9488; border-radius: 10px; padding: 8px 12px; font-family: 'Courier New', monospace; }

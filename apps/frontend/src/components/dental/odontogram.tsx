@@ -3,6 +3,7 @@ import { fetchAPI } from "@/lib/api";
 
 import { useState, useMemo, useCallback } from "react";
 import { useFetch } from "@/lib/use-fetch";
+import { formatAge } from "@/lib/format";
 import { KpiCard } from "@/components/cms/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -92,7 +93,7 @@ const FDI_TO_UNIVERSAL: Record<string, string> = {
 };
 
 interface Patient {
-  id: string; name: string; patientCode: string; age?: number; phone: string;
+  id: string; name: string; patientCode: string; age?: number; dob?: string | null; phone: string;
 }
 
 export function DentalOdontogram() {
@@ -225,7 +226,7 @@ export function DentalOdontogram() {
                       className={`w-full text-left p-2.5 rounded-lg border transition-all ${selectedPatientId === p.id ? "bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-900" : "border-transparent hover:bg-accent/50"}`}
                     >
                       <p className="text-xs font-semibold truncate">{p.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{p.patientCode} · {p.age || "—"}y · {p.phone}</p>
+                      <p className="text-[10px] text-muted-foreground">{p.patientCode} · {p.age || p.dob ? formatAge(p) : "—"} · {p.phone}</p>
                     </button>
                   ))}
                 </div>
@@ -559,7 +560,7 @@ function PatientPicker({ patients, loading, onPick }: { patients: Patient[]; loa
                 className="w-full text-left p-2.5 rounded-lg border border-border hover:border-teal-300 hover:bg-teal-50/50 dark:hover:bg-teal-950/20 transition-colors"
               >
                 <p className="text-xs font-semibold">{p.name}</p>
-                <p className="text-[10px] text-muted-foreground">{p.patientCode} · {p.age || "—"}y</p>
+                <p className="text-[10px] text-muted-foreground">{p.patientCode} · {p.age || p.dob ? formatAge(p) : "—"}</p>
               </button>
             ))}
           </div>

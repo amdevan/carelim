@@ -2,6 +2,7 @@
 import { fetchAPI } from "@/lib/api";
 
 import { useFetch } from "@/lib/use-fetch";
+import { formatAge } from "@/lib/format";
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -69,7 +70,7 @@ interface PatientSource {
   id: string; patientId: string; sourceType: string; sourceName: string;
   campaignId: string | null; clinicId: string | null; trackingId: string;
   createdBy: string | null; createdAt: string;
-  patient: { id: string; name: string; patientCode: string; phone: string; age: number; gender: string } | null;
+  patient: { id: string; name: string; patientCode: string; phone: string; age: number; dob?: string | null; gender: string } | null;
   clinicName: string; campaignName: string;
 }
 interface ActivityLog { id: string; patientId: string; appointmentId: string | null; activity: string; description: string | null; performedBy: string | null; createdAt: string; }
@@ -172,7 +173,7 @@ export function CMSPatients() {
                   <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Current Clinic</p><p className="text-xs font-semibold">{detail.clinicName}</p></CardContent></Card>
                   <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Campaign</p><p className="text-xs font-semibold">{detail.campaignName}</p></CardContent></Card>
                   <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Phone</p><p className="text-xs font-semibold">{detail.patient?.phone}</p></CardContent></Card>
-                  <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Age / Gender</p><p className="text-xs font-semibold">{detail.patient?.age}y · {detail.patient?.gender}</p></CardContent></Card>
+                  <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Age / Gender</p><p className="text-xs font-semibold">{detail.patient ? formatAge(detail.patient) : "—"} · {detail.patient?.gender}</p></CardContent></Card>
                 </div>
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-xs font-semibold flex items-center gap-2"><Activity className="w-3.5 h-3.5" /> Patient Journey Timeline</CardTitle></CardHeader>

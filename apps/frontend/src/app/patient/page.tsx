@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { formatAge } from "@/lib/format";
 import { apiUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -812,7 +813,7 @@ function HealthProfileView({ user }: { user: PatientUser }) {
               <p className="text-sm text-muted-foreground">Patient ID: {profile.patientCode}</p>
               <div className="flex gap-2 mt-1">
                 <Badge variant="outline" className="text-xs">{profile.gender}</Badge>
-                <Badge variant="outline" className="text-xs">Age {profile.age}</Badge>
+                <Badge variant="outline" className="text-xs">Age {formatAge(profile)}</Badge>
                 {profile.bloodGroup && <Badge variant="outline" className="text-xs">Blood: {profile.bloodGroup}</Badge>}
               </div>
             </div>
