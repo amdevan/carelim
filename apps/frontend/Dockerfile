@@ -22,6 +22,13 @@ RUN npx prisma db push --accept-data-loss 2>&1 || echo "Warning: prisma db push 
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
+# Copy Prisma adapter + pg for runtime schema sync.
+# Cherry-picking single packages misses transitive deps (pg crashed on
+# pg-types at boot), so install a complete isolated tree in a stage instead.
+FROM builder AS rtdeps
+RUN mkdir -p /tmp/rt && cd /tmp/rt && npm init -y >/dev/null \
+  && npm install --omit=dev --no-audit --no-fund pg@^8.23.0 @prisma/adapter-pg@^7.10.0
+
 # ---- Production Stage ----
 FROM node:22-alpine AS runner
 
@@ -43,9 +50,8 @@ COPY --from=builder /app/apps/frontend/public ./public
 # Ensure uploads directory exists and is writable
 RUN mkdir -p ./public/uploads/logos && chmod 777 ./public/uploads/logos
 
-# Copy Prisma adapter for runtime migrations
-COPY --from=builder /app/node_modules/@prisma/adapter-pg ./node_modules/@prisma/adapter-pg
-COPY --from=builder /app/node_modules/pg ./node_modules/pg
+# Copy Prisma adapter + complete pg dependency tree (pg, pg-types, pg-protocol, ...)
+COPY --from=rtdeps /tmp/rt/node_modules ./node_modules
 
 # Copy Prisma schema for runtime use
 COPY --from=builder /app/apps/frontend/prisma ./prisma
