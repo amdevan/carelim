@@ -1,5 +1,45 @@
 // API helper for communicating with the backend on a separate domain/port
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+/**
+ * Defensive cleanup for build-time NEXT_PUBLIC_API_URL values. Env values
+ * pasted into deployment UIs sometimes arrive with shell quotes/backticks or
+ * trailing slashes baked in, and a bare hostname (no scheme) silently becomes
+ * a *relative* path in the browser — producing requests like
+ * /app.carelim.com/api/* that depend on rescue rewrites to work at all.
+ */
+function sanitizeApiBase(raw: string): string {
+  const v = raw.replace(/[`"'\s]/g, "").replace(/\/+$/, "");
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  if (v.startsWith("/")) return v;
+  // Bare hostname — assume https (public domains are served behind TLS).
+  return `https://${v}`;
+}
+
+export const API_BASE_URL = sanitizeApiBase(process.env.NEXT_PUBLIC_API_URL || "");
+
+/**
+ * Browser-side normalization of a computed absolute URL:
+ * - same-origin URLs collapse to a relative path (identical target, no
+ *   CORS/CSP edge cases);
+ * - mixed-content requests (https page → http:// URL) can never succeed and
+ *   are routed through the same-origin /api proxy instead.
+ */
+function normalizeForBrowser(url: string, fallbackPath: string): string {
+  if (typeof window === "undefined") return url;
+  try {
+    const u = new URL(url, window.location.href);
+    if (u.origin === window.location.origin) {
+      return u.pathname + u.search;
+    }
+    if (window.location.protocol === "https:" && u.protocol === "http:") {
+      return fallbackPath;
+    }
+  } catch {
+    return fallbackPath;
+  }
+  return url;
+}
 
 /**
  * Prefixes an API path with the backend base URL.
@@ -8,10 +48,10 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 export function apiUrl(path: string): string {
   if (!API_BASE_URL) return path;
   // If path already starts with http, return as-is
-  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
   // Ensure path starts with /
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${API_BASE_URL}${normalizedPath}`;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return normalizeForBrowser(`${API_BASE_URL}${normalizedPath}`, normalizedPath);
 }
 
 function buildHeaders(init?: RequestInit, token?: string | null): Record<string, string> {
