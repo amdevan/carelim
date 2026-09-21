@@ -53,12 +53,16 @@ export function SaasLogin({ onLogin }: SaasLoginProps) {
     e.preventDefault();
     setLoading(true);
 
+    // Manual AbortController — AbortSignal.timeout is unsupported on older
+    // browsers and throws before fetch even runs
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
     try {
       const res = await fetchAPI("/api/admin-auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
-        signal: AbortSignal.timeout(20000),
+        signal: controller.signal,
       });
 
       // Parse defensively — proxy/reverse-proxy failures can return non-JSON
@@ -84,9 +88,10 @@ export function SaasLogin({ onLogin }: SaasLoginProps) {
       toast.error("Connection failed", {
         description: timedOut
           ? "Request timed out. The server may be down — please try again."
-          : "Unable to reach the server. Please try again.",
+          : `Network error: ${e instanceof Error ? e.message : "unknown"}. Please try again.`,
       });
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   };

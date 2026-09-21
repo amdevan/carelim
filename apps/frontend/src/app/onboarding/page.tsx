@@ -109,6 +109,10 @@ export default function OnboardingPage() {
     setSubmitting(true);
     setSubmitError(null);
 
+    // Manual AbortController — AbortSignal.timeout is unsupported on older
+    // browsers and throws before fetch even runs
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
     try {
       const response = await fetch(apiUrl("/api/onboarding"), {
         method: "POST",
@@ -119,7 +123,7 @@ export default function OnboardingPage() {
           packageSelection,
           skipPackage: packageSelection.skipPackage,
         }),
-        signal: AbortSignal.timeout(60000),
+        signal: controller.signal,
       });
 
       // Parse defensively — proxy/reverse-proxy failures can return non-JSON
@@ -151,10 +155,13 @@ export default function OnboardingPage() {
       const timedOut = error instanceof DOMException && error.name === "AbortError";
       const message = timedOut
         ? "Request timed out. The server may be overloaded — please try again."
-        : error.message || "An unexpected error occurred";
+        : error instanceof TypeError
+          ? `Network error: ${error.message}. Please try again.`
+          : error?.message || "An unexpected error occurred";
       setSubmitError(message);
       toast.error(message || "Failed to create organization");
     } finally {
+      clearTimeout(timer);
       setSubmitting(false);
     }
   };
