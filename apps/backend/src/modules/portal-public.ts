@@ -1527,6 +1527,124 @@ async function publicBookingAltGet(req: Request, res: Response) {
   }
 }
 
+/**
+ * Link-flow booking submission: create a REAL Appointment (mirrors
+ * publicBookingPost) plus a confirmed PublicBooking record for the admin log.
+ */
+async function createLinkFlowAppointment(req: Request, res: Response, body: any) {
+  try {
+    const { doctorId, date, time, patientName, patientPhone, patientEmail, patientAge, patientGender, reason, linkSlug } = body;
+
+    // Resolve tenant/branch from link slug
+    const linkCtx = await resolveContext(linkSlug || null);
+    const tenantId = linkCtx.tenantId || getAuthTenantId(req);
+
+    // Find or create patient (scope by phone + tenant)
+    const patientWhere: any = { phone: patientPhone };
+    if (tenantId) patientWhere.tenantId = tenantId;
+
+    let patient = await rawDb.patient.findFirst({ where: patientWhere }) as any;
+    if (!patient) {
+      const patientData: any = {
+        name: patientName,
+        phone: patientPhone,
+        email: patientEmail || undefined,
+        age: patientAge ? parseInt(patientAge) : 0,
+        gender: patientGender || "male",
+      };
+      if (tenantId) patientData.tenantId = tenantId;
+      patient = await createPatientWithSerialCode(rawDb, patientData);
+    }
+
+    // Count existing appointments for token number
+    const appointmentDate = new Date(date);
+    const dayStart = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth(), appointmentDate.getDate());
+    const dayEnd = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth(), appointmentDate.getDate() + 1);
+    const count = await rawDb.appointment.count({
+      where: { date: { gte: dayStart, lt: dayEnd } },
+    });
+
+    // Get doctor fee and branchId
+    const doctor = await rawDb.doctor.findUnique({ where: { id: doctorId } });
+    if (!doctor) return fail(res, 404, "Doctor not found");
+
+    const appointmentData: any = {
+      patientId: patient.id,
+      doctorId,
+      departmentId: body.departmentId || doctor.departmentId,
+      date: dayStart,
+      time,
+      type: body.type || "online",
+      reason: reason || undefined,
+      fee: doctor.consultationFee || 0,
+      status: "scheduled",
+      tokenNo: count + 1,
+    };
+    if (linkCtx.branchId) {
+      appointmentData.branchId = linkCtx.branchId;
+    } else if (doctor.branchId) {
+      appointmentData.branchId = doctor.branchId;
+    }
+
+    const appointment = await rawDb.appointment.create({
+      data: appointmentData,
+      include: { patient: true, doctor: { include: { department: true } } },
+    });
+
+    // Log the booking for the admin queue (best-effort)
+    let booking: any = null;
+    try {
+      const bookingData: any = {
+        patientName,
+        phone: patientPhone,
+        email: patientEmail || null,
+        doctorName: doctor.name,
+        department: appointment.doctor?.department?.name || null,
+        date: dayStart,
+        time,
+        status: "confirmed",
+        notes: reason || null,
+      };
+      if (tenantId) bookingData.tenantId = tenantId;
+      booking = await rawDb.publicBooking.create({ data: bookingData });
+    } catch {
+      // PublicBooking is a log only; don't block the appointment
+    }
+
+    // Create audit log
+    try {
+      await rawDb.auditLog.create({
+        data: {
+          user: "public@booking",
+          action: "CREATE",
+          module: "Appointment",
+          detail: `Link booking by ${patientName} with Dr. ${doctor.name} at ${time}`,
+        },
+      });
+    } catch {
+      // AuditLog might fail; don't block the booking
+    }
+
+    return res.status(201).json({
+      success: true,
+      appointment: {
+        id: appointment.id,
+        tokenNo: appointment.tokenNo,
+        date: appointment.date,
+        time: appointment.time,
+        doctor: appointment.doctor?.name,
+        department: appointment.doctor?.department?.name,
+        fee: appointment.fee,
+        patient: appointment.patient?.name,
+      },
+      booking,
+    });
+  } catch (error) {
+    console.error("Link booking POST error:", error);
+    return fail(res, 500, "Failed to book appointment");
+  }
+}
+
 async function publicBookingAltPost(req: Request, res: Response) {
   try {
     const body = (req.body || {}) as any;
@@ -1537,6 +1655,14 @@ async function publicBookingAltPost(req: Request, res: Response) {
       if (body.date && body.time && isSlotInPast(body.date, body.time)) {
         return fail(res, 400, "Selected time has already passed. Please choose an upcoming slot.");
       }
+
+      // Full booking data → create a REAL Appointment (this is the public
+      // booking link flow). Incomplete submissions (legacy callers) fall
+      // through to the pending request queue below.
+      if (body.doctorId && body.date && body.time && body.patientPhone) {
+        return await createLinkFlowAppointment(req, res, body);
+      }
+
       const tenantId = getAuthTenantId(req) || (await resolveTenantFromSlug(body.linkSlug || null));
 
       const doctor = body.doctorId

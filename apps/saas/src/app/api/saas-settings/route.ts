@@ -19,11 +19,13 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
     for (const [key, value] of Object.entries(body)) {
-      await db.setting.upsert({
-        where: { key },
-        update: { value: String(value) },
-        create: { key, value: String(value) },
-      });
+      // Setting is unique per (tenantId, key); SaaS keys are global (tenantId = null)
+      const existing = await db.setting.findFirst({ where: { key, tenantId: null } });
+      if (existing) {
+        await db.setting.update({ where: { id: existing.id }, data: { value: String(value) } });
+      } else {
+        await db.setting.create({ data: { key, value: String(value) } });
+      }
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

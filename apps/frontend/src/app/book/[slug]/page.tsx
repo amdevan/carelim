@@ -199,6 +199,7 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [bookedInfo, setBookedInfo] = useState<{ tokenNo?: number; fee?: number } | null>(null);
   const [error, setError] = useState("");
 
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -401,6 +402,8 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
         const data = await res.json();
         throw new Error(data.error || "Booking failed");
       }
+      const data = await res.json().catch(() => ({}));
+      setBookedInfo(data?.appointment || null);
       setSuccess(true);
     } catch (err: any) {
       setError(err.message || "Failed to book appointment");
@@ -458,9 +461,18 @@ export default function BookPage({ params }: { params: Promise<{ slug: string }>
                 <span>{formatTime12(form.time)}</span>
               </div>
             </div>
+            {bookedInfo?.tokenNo ? (
+              <div className="flex flex-col items-center gap-1 py-3 px-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10">
+                <span className="text-[11px] uppercase tracking-wider text-emerald-300/70">Token Number</span>
+                <span className="text-2xl font-bold text-emerald-300">#{bookedInfo.tokenNo}</span>
+                {bookedInfo.fee ? (
+                  <span className="text-xs text-white/50">Consultation fee: Rs. {bookedInfo.fee}</span>
+                ) : null}
+              </div>
+            ) : null}
             <div className="flex items-center justify-center gap-2 text-xs text-white/40">
               <Shield className="w-3.5 h-3.5" />
-              <span>We&apos;ll contact you shortly to confirm</span>
+              <span>Your appointment is confirmed — please arrive 10 minutes early</span>
             </div>
             {!isDirectLink && (
               <button

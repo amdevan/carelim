@@ -8,7 +8,7 @@
  */
 import { Router, Request, Response } from "express";
 import { randomBytes } from "crypto";
-import { db } from "../lib/prisma";
+import { db, rawDb } from "../lib/prisma";
 import { createPatientWithSerialCode } from "../lib/patient-code";
 import { fail, wrap } from "../lib/http";
 import { requirePermission } from "../middleware/permissions";
@@ -26,6 +26,50 @@ function nanoId(len: number): string {
   let out = "";
   for (let i = 0; i < len; i++) out += NANO_ALPHABET[bytes[i] % 64];
   return out;
+}
+
+// ─── Serial code helpers (same pattern as finance.ts invoices) ──
+const MAX_RETRIES = 5;
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Generate the next sequential number for a prefix (e.g. "RX-" → "RX-00042").
+ * Only codes that are exactly `prefix + digits` count toward the sequence so
+ * legacy random codes (e.g. RX-VTPNMHHG) don't poison it.
+ */
+async function getNextSequenceNumber(
+  prefix: string,
+  latestQuery: () => Promise<{ code: string }[]>
+): Promise<string> {
+  const latest = await latestQuery();
+  const nums = latest
+    .map(r => r.code.match(new RegExp(`^${escapeRegex(prefix)}(\\d+)$`)))
+    .filter((m): m is RegExpMatchArray => !!m)
+    .map(m => parseInt(m[1], 10));
+  const nextNum = (nums.length > 0 ? Math.max(...nums) : 0) + 1;
+  return `${prefix}${String(nextNum).padStart(5, "0")}`;
+}
+
+/** Create a record, retrying on P2002 unique-constraint conflicts. */
+async function createWithRetry<T>(
+  createFn: () => Promise<T>,
+  regenerateFn: () => Promise<void>,
+): Promise<T> {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await createFn();
+    } catch (error: any) {
+      if (error?.code === "P2002") {
+        await regenerateFn();
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error(`Failed to create record after ${MAX_RETRIES} attempts (unique constraint conflicts)`);
 }
 
 // Frontend getAuthEmail(req) equivalent (authed email or fixed fallback)
@@ -342,37 +386,54 @@ async function createPrescription(req: Request, res: Response) {
       items, patientId, doctorId, diagnosis, symptoms, vitals, advice, followUp,
       clinicalData, branchId,
     } = body;
-    const count = await db.prescription.count();
-    const prescription = await db.prescription.create({
-      data: {
-        code: `RX-${nanoId(8).toUpperCase()}`,
-        branchId: branchId || null,
-        patientId,
-        doctorId,
-        diagnosis: diagnosis || null,
-        symptoms: symptoms || null,
-        vitals: vitals || null,
-        advice: advice || null,
-        followUp: followUp || null,
-        status: "active",
-        clinicalData: clinicalData ? (typeof clinicalData === "string" ? clinicalData : JSON.stringify(clinicalData)) : null,
-        items: {
-          create: (items || []).map((it: {
-            medicineName: string; dosage: string; frequency: string;
-            duration: string; quantity: number; instructions?: string;
-            generic?: string; strength?: string; route?: string; timing?: string; remarks?: string;
-          }) => ({
-            medicineName: it.medicineName,
-            dosage: it.dosage,
-            frequency: it.frequency,
-            duration: it.duration,
-            quantity: it.quantity || 1,
-            instructions: it.instructions || null,
-          })),
-        },
+
+    // Prescription code is globally unique while the tenant middleware scopes
+    // Prescription via branch.tenantId — a db-level scan would miss other
+    // tenants' serials and collide forever. Scan ALL prescriptions via rawDb.
+    const buildCode = () =>
+      getNextSequenceNumber("RX-", () =>
+        rawDb.prescription.findMany({
+          where: { code: { startsWith: "RX-" } },
+          select: { code: true },
+        })
+      );
+    let code = await buildCode();
+    const prescription = await createWithRetry(
+      () =>
+        db.prescription.create({
+          data: {
+            code,
+            branchId: branchId || null,
+            patientId,
+            doctorId,
+            diagnosis: diagnosis || null,
+            symptoms: symptoms || null,
+            vitals: vitals || null,
+            advice: advice || null,
+            followUp: followUp || null,
+            status: "active",
+            clinicalData: clinicalData ? (typeof clinicalData === "string" ? clinicalData : JSON.stringify(clinicalData)) : null,
+            items: {
+              create: (items || []).map((it: {
+                medicineName: string; dosage: string; frequency: string;
+                duration: string; quantity: number; instructions?: string;
+                generic?: string; strength?: string; route?: string; timing?: string; remarks?: string;
+              }) => ({
+                medicineName: it.medicineName,
+                dosage: it.dosage,
+                frequency: it.frequency,
+                duration: it.duration,
+                quantity: it.quantity || 1,
+                instructions: it.instructions || null,
+              })),
+            },
+          },
+          include: { items: true, patient: true, doctor: true },
+        }),
+      async () => {
+        code = await buildCode();
       },
-      include: { items: true, patient: true, doctor: true },
-    });
+    );
     await db.auditLog.create({ data: { user: authEmail(), action: "CREATE", module: "Prescription", detail: `Created prescription ${prescription.code}` } });
     res.status(201).json(prescription);
   } catch (error) {

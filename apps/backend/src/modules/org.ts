@@ -425,11 +425,31 @@ async function updateSettings(req: Request, res: Response) {
   try {
     const body = req.body || {};
     for (const [key, value] of Object.entries(body)) {
-      await db.setting.upsert({
-        where: { key },
-        update: { value: String(value) },
-        create: { key, value: String(value) },
-      });
+      // Settings are unique per tenant (Setting @@unique([tenantId, key])) so
+      // db's tenant middleware must scope the lookup — a bare upsert on
+      // `key` would update another tenant's row.
+      const existing = await db.setting.findFirst({ where: { key } });
+      if (existing) {
+        await db.setting.update({
+          where: { id: existing.id },
+          data: { value: String(value) },
+        });
+        continue;
+      }
+      try {
+        // create auto-injects tenantId from the tenant middleware
+        await db.setting.create({ data: { key, value: String(value) } });
+      } catch (err: any) {
+        // Concurrent save created the same key — update instead of failing
+        if (err?.code !== "P2002") throw err;
+        const row = await db.setting.findFirst({ where: { key } });
+        if (row) {
+          await db.setting.update({
+            where: { id: row.id },
+            data: { value: String(value) },
+          });
+        }
+      }
     }
     await db.auditLog.create({
       data: { user: getCurrentUserEmail(), action: "UPDATE", module: "Settings", detail: "Updated clinic settings" },

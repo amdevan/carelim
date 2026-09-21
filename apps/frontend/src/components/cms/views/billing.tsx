@@ -84,6 +84,12 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const PAYMENT_METHODS = ["Cash", "Card", "Bank", "eSewa", "Khalti", "FonePay", "Stripe", "PayPal"];
+// Map legacy lowercase setting values (e.g. default_payment_method: "cash") to
+// the invoice payment-method vocabulary.
+const PAYMENT_METHOD_ALIASES: Record<string, string> = {
+  cash: "Cash", card: "Card", bank: "Bank", bank_transfer: "Bank", online: "eSewa",
+  esewa: "eSewa", khalti: "Khalti", fonepay: "FonePay", stripe: "Stripe", paypal: "PayPal",
+};
 
 const STATUS_FILTERS = ["all", "paid", "partial", "unpaid", "refunded"] as const;
 
@@ -133,7 +139,7 @@ function buildInvoiceHTML(inv: Invoice, settings?: Record<string, string>): stri
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>${formatRs(inv.subtotal)}</span></div>
       <div class="row"><span>Discount</span><span>- ${formatRs(inv.discount)}</span></div>
-      <div class="row"><span>Tax</span><span>+ ${formatRs(inv.tax)}</span></div>
+      <div class="row"><span>VAT</span><span>+ ${formatRs(inv.tax)}</span></div>
       <div class="row grand"><span>Total</span><span>${formatRs(inv.total)}</span></div>
       <div class="row"><span>Paid</span><span>${formatRs(inv.paid)}</span></div>
       <div class="row"><span>Due</span><span>${formatRs(inv.due)}</span></div>
@@ -834,10 +840,15 @@ function CreateInvoiceDialog({
     }
   }, [billType, open]);
 
-  // Load tax rate from settings when dialog opens
+  // Load VAT rate and default payment method from settings when dialog opens
   useEffect(() => {
-    if (open && settings?.tax_rate) {
+    if (!open) return;
+    if (settings?.tax_rate) {
       setTaxRate(Number(settings.tax_rate) || 13);
+    }
+    if (settings?.default_payment_method) {
+      const pm = PAYMENT_METHOD_ALIASES[settings.default_payment_method] ?? settings.default_payment_method;
+      if (PAYMENT_METHODS.includes(pm)) setPaymentMethod(pm);
     }
   }, [open, settings]);
 
@@ -1322,7 +1333,7 @@ function CreateInvoiceDialog({
                 <Input type="number" min="0" value={discount || ""} onChange={(e) => { const v = e.target.value; setDiscount(v === "" ? 0 : Math.max(0, Number(v))); }} className="h-9" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Tax Rate (%)</Label>
+                <Label className="text-xs">VAT (%)</Label>
                 <Input type="number" min="0" max="100" value={taxRate || ""} onChange={(e) => { const v = e.target.value; setTaxRate(v === "" ? 0 : Math.max(0, Math.min(100, Number(v)))); }} className="h-9" />
               </div>
               <div className="space-y-1.5">
@@ -1355,7 +1366,7 @@ function CreateInvoiceDialog({
             <div className="space-y-1.5">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="font-medium">{formatRs(subtotal)}</span></div>
               {discount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="font-medium text-rose-600">- {formatRs(discount)}</span></div>}
-              {taxAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Tax ({taxRate}%)</span><span className="font-medium">+ {formatRs(taxAmount)}</span></div>}
+              {taxAmount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">VAT ({taxRate}%)</span><span className="font-medium">+ {formatRs(taxAmount)}</span></div>}
               <div className="flex justify-between font-semibold border-t border-teal-200 dark:border-teal-800 pt-2 mt-1"><span>Total</span><span className="text-teal-700 dark:text-teal-300">{formatRs(total)}</span></div>
               <div className="flex justify-between text-emerald-600"><span>Paid</span><span className="font-medium">{formatRs(paid)}</span></div>
               {change > 0 ? (
@@ -1683,7 +1694,7 @@ function InvoiceDetail({ invoice, settings, onDelete }: { invoice: Invoice; sett
         <div className="rounded-lg border bg-muted/30 p-4 space-y-1.5 text-sm ml-auto max-w-xs">
           <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatRs(invoice.subtotal)}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-rose-600">- {formatRs(invoice.discount)}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span>+ {formatRs(invoice.tax)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">VAT</span><span>+ {formatRs(invoice.tax)}</span></div>
           <div className="flex justify-between font-semibold border-t pt-1.5 mt-1.5 text-base"><span>Total</span><span>{formatRs(invoice.total)}</span></div>
           <div className="flex justify-between text-emerald-600"><span>Paid</span><span>{formatRs(invoice.paid)}</span></div>
           <div className="flex justify-between font-semibold text-rose-600"><span>Due</span><span>{formatRs(invoice.due)}</span></div>

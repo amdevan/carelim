@@ -859,11 +859,14 @@ async function getSaasSettings(_req: Request, res: Response) {
 async function updateSaasSettings(req: Request, res: Response) {
   const body = req.body || {};
   for (const [k, v] of Object.entries(body)) {
-    await rawDb.setting.upsert({
-      where: { key: k },
-      update: { value: String(v) },
-      create: { key: k, value: String(v) },
-    });
+    // SaaS keys are global (tenantId = null); Setting is now unique per
+    // (tenantId, key), so look the row up explicitly instead of upserting.
+    const existing = await rawDb.setting.findFirst({ where: { key: k, tenantId: null } });
+    if (existing) {
+      await rawDb.setting.update({ where: { id: existing.id }, data: { value: String(v) } });
+    } else {
+      await rawDb.setting.create({ data: { key: k, value: String(v) } });
+    }
   }
   return res.json({ ok: true });
 }

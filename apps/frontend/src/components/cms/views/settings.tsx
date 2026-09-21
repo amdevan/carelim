@@ -69,7 +69,7 @@ const defaultSettings: SettingsMap = {
   show_logo_on_invoice: "true",
   show_tax_breakdown: "true",
   footer_text: "",
-  default_payment_method: "cash",
+  default_payment_method: "Cash",
   allow_partial_payment: "true",
   auto_generate_receipt: "true",
   payment_due_days: "30",
@@ -368,7 +368,7 @@ function ClinicTab({ form, updateForm, saving, onSave }: { form: SettingsMap; up
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Globe className="w-4 h-4 text-teal-600" /> Localization</CardTitle><CardDescription className="text-xs">Currency, tax, timezone & language</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Globe className="w-4 h-4 text-teal-600" /> Localization</CardTitle><CardDescription className="text-xs">Currency, VAT, timezone & language</CardDescription></CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label>Currency</Label>
@@ -376,7 +376,7 @@ function ClinicTab({ form, updateForm, saving, onSave }: { form: SettingsMap; up
                 <SelectItem value="NPR">NPR — Nepali Rupee</SelectItem><SelectItem value="USD">USD — US Dollar</SelectItem><SelectItem value="EUR">EUR — Euro</SelectItem><SelectItem value="INR">INR — Indian Rupee</SelectItem><SelectItem value="GBP">GBP — British Pound</SelectItem>
               </SelectContent></Select>
             </div>
-            <div className="space-y-1.5"><Label>Tax Rate (%)</Label><Input type="number" value={form.tax_rate ?? "0"} onChange={(e) => updateForm("tax_rate", e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>VAT Rate (%)</Label><Input type="number" value={form.tax_rate ?? "0"} onChange={(e) => updateForm("tax_rate", e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Timezone</Label>
               <Select value={form.timezone ?? "Asia/Kathmandu"} onValueChange={(v) => updateForm("timezone", v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>
                 <SelectItem value="Asia/Kathmandu">Asia/Kathmandu (UTC+5:45)</SelectItem><SelectItem value="Asia/Kolkata">Asia/Kolkata (UTC+5:30)</SelectItem><SelectItem value="UTC">UTC</SelectItem><SelectItem value="America/New_York">America/New_York</SelectItem><SelectItem value="Europe/London">Europe/London</SelectItem>
@@ -543,6 +543,11 @@ function PaymentsTab({ form, updateForm, saving, onSave }: { form: SettingsMap; 
   const openConfig = (gatewayKey: string) => { const gw = PAYMENT_GATEWAYS.find((g) => g.key === gatewayKey); if (!gw) return; const vals: Record<string, string> = {}; gw.fields.forEach((f) => { vals[f] = form[`gw_${gatewayKey}_${f}`] ?? ""; }); setConfigValues(vals); setConfigOpen(gatewayKey); };
   const saveConfig = () => { if (!configOpen) return; const payload: SettingsMap = {}; Object.entries(configValues).forEach(([k, v]) => { payload[`gw_${configOpen}_${k}`] = v; }); onSave(payload); setConfigOpen(null); };
   const save = () => { const payload: SettingsMap = {}; PAYMENT_GATEWAYS.forEach((g) => { payload[`payment_${g.key}`] = enabled[g.key] ? "true" : "false"; }); payload.default_payment_method = form.default_payment_method; payload.allow_partial_payment = form.allow_partial_payment; onSave(payload); };
+  // Default payment method uses the same vocabulary as invoice PAYMENT_METHODS;
+  // legacy lowercase values map for display.
+  const PAYMENT_METHOD_OPTIONS = ["Cash", "Card", "Bank", "eSewa", "Khalti", "FonePay", "Stripe", "PayPal"];
+  const PAYMENT_METHOD_ALIASES: Record<string, string> = { cash: "Cash", card: "Card", bank: "Bank", bank_transfer: "Bank", online: "eSewa", esewa: "eSewa", khalti: "Khalti", fonepay: "FonePay", stripe: "Stripe", paypal: "PayPal" };
+  const pmValue = PAYMENT_METHOD_ALIASES[form.default_payment_method] ?? (form.default_payment_method || "Cash");
 
   return (
     <div className="space-y-4">
@@ -560,7 +565,7 @@ function PaymentsTab({ form, updateForm, saving, onSave }: { form: SettingsMap; 
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label>Default Payment Method</Label>
-              <Select value={form.default_payment_method ?? "cash"} onValueChange={(v) => updateForm("default_payment_method", v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="card">Card</SelectItem><SelectItem value="online">Online</SelectItem><SelectItem value="bank_transfer">Bank Transfer</SelectItem></SelectContent></Select>
+              <Select value={pmValue} onValueChange={(v) => updateForm("default_payment_method", v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAYMENT_METHOD_OPTIONS.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}</SelectContent></Select>
             </div>
             <div className="space-y-1.5"><Label>Payment Due (days)</Label><Input type="number" value={form.payment_due_days ?? "30"} onChange={(e) => updateForm("payment_due_days", e.target.value)} /></div>
           </div>

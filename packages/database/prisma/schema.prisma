@@ -557,9 +557,12 @@ model Setting {
   id       String  @id @default(cuid())
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id])
-  key      String  @unique
+  key      String
   value    String
 
+  // Unique per tenant so two clinics can both define "tax_rate" etc.
+  // Super-admin SaaS settings use tenantId = null for the "carelim_" keys.
+  @@unique([tenantId, key])
   @@index([tenantId])
 }
 
