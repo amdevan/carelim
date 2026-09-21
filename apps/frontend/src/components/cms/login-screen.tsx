@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useAppStore } from "@/store/app-store";
+import { describeNetworkError } from "@/lib/network-error";
 import { motion } from "framer-motion";
 import {
   HeartPulse,
@@ -74,9 +75,7 @@ export function LoginScreen() {
     } catch (e) {
       const timedOut = e instanceof DOMException && e.name === "AbortError";
       toast.error("Login failed", {
-        description: timedOut
-          ? "Request timed out. The server may be down — please try again."
-          : `Network error: ${e instanceof Error ? e.message : "unknown"}. Please try again.`,
+        description: describeNetworkError(e, timedOut),
       });
     } finally {
       clearTimeout(timer);

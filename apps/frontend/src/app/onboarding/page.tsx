@@ -13,6 +13,7 @@ import { Step3Pricing } from "@/components/onboarding/step3-pricing";
 import { Step4Success } from "@/components/onboarding/step4-success";
 import { useOnboardingStore } from "@/components/onboarding/onboarding-store";
 import { apiUrl } from "@/lib/api";
+import { describeNetworkError } from "@/lib/network-error";
 import { toast } from "sonner";
 
 export default function OnboardingPage() {
@@ -153,11 +154,7 @@ export default function OnboardingPage() {
       toast.success("Organization created successfully!");
     } catch (error: any) {
       const timedOut = error instanceof DOMException && error.name === "AbortError";
-      const message = timedOut
-        ? "Request timed out. The server may be overloaded — please try again."
-        : error instanceof TypeError
-          ? `Network error: ${error.message}. Please try again.`
-          : error?.message || "An unexpected error occurred";
+      const message = describeNetworkError(error, timedOut);
       setSubmitError(message);
       toast.error(message || "Failed to create organization");
     } finally {

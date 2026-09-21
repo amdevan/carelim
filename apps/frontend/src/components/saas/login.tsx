@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
+import { describeNetworkError } from "@/lib/network-error";
 import {
   Mail,
   Lock,
@@ -86,9 +87,7 @@ export function SaasLogin({ onLogin }: SaasLoginProps) {
     } catch (e) {
       const timedOut = e instanceof DOMException && e.name === "AbortError";
       toast.error("Connection failed", {
-        description: timedOut
-          ? "Request timed out. The server may be down — please try again."
-          : `Network error: ${e instanceof Error ? e.message : "unknown"}. Please try again.`,
+        description: describeNetworkError(e, timedOut),
       });
     } finally {
       clearTimeout(timer);
