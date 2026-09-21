@@ -33,6 +33,8 @@ COPY --from=builder /app/apps/backend/package.json ./
 
 # Copy node_modules from ROOT (npm workspaces hoists deps there)
 COPY --from=builder /app/node_modules ./node_modules
+# npm may install some deps per-workspace instead of hoisting — merge them in
+COPY --from=builder /app/apps/backend/node_modules ./node_modules
 
 # Copy Prisma schema and client (needed at runtime)
 COPY --from=builder /app/packages/database/prisma ./prisma
