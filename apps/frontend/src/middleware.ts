@@ -1,30 +1,5 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
-
-const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
-if (!JWT_SECRET) {
-  // Fail fast — an empty secret would make every token verification fail silently
-  throw new Error("JWT_SECRET or NEXTAUTH_SECRET must be set in environment");
-}
-
-async function verifyTokenEdge(token: string): Promise<{ userId: string; email: string; role: string; type: string; tenantId?: string; branchId?: string; branchIds?: string[] } | null> {
-  try {
-    const secret = new TextEncoder().encode(JWT_SECRET);
-    const { payload } = await jwtVerify(token, secret);
-    return {
-      userId: (payload.userId as string) || "",
-      email: (payload.email as string) || "",
-      role: (payload.role as string) || "",
-      type: (payload.type as string) || "user",
-      tenantId: (payload.tenantId as string) || undefined,
-      branchId: (payload.branchId as string) || undefined,
-      branchIds: (payload.branchIds as string[]) || undefined,
-    };
-  } catch {
-    return null;
-  }
-}
 
 // Domain → module path mapping
 // Each Carelim panel is accessible via its own subdomain.
@@ -80,85 +55,9 @@ function panelOwnUrl(panel: string): string | null {
   return null;
 }
 
-// API routes that are public (no auth required)
-const PUBLIC_API_ROUTES = [
-  "/api/auth/login",
-  "/api/auth/refresh",
-  "/api/admin-auth",
-  "/api/doctor-auth",
-  "/api/onboarding",
-  "/api/public/booking",
-  "/api/public/patient-lookup",
-  "/api/public-booking",
-  "/api/public-bookings",
-  "/api/patient/auth",
-  "/api/staff-auth",
-];
-
-// Method-specific public access (everything else on these routes requires auth)
-const PUBLIC_METHOD_ROUTES: Array<{ method: string; pattern: RegExp }> = [
-  // Uploaded files (logos) — public read; IDs are unguessable cuids
-  { method: "GET", pattern: /^\/api\/files\/[^/]+$/ },
-  // Public booking flow reads a single branch's public info
-  { method: "GET", pattern: /^\/api\/branches\/[^/]+$/ },
-  // SaaS pricing is public (plan management requires auth)
-  { method: "GET", pattern: /^\/api\/plans\/?$/ },
-];
-
-function isProtectedApiRoute(pathname: string, method: string): boolean {
-  // Method-specific public exceptions first
-  for (const { method: m, pattern } of PUBLIC_METHOD_ROUTES) {
-    if (method === m && pattern.test(pathname)) return false;
-  }
-  // Explicit public routes
-  if (PUBLIC_API_ROUTES.some((route) => pathname.startsWith(route))) {
-    return false;
-  }
-  // Default-deny: every other /api route requires authentication
-  return true;
-}
-
-// Platform-admin routes: require a super_admin role claim (not just any valid JWT)
-const SUPER_ADMIN_PREFIXES = [
-  "/api/tenants",
-  "/api/admin-users",
-  "/api/admin-impersonate",
-  "/api/tenant-actions",
-  "/api/saas-dashboard",
-  "/api/saas-invoices",
-  "/api/saas-audit",
-  "/api/saas-settings",
-  "/api/saas-modules",
-  "/api/add-ons",
-  "/api/support-tickets",
-];
-
-function requiresSuperAdmin(pathname: string, method: string): boolean {
-  if (SUPER_ADMIN_PREFIXES.some((route) => pathname.startsWith(route))) return true;
-  return false;
-}
-
-function getTokenFromRequest(request: NextRequest): string | null {
-  // Check Authorization header
-  const authHeader = request.headers.get("Authorization");
-  if (authHeader?.startsWith("Bearer ")) {
-    return authHeader.slice(7);
-  }
-
-  // Check cookie
-  const token = request.cookies.get("carelim_token")?.value;
-  if (token) return token;
-
-  return null;
-}
-
-export async function middleware(request: NextRequest) {
-  const hostname = request.headers.get("host") || "";
-  const url = request.nextUrl;
-  const pathname = url.pathname;
-
-  // --- Security Headers (applied to all responses) ---
-  const securityHeaders: Record<string, string> = {
+// --- Security Headers (applied to all responses) ---
+function securityHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "X-XSS-Protection": "1; mode=block",
@@ -166,71 +65,35 @@ export async function middleware(request: NextRequest) {
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';",
   };
-
   // HSTS only in production
   if (process.env.NODE_ENV === "production") {
-    securityHeaders["Strict-Transport-Security"] =
-      "max-age=63072000; includeSubDomains; preload";
+    headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload";
   }
+  return headers;
+}
 
-  // --- API Auth Protection ---
+function withSecurity(response: NextResponse): NextResponse {
+  for (const [key, value] of Object.entries(securityHeaders())) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
+
+export async function middleware(request: NextRequest) {
+  const hostname = request.headers.get("host") || "";
+  const url = request.nextUrl;
+  const pathname = url.pathname;
+
+  // --- API routes: authentication is the backend's job ---
+  // The Express backend authenticates every request fail-closed (JWT via the
+  // Authorization header or the carelim_token cookie, tenant context, and
+  // super-admin checks). This middleware used to re-verify tokens with the
+  // frontend's own JWT_SECRET — redundant, and fatal when the two apps'
+  // secrets drift apart: every protected API call returned 401 even with a
+  // perfectly valid session. Requests now flow straight through to the
+  // backend via the /api/[...path] proxy.
   if (pathname.startsWith("/api/")) {
-    if (isProtectedApiRoute(pathname, request.method)) {
-      const token = getTokenFromRequest(request);
-
-      if (!token) {
-        return NextResponse.json(
-          { error: "Authentication required" },
-          { status: 401 }
-        );
-      }
-
-      const payload = await verifyTokenEdge(token);
-      if (!payload) {
-        return NextResponse.json(
-          { error: "Invalid or expired token" },
-          { status: 401 }
-        );
-      }
-
-      // Platform-admin authorization: only super_admins may touch these routes
-      if (requiresSuperAdmin(pathname, request.method) && payload.role !== "super_admin") {
-        return NextResponse.json(
-          { error: "Forbidden: super admin access required" },
-          { status: 403 }
-        );
-      }
-
-      // Add user info to request headers for downstream handlers
-      const response = NextResponse.next();
-      response.headers.set("x-user-id", payload.userId);
-      response.headers.set("x-user-email", payload.email);
-      response.headers.set("x-user-role", payload.role);
-      response.headers.set("x-user-type", payload.type);
-      if (payload.tenantId) {
-        response.headers.set("x-tenant-id", payload.tenantId);
-      }
-      if (payload.branchId) {
-        response.headers.set("x-branch-id", payload.branchId);
-      }
-      if (payload.branchIds) {
-        response.headers.set("x-branch-ids", JSON.stringify(payload.branchIds));
-      }
-
-      // Apply security headers
-      for (const [key, value] of Object.entries(securityHeaders)) {
-        response.headers.set(key, value);
-      }
-
-      return response;
-    }
-
-    // For public API routes, still apply security headers
-    const response = NextResponse.next();
-    for (const [key, value] of Object.entries(securityHeaders)) {
-      response.headers.set(key, value);
-    }
-    return response;
+    return withSecurity(NextResponse.next());
   }
 
   // --- Page Routes: Panels only reachable from their own domain ---
@@ -261,10 +124,7 @@ export async function middleware(request: NextRequest) {
     applyRoutePath(routePath);
     const response = NextResponse.rewrite(url);
     response.headers.set("Cache-Control", "no-store, must-revalidate");
-    for (const [key, value] of Object.entries(securityHeaders)) {
-      response.headers.set(key, value);
-    }
-    return response;
+    return withSecurity(response);
   }
 
   // Check development domains
@@ -273,10 +133,7 @@ export async function middleware(request: NextRequest) {
     applyRoutePath(devRoutePath);
     const response = NextResponse.rewrite(url);
     response.headers.set("Cache-Control", "no-store, must-revalidate");
-    for (const [key, value] of Object.entries(securityHeaders)) {
-      response.headers.set(key, value);
-    }
-    return response;
+    return withSecurity(response);
   }
 
   // Default: serve the main app (CMS) with security headers.
@@ -286,10 +143,7 @@ export async function middleware(request: NextRequest) {
   // matcher and keep their immutable caching.
   const response = NextResponse.next();
   response.headers.set("Cache-Control", "no-store, must-revalidate");
-  for (const [key, value] of Object.entries(securityHeaders)) {
-    response.headers.set(key, value);
-  }
-  return response;
+  return withSecurity(response);
 }
 
 export const config = {
