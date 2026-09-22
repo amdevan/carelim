@@ -539,11 +539,13 @@ model AuditLog {
 }
 
 model Setting {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id])
-  key      String @unique
+  key      String
   value    String
+
+  @@unique([tenantId, key])
   @@index([tenantId])
 }
 

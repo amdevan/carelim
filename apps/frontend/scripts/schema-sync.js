@@ -314,6 +314,23 @@ async function migrate() {
       await run(sql, 'create: ' + sql.substring(20, 50));
     }
 
+    // ── Setting model: per-tenant key uniqueness migration ──
+    // The Setting model moved from `key @unique` (global) to
+    // `@@unique([tenantId, key])` (per-tenant). The generic @@unique
+    // handler above only fires for NEWLY created tables, so for an
+    // existing Setting table we must (1) create the compound index and
+    // (2) drop the old global Setting_key_key index explicitly —
+    // otherwise two tenants saving the same key (e.g. tax_rate) still
+    // hit P2002. Both statements are safe: they only add/remove indexes,
+    // never delete rows.
+    if (existingTables.has('Setting')) {
+      await run(
+        'CREATE UNIQUE INDEX IF NOT EXISTS "Setting_tenantId_key_key" ON "Setting"("tenantId", "key")',
+        'Setting compound unique (tenantId, key)'
+      );
+      await run('DROP INDEX IF EXISTS "Setting_key_key"', 'drop stale Setting_key_key');
+    }
+
     console.log('Schema sync complete: ' + ok + ' ok, ' + fail + ' failed');
   } finally {
     client.release();
