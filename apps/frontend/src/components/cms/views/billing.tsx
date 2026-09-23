@@ -904,8 +904,7 @@ function CreateInvoiceDialog({
   };
   // Quick pay actions collapse splits into a single row
   const payFull = () => setPayments((prev) => [{ method: prev[0]?.method || "Cash", amount: total }]);
-  const payHalf = () => setPayments((prev) => [{ method: prev[0]?.method || "Cash", amount: Math.ceil(total / 2) }]);
-  const clearPayments = () => setPayments((prev) => [{ method: prev[0]?.method || "Cash", amount: 0 }]);
+  const payDue = () => setPayments((prev) => [{ method: prev[0]?.method || "Cash", amount: 0 }]);
   // Fill the first empty row (or append) with the unallocated remainder
   const allocateRemaining = () => setPayments((prev) => {
     const paidSum = prev.reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -1405,9 +1404,7 @@ function CreateInvoiceDialog({
               <div className="flex items-center gap-2 text-xs">
                 <button type="button" onClick={payFull} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Full ({formatRs(total)})</button>
                 <span className="text-muted-foreground">·</span>
-                <button type="button" onClick={payHalf} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Half ({formatRs(Math.ceil(total / 2))})</button>
-                <span className="text-muted-foreground">·</span>
-                <button type="button" onClick={clearPayments} className="text-muted-foreground hover:text-foreground underline underline-offset-2">Clear</button>
+                <button type="button" onClick={payDue} className="text-amber-600 hover:text-amber-700 underline underline-offset-2">Due ({formatRs(total)})</button>
               </div>
             )}
           </div>
