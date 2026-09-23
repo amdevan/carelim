@@ -39,7 +39,7 @@ import {
 import {
   Search, Plus, Receipt, Wallet, TrendingUp, AlertTriangle,
   Eye, CreditCard, Printer, X, Download, RotateCcw, Mail, MessageSquare,
-  ArrowUpDown, Stethoscope, Pill, FlaskConical, Package, BedDouble,
+  ArrowUpDown, Stethoscope, Syringe, Scan, FlaskConical, Package, BedDouble,
   FileText, Trash2,
 } from "lucide-react";
 import { formatRs, formatDate, statusColors, statusLabel } from "@/lib/format";
@@ -77,7 +77,8 @@ interface Invoice {
 
 const TYPE_COLORS: Record<string, string> = {
   consultation: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
-  pharmacy: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+  procedures: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+  radiology: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300",
   lab: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300",
   package: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
   ipd: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
@@ -747,7 +748,8 @@ interface BillTypeInfo {
 
 const BILL_TYPES: BillTypeInfo[] = [
   { id: "consultation", label: "Consultation", description: "General consultation billing", icon: Stethoscope, gradient: "from-teal-500 to-teal-600" },
-  { id: "pharmacy", label: "Pharmacy", description: "Medicine and drug billing", icon: Pill, gradient: "from-violet-500 to-violet-600" },
+  { id: "procedures", label: "Procedures", description: "Minor surgery, injections & dressings", icon: Syringe, gradient: "from-violet-500 to-violet-600" },
+  { id: "radiology", label: "Radiology", description: "X-Ray, CT, MRI & ultrasound imaging", icon: Scan, gradient: "from-indigo-500 to-indigo-600" },
   { id: "lab", label: "Lab Test", description: "Laboratory test and diagnostics", icon: FlaskConical, gradient: "from-cyan-500 to-cyan-600" },
   { id: "package", label: "Health Package", description: "Health checkup packages", icon: Package, gradient: "from-amber-500 to-amber-600" },
   { id: "ipd", label: "IPD", description: "In-patient department charges", icon: BedDouble, gradient: "from-rose-500 to-rose-600" },
@@ -814,11 +816,6 @@ function CreateInvoiceDialog({
   const [consultationFee, setConsultationFee] = useState(0);
   const [doctorName, setDoctorName] = useState("");
 
-  // Pharmacy-specific
-  const [medItems, setMedItems] = useState<{ medicineName: string; qty: number; unitPrice: number; batchNo: string; expiry: string; }[]>([
-    { medicineName: "", qty: 1, unitPrice: 0, batchNo: "", expiry: "" },
-  ]);
-
   // Lab-specific
   const [labItems, setLabItems] = useState<{ testId: string; testName: string; sampleType: string; rate: number; }[]>([
     { testId: "", testName: "", sampleType: "", rate: 0 },
@@ -865,12 +862,11 @@ function CreateInvoiceDialog({
   // Compute subtotal from type-specific items
   const itemsSubtotal = useMemo(() => {
     if (type === "consultation") return consultationFee;
-    if (type === "pharmacy") return medItems.reduce((s, m) => s + (Number(m.qty) || 0) * (Number(m.unitPrice) || 0), 0);
     if (type === "lab") return labItems.reduce((s, l) => s + (Number(l.rate) || 0), 0);
     if (type === "package") return packagePrice;
     if (type === "ipd") return ipdItems.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0) + dailyRoomCharge + medicineCharges;
     return items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0);
-  }, [type, consultationFee, medItems, labItems, packagePrice, ipdItems, dailyRoomCharge, medicineCharges, items]);
+  }, [type, consultationFee, labItems, packagePrice, ipdItems, dailyRoomCharge, medicineCharges, items]);
 
   const subtotal = itemsSubtotal;
   const taxAmount = useMemo(() => (subtotal - discount) * (taxRate / 100), [subtotal, discount, taxRate]);
@@ -885,12 +881,17 @@ function CreateInvoiceDialog({
     }
   }, [total, type, paid]);
 
-  // Pharmacy helpers
-  const updateMedItem = (idx: number, patch: Partial<typeof medItems[0]>) => {
-    setMedItems((prev) => prev.map((m, i) => i === idx ? { ...m, ...patch } : m));
+  // Service item helpers (Procedures / Radiology / generic custom items)
+  const updateItem = (idx: number, patch: Partial<InvoiceItem>) => {
+    setItems((prev) => prev.map((it, i) => {
+      if (i !== idx) return it;
+      const next = { ...it, ...patch };
+      next.amount = (Number(next.qty) || 0) * (Number(next.rate) || 0);
+      return next;
+    }));
   };
-  const addMedItem = () => setMedItems((p) => [...p, { medicineName: "", qty: 1, unitPrice: 0, batchNo: "", expiry: "" }]);
-  const removeMedItem = (idx: number) => setMedItems((p) => p.filter((_, i) => i !== idx));
+  const addItem = () => setItems((p) => [...p, { description: "", qty: 1, rate: 0, amount: 0 }]);
+  const removeItem = (idx: number) => setItems((p) => (p.length === 1 ? p : p.filter((_, i) => i !== idx)));
 
   // Lab helpers
   const updateLabItem = (idx: number, patch: Partial<typeof labItems[0]>) => {
@@ -924,14 +925,6 @@ function CreateInvoiceDialog({
       const displayName = doc?.name || "TBD";
       return [{ description: `Consultation - Dr. ${displayName}`, qty: 1, rate: consultationFee, amount: consultationFee }];
     }
-    if (type === "pharmacy") {
-      return medItems.filter((m) => m.medicineName).map((m) => ({
-        description: `${m.medicineName}${m.batchNo ? ` [${m.batchNo}]` : ""}`,
-        qty: Number(m.qty) || 0,
-        rate: Number(m.unitPrice) || 0,
-        amount: (Number(m.qty) || 0) * (Number(m.unitPrice) || 0),
-      }));
-    }
     if (type === "lab") {
       return labItems.filter((l) => l.testName).map((l) => ({
         description: `${l.testName}${l.sampleType ? ` (${l.sampleType})` : ""}`,
@@ -963,7 +956,6 @@ function CreateInvoiceDialog({
     setPaid(0);
     setConsultationFee(0);
     setDoctorName("");
-    setMedItems([{ medicineName: "", qty: 1, unitPrice: 0, batchNo: "", expiry: "" }]);
     setLabItems([{ testId: "", testName: "", sampleType: "", rate: 0 }]);
     setPackageName("");
     setPackagePrice(0);
@@ -1054,7 +1046,8 @@ function CreateInvoiceDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {type === "consultation" && <Stethoscope className="w-5 h-5 text-teal-600" />}
-            {type === "pharmacy" && <Pill className="w-5 h-5 text-violet-600" />}
+            {type === "procedures" && <Syringe className="w-5 h-5 text-violet-600" />}
+            {type === "radiology" && <Scan className="w-5 h-5 text-indigo-600" />}
             {type === "lab" && <FlaskConical className="w-5 h-5 text-cyan-600" />}
             {type === "package" && <Package className="w-5 h-5 text-amber-600" />}
             {type === "ipd" && <BedDouble className="w-5 h-5 text-rose-600" />}
@@ -1116,36 +1109,48 @@ function CreateInvoiceDialog({
             </div>
           )}
 
-          {type === "pharmacy" && (
-            <div className="rounded-xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50/80 to-white dark:from-violet-950/30 dark:to-card p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center">
-                    <Pill className="w-4 h-4 text-violet-600" />
+          {(type === "procedures" || type === "radiology") && (() => {
+            const isProc = type === "procedures";
+            const c = isProc
+              ? { border: "border-violet-200 dark:border-violet-800", bg: "bg-gradient-to-br from-violet-50/80 to-white dark:from-violet-950/30 dark:to-card", iconBg: "bg-violet-100 dark:bg-violet-900/50", icon: "text-violet-600", title: "text-violet-800 dark:text-violet-300", amount: "text-violet-600", sub: "text-violet-700 dark:text-violet-400" }
+              : { border: "border-indigo-200 dark:border-indigo-800", bg: "bg-gradient-to-br from-indigo-50/80 to-white dark:from-indigo-950/30 dark:to-card", iconBg: "bg-indigo-100 dark:bg-indigo-900/50", icon: "text-indigo-600", title: "text-indigo-800 dark:text-indigo-300", amount: "text-indigo-600", sub: "text-indigo-700 dark:text-indigo-400" };
+            return (
+              <div className={`rounded-xl border ${c.border} ${c.bg} p-4 space-y-3`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-lg ${c.iconBg} flex items-center justify-center`}>
+                      {isProc ? <Syringe className={`w-4 h-4 ${c.icon}`} /> : <Scan className={`w-4 h-4 ${c.icon}`} />}
+                    </div>
+                    <p className={`text-sm font-semibold ${c.title}`}>{isProc ? "Procedure Items" : "Radiology Items"}</p>
                   </div>
-                  <p className="text-sm font-semibold text-violet-800 dark:text-violet-300">Medication Items</p>
+                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addItem}>
+                    <Plus className="w-3.5 h-3.5" /> Add Item
+                  </Button>
                 </div>
-                <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addMedItem}>
-                  <Plus className="w-3.5 h-3.5" /> Add Medicine
-                </Button>
-              </div>
-              <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-thin">
-                {medItems.map((m, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                    <Input className="col-span-12 sm:col-span-3 h-9 text-sm" placeholder="Medicine Name" value={m.medicineName} onChange={(e) => updateMedItem(idx, { medicineName: e.target.value })} />
-                    <Input type="number" className="col-span-3 sm:col-span-1 h-9 text-sm" placeholder="Qty" value={m.qty} onChange={(e) => updateMedItem(idx, { qty: Number(e.target.value) })} />
-                    <Input type="number" className="col-span-3 sm:col-span-2 h-9 text-sm" placeholder="Unit Price" value={m.unitPrice} onChange={(e) => updateMedItem(idx, { unitPrice: Number(e.target.value) })} />
-                    <Input className="col-span-3 sm:col-span-2 h-9 text-sm" placeholder="Batch No" value={m.batchNo} onChange={(e) => updateMedItem(idx, { batchNo: e.target.value })} />
-                    <Input type="date" className="col-span-3 sm:col-span-2 h-9 text-sm" value={m.expiry} onChange={(e) => updateMedItem(idx, { expiry: e.target.value })} />
-                    <div className="col-span-2 text-right text-sm font-medium text-violet-600">{formatRs((Number(m.qty) || 0) * (Number(m.unitPrice) || 0))}</div>
-                    <Button type="button" variant="ghost" size="sm" className="col-span-1 h-8 w-8 p-0 text-rose-500 hover:text-rose-600" onClick={() => removeMedItem(idx)} disabled={medItems.length === 1}>
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-thin">
+                  {items.map((it, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <Input className="col-span-12 sm:col-span-6 h-9 text-sm" placeholder={isProc ? "Procedure (e.g. Dressing, Injection)" : "Study (e.g. Chest X-Ray, MRI Brain)"} value={it.description} onChange={(e) => updateItem(idx, { description: e.target.value })} />
+                      <Input type="number" min="0" className="col-span-3 sm:col-span-2 h-9 text-sm" placeholder="Qty" value={it.qty} onChange={(e) => updateItem(idx, { qty: Number(e.target.value) })} />
+                      <Input type="number" min="0" className="col-span-5 sm:col-span-3 h-9 text-sm" placeholder="Rate" value={it.rate} onChange={(e) => updateItem(idx, { rate: Number(e.target.value) || 0 })} />
+                      <div className={`col-span-3 sm:col-span-1 text-right text-sm font-medium ${c.amount}`}>{formatRs((Number(it.qty) || 0) * (Number(it.rate) || 0))}</div>
+                      <Button type="button" variant="ghost" size="sm" className="col-span-1 h-8 w-8 p-0 text-rose-500 hover:text-rose-600" onClick={() => removeItem(idx)} disabled={items.length === 1}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                {items.some((it) => it.description) && (
+                  <div className="flex justify-between items-center text-xs text-muted-foreground border-t pt-2">
+                    <span>{items.filter((it) => it.description).length} item(s)</span>
+                    <span className={`font-medium ${c.sub}`}>Subtotal: {formatRs(items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0))}</span>
                   </div>
-                ))}
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {type === "lab" && (
             <div className="rounded-xl border border-cyan-200 dark:border-cyan-800 bg-gradient-to-br from-cyan-50/80 to-white dark:from-cyan-950/30 dark:to-card p-4 space-y-3">
