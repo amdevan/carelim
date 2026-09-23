@@ -808,8 +808,7 @@ function CreateInvoiceDialog({
   const [items, setItems] = useState<InvoiceItem[]>([{ description: "", qty: 1, rate: 0, amount: 0 }]);
   const [discount, setDiscount] = useState(0);
   const [taxRate, setTaxRate] = useState(13);
-  const [paymentMethod, setPaymentMethod] = useState("Cash");
-  const [paid, setPaid] = useState(0);
+  const [payments, setPayments] = useState<{ method: string; amount: number }[]>([{ method: "Cash", amount: 0 }]);
   const [saving, setSaving] = useState(false);
   const branchId = useAppStore((s) => s.branchId);
 
@@ -845,7 +844,7 @@ function CreateInvoiceDialog({
     }
     if (settings?.default_payment_method) {
       const pm = PAYMENT_METHOD_ALIASES[settings.default_payment_method] ?? settings.default_payment_method;
-      if (PAYMENT_METHODS.includes(pm)) setPaymentMethod(pm);
+      if (PAYMENT_METHODS.includes(pm)) setPayments((prev) => [{ method: pm, amount: prev[0]?.amount || 0 }]);
     }
   }, [open, settings]);
 
@@ -868,6 +867,11 @@ function CreateInvoiceDialog({
     return items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0);
   }, [type, consultationFee, labItems, packagePrice, ipdItems, dailyRoomCharge, medicineCharges, items]);
 
+  const paid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const paymentMethod =
+    payments.filter((p) => Number(p.amount) > 0).map((p) => p.method).join(" + ") ||
+    payments[0]?.method ||
+    "Cash";
   const subtotal = itemsSubtotal;
   const taxAmount = useMemo(() => (subtotal - discount) * (taxRate / 100), [subtotal, discount, taxRate]);
   const total = Math.max(0, subtotal - discount + taxAmount);
@@ -877,7 +881,7 @@ function CreateInvoiceDialog({
   // Auto-fill paid amount to match total for consultation
   useEffect(() => {
     if (type === "consultation" && total > 0 && paid === 0) {
-      setPaid(total);
+      setPayments((prev) => [{ method: prev[0]?.method || "Cash", amount: total }]);
     }
   }, [total, type, paid]);
 
@@ -892,6 +896,25 @@ function CreateInvoiceDialog({
   };
   const addItem = () => setItems((p) => [...p, { description: "", qty: 1, rate: 0, amount: 0 }]);
   const removeItem = (idx: number) => setItems((p) => (p.length === 1 ? p : p.filter((_, i) => i !== idx)));
+
+  const addPayment = () => setPayments((p) => [...p, { method: "Cash", amount: 0 }]);
+  const removePayment = (idx: number) => setPayments((p) => (p.length === 1 ? p : p.filter((_, i) => i !== idx)));
+  const updatePayment = (idx: number, patch: Partial<{ method: string; amount: number }>) => {
+    setPayments((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  };
+  // Quick pay actions collapse splits into a single row
+  const payFull = () => setPayments((prev) => [{ method: prev[0]?.method || "Cash", amount: total }]);
+  const payHalf = () => setPayments((prev) => [{ method: prev[0]?.method || "Cash", amount: Math.ceil(total / 2) }]);
+  const clearPayments = () => setPayments((prev) => [{ method: prev[0]?.method || "Cash", amount: 0 }]);
+  // Fill the first empty row (or append) with the unallocated remainder
+  const allocateRemaining = () => setPayments((prev) => {
+    const paidSum = prev.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const rem = Math.max(0, total - paidSum);
+    if (rem <= 0) return prev;
+    const emptyIdx = prev.findIndex((p) => !Number(p.amount));
+    if (emptyIdx >= 0) return prev.map((p, i) => (i === emptyIdx ? { ...p, amount: rem } : p));
+    return [...prev, { method: "Cash", amount: rem }];
+  });
 
   // Lab helpers
   const updateLabItem = (idx: number, patch: Partial<typeof labItems[0]>) => {
@@ -952,8 +975,7 @@ function CreateInvoiceDialog({
     setItems([{ description: "", qty: 1, rate: 0, amount: 0 }]);
     setDiscount(0);
     setTaxRate(settings?.tax_rate ? Number(settings.tax_rate) || 13 : 13);
-    setPaymentMethod("Cash");
-    setPaid(0);
+    setPayments([{ method: "Cash", amount: 0 }]);
     setConsultationFee(0);
     setDoctorName("");
     setLabItems([{ testId: "", testName: "", sampleType: "", rate: 0 }]);
@@ -1332,7 +1354,7 @@ function CreateInvoiceDialog({
           {/* Discount / tax / payment */}
           <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20 p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Details</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Discount (Rs)</Label>
                 <Input type="number" min="0" value={discount || ""} onChange={(e) => { const v = e.target.value; setDiscount(v === "" ? 0 : Math.max(0, Number(v))); }} className="h-9" />
@@ -1341,27 +1363,51 @@ function CreateInvoiceDialog({
                 <Label className="text-xs">VAT (%)</Label>
                 <Input type="number" min="0" max="100" value={taxRate || ""} onChange={(e) => { const v = e.target.value; setTaxRate(v === "" ? 0 : Math.max(0, Math.min(100, Number(v)))); }} className="h-9" />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Payment Method</Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Paid (Rs)</Label>
-                <Input type="number" min="0" value={paid || ""} onChange={(e) => { const v = e.target.value; setPaid(v === "" ? 0 : Math.max(0, Number(v))); }} className="h-9" />
-              </div>
             </div>
+
+            {/* Multi-payment: split paid amount across methods */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Payments <span className="text-muted-foreground font-normal">(split across methods)</span></Label>
+                <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={addPayment}>
+                  <Plus className="w-3 h-3" /> Add
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {payments.map((p, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-6 sm:col-span-4">
+                      <Select value={p.method} onValueChange={(v) => updatePayment(idx, { method: v })}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Input type="number" min="0" className="col-span-5 sm:col-span-3 h-9" placeholder="Amount" value={p.amount || ""} onChange={(e) => { const v = e.target.value; updatePayment(idx, { amount: v === "" ? 0 : Math.max(0, Number(v)) }); }} />
+                    <div className="col-span-1 flex justify-center">
+                      <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-rose-500 hover:text-rose-600" onClick={() => removePayment(idx)} disabled={payments.length === 1}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {due > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-amber-600 dark:text-amber-400">Remaining to allocate: {formatRs(due)}</span>
+                  <button type="button" onClick={allocateRemaining} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Allocate remaining</button>
+                </div>
+              )}
+            </div>
+
             {total > 0 && (
               <div className="flex items-center gap-2 text-xs">
-                <button type="button" onClick={() => setPaid(total)} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Full ({formatRs(total)})</button>
+                <button type="button" onClick={payFull} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Full ({formatRs(total)})</button>
                 <span className="text-muted-foreground">·</span>
-                <button type="button" onClick={() => setPaid(Math.ceil(total / 2))} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Half ({formatRs(Math.ceil(total / 2))})</button>
+                <button type="button" onClick={payHalf} className="text-teal-600 hover:text-teal-700 underline underline-offset-2">Pay Half ({formatRs(Math.ceil(total / 2))})</button>
                 <span className="text-muted-foreground">·</span>
-                <button type="button" onClick={() => setPaid(0)} className="text-muted-foreground hover:text-foreground underline underline-offset-2">Clear</button>
+                <button type="button" onClick={clearPayments} className="text-muted-foreground hover:text-foreground underline underline-offset-2">Clear</button>
               </div>
             )}
           </div>
