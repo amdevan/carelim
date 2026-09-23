@@ -991,7 +991,7 @@ function CreateInvoiceDialog({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!patientId) { toast.error("Please select a patient"); return; }
-    if (["procedures", "radiology", "package"].includes(type) && !doctorName) {
+    if (["lab", "procedures", "radiology", "package"].includes(type) && !doctorName) {
       toast.error("Please select the ordering doctor (required for commission)");
       return;
     }
@@ -1091,7 +1091,7 @@ function CreateInvoiceDialog({
             <PatientSearch value={patientId} onValueChange={setPatientId} label="" required />
             {(type === "lab" || type === "procedures" || type === "radiology" || type === "package") && (
               <div className="space-y-1.5">
-                <DoctorSearch value={doctorName} onValueChange={setDoctorName} label={type === "lab" ? "Ordering Doctor" : "Ordering Doctor (for commission)"} required={type !== "lab"} />
+                <DoctorSearch value={doctorName} onValueChange={setDoctorName} label="Ordering Doctor (for commission)" required />
                 {doctorName && doctors && (() => {
                   const doc = doctors.find((d) => d.id === doctorName);
                   return doc ? (
