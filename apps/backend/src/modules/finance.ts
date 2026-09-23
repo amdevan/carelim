@@ -146,7 +146,11 @@ async function listInvoices(req: Request, res: Response) {
     if (branchId) where.branchId = branchId;
     const invoices = await rawDb.invoice.findMany({
       where,
-      include: { patient: true, items: true },
+      include: {
+        patient: true,
+        items: true,
+        doctor: { select: { id: true, name: true, specialization: true, commissionPct: true } },
+      },
       orderBy: { date: "desc" },
     });
     res.json(invoices);
@@ -159,7 +163,7 @@ async function listInvoices(req: Request, res: Response) {
 async function createInvoice(req: Request, res: Response) {
   try {
     const body = req.body || {};
-    const { items, testIds, ...data } = body;
+    const { items, testIds, doctorId, ...data } = body;
 
     // invoiceNo is globally unique and the tenant middleware resolves Invoice
     // via branch.tenantId — null-branch auto-invoices would be invisible to a
@@ -175,6 +179,7 @@ async function createInvoice(req: Request, res: Response) {
         return db.invoice.create({
           data: {
             ...data,
+            doctorId: typeof doctorId === "string" && doctorId ? doctorId : null,
             date: new Date(),
             invoiceNo,
             items: { create: items || [] },
@@ -213,7 +218,7 @@ async function createInvoice(req: Request, res: Response) {
               data: {
                 orderNo: labOrderNo,
                 patientId: data.patientId,
-                doctorId: data.doctorId || null,
+                doctorId: doctorId || null,
                 priority: "normal",
                 status: "ordered",
                 totalAmount,
@@ -257,7 +262,11 @@ async function getInvoice(req: Request, res: Response) {
     const id = req.params.id as string;
     const inv = await rawDb.invoice.findFirst({
       where: { id, ...invoiceTenantScope() },
-      include: { patient: true, items: true },
+      include: {
+        patient: true,
+        items: true,
+        doctor: { select: { id: true, name: true, specialization: true, commissionPct: true } },
+      },
     });
     if (!inv) return fail(res, 404, "Not found");
     res.json(inv);

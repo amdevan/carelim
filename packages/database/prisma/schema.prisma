@@ -62,6 +62,7 @@ model Doctor {
   prescriptions   Prescription[]
   scheduleSlots   DoctorScheduleSlot[]
   bookingLinks    BookingLink[]
+  invoices        Invoice[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -443,6 +444,8 @@ model Invoice {
   due           Float         @default(0)
   status        String        @default("unpaid") // unpaid | partial | paid | refunded
   paymentMethod String?
+  doctorId      String?
+  doctor        Doctor?       @relation(fields: [doctorId], references: [id])
   date          DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   items         InvoiceItem[]

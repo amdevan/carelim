@@ -70,6 +70,7 @@ interface Invoice {
   due: number;
   status: string;
   paymentMethod: string | null;
+  doctor?: { id: string; name: string } | null;
   date: string;
   patient: { id: string; patientCode: string; name: string; phone: string; age?: number; dob?: string | null; gender?: string; address?: string | null };
   items: InvoiceItem[];
@@ -119,6 +120,7 @@ function buildInvoiceHTML(inv: Invoice, settings?: Record<string, string>): stri
       <div class="info-cell"><span class="label">Phone</span> ${escapeHTML(inv.patient.phone || "—")}</div>
       <div class="info-cell"><span class="label">Type</span> ${escapeHTML(inv.type)}</div>
       <div class="info-cell"><span class="label">Payment</span> ${escapeHTML(inv.paymentMethod || "—")}</div>
+      ${inv.doctor?.name ? `<div class="info-cell"><span class="label">Ordering Doctor</span> Dr. ${escapeHTML(inv.doctor.name)}</div>` : ""}
     </div>`;
 
   const itemRows = (inv.items?.length ? inv.items : []).map((it) => `
@@ -989,6 +991,10 @@ function CreateInvoiceDialog({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!patientId) { toast.error("Please select a patient"); return; }
+    if (["procedures", "radiology", "package"].includes(type) && !doctorName) {
+      toast.error("Please select the ordering doctor (required for commission)");
+      return;
+    }
     const finalItems = await buildItems();
     if (finalItems.length === 0) {
       toast.error("Add at least one invoice item"); return;
@@ -1014,10 +1020,13 @@ function CreateInvoiceDialog({
           amount: (Number(i.qty) || 0) * (Number(i.rate) || 0),
         })),
       };
+      // Ordering doctor (commission attribution) for lab / procedures / radiology / package
+      if (["lab", "procedures", "radiology", "package"].includes(type) && doctorName) {
+        body.doctorId = doctorName;
+      }
       // Include testIds for lab invoices to create lab orders
       if (type === "lab") {
         body.testIds = labItems.filter((l) => l.testId && l.testName).map((l) => l.testId);
-        if (doctorName) body.doctorId = doctorName;
       }
       const res = await fetchAPI("/api/invoices", {
         method: "POST",
@@ -1080,9 +1089,9 @@ function CreateInvoiceDialog({
           {/* Patient + Doctor selectors */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <PatientSearch value={patientId} onValueChange={setPatientId} label="" required />
-            {type === "lab" && (
+            {(type === "lab" || type === "procedures" || type === "radiology" || type === "package") && (
               <div className="space-y-1.5">
-                <DoctorSearch value={doctorName} onValueChange={setDoctorName} label="Ordering Doctor" />
+                <DoctorSearch value={doctorName} onValueChange={setDoctorName} label={type === "lab" ? "Ordering Doctor" : "Ordering Doctor (for commission)"} required={type !== "lab"} />
                 {doctorName && doctors && (() => {
                   const doc = doctors.find((d) => d.id === doctorName);
                   return doc ? (

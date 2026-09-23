@@ -434,6 +434,8 @@ model Invoice {
   due         Float    @default(0)
   status      String   @default("unpaid") // unpaid | partial | paid | refunded
   paymentMethod String?
+  doctorId      String?
+  doctor        Doctor?   @relation(fields: [doctorId], references: [id])
   date        DateTime @default(now())
   updatedAt   DateTime @updatedAt
   items       InvoiceItem[]
@@ -589,6 +591,7 @@ model Branch {
   patientPayments PatientPayment[]
   clinicalNotes   ClinicalNote[]
   bookingLinks    BookingLink[]
+  invoices        Invoice[]
   @@index([tenantId])
 }
 
